@@ -1,0 +1,87 @@
+[
+  {
+    "id": "fixture_1_unsupported_claim",
+    "text": "Golden Oat Elixir is the world's best oat beverage, clinically proven to boost vitality and guaranteed to rejuvenate your morning routine. Our revolutionary formula cures morning fatigue with 100% safe organic ingredients.",
+    "intent": "Introduce Golden Oat Elixir product benefits",
+    "expected_categories": [
+      "unsupported_claim",
+      "tone"
+    ],
+    "expected_errors": [
+      "world's best",
+      "clinically proven",
+      "guaranteed",
+      "cures",
+      "100% safe"
+    ]
+  },
+  {
+    "id": "fixture_2_outdated_facts",
+    "text": "Subscribe to our monthly artisan pantry box for only $28 per month. Our Portland production facility operates with 50% solar energy as we continue reducing our emissions.",
+    "intent": "Subscription pricing and sustainability update",
+    "expected_categories": [
+      "factual_accuracy"
+    ],
+    "expected_errors": [
+      "$28",
+      "50%"
+    ]
+  },
+  {
+    "id": "fixture_3_off_brand_tone",
+    "text": "Hey guys! We are gonna throw a super cool party this weekend. BUY NOW AND GET FREE SHIPPING on all orders! You will totally love these crazy good snacks.",
+    "intent": "Announce weekend harvest event",
+    "expected_categories": [
+      "tone",
+      "accessibility"
+    ],
+    "expected_errors": [
+      "gonna",
+      "super cool",
+      "BUY NOW AND GET FREE SHIPPING"
+    ]
+  },
+  {
+    "id": "fixture_4_banned_terms",
+    "text": "Our cheap sourdough loaves offer great taste for our users. Every loaf is baked in our modern factories using traditional wild yeast starters.",
+    "intent": "Showcase artisan sourdough baking",
+    "expected_categories": [
+      "terminology"
+    ],
+    "expected_errors": [
+      "cheap",
+      "users",
+      "factories"
+    ]
+  },
+  {
+    "id": "fixture_5_accessibility",
+    "text": "Explore our harvest sourdough pairings! [click here](https://aureliafoods.com/recipes) to view the recipe.\n\n![](https://aureliafoods.com/images/loaf.jpg)",
+    "intent": "Share sourdough recipe guide",
+    "expected_categories": [
+      "accessibility"
+    ],
+    "expected_errors": [
+      "[click here]",
+      "![]("
+    ]
+  },
+  {
+    "id": "fixture_6_clean_sample",
+    "text": "Stone-Ground Einkorn Flour is sourced exclusively from certified organic family farms in Idaho. Aurelia Foods distributes to over 450 independent grocery stores across the Pacific Northwest. We thank our patrons for supporting sustainable regional agriculture.",
+    "intent": "Explain grain sourcing and celebrate farm partnerships",
+    "expected_categories": [],
+    "expected_errors": []
+  },
+  {
+    "id": "fixture_7_ambiguous_case",
+    "text": "Our new Wildflower Honey Infusion is crafted with all-natural botanical botanicals harvested from Willamette Valley apiaries.",
+    "intent": "Introduce herbal botanical blend",
+    "expected_categories": [
+      "messaging"
+    ],
+    "expected_errors": [
+      "all-natural"
+    ]
+  }
+]

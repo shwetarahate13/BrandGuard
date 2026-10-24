@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: brandguard-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: brandguard
+      POSTGRES_PASSWORD: brandguard_dev_password
+      POSTGRES_DB: brandguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brandguard -d brandguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: brandguard-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://brandguard:brandguard_dev_password@postgres:5432/brandguard
+      JWT_SECRET: dev-super-secret-jwt-key-for-local-testing
+      SECRET_KEY: dev-super-secret-app-key
+      LLM_PROVIDER: mock
+      LLM_MODEL: claude-sonnet-4-20250514
+      AUTO_SEED: "true"
+      EMBEDDING_BACKEND: tfidf
+      CHROMA_PERSIST_DIR: /tmp/chroma
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

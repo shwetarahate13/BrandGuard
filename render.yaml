@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: brandguard
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: LLM_PROVIDER
+        value: mock
+      - key: LLM_MODEL
+        value: claude-sonnet-4-20250514
+      - key: LLM_API_KEY
+        sync: false
+      - key: AUTO_SEED
+        value: "true"
+      - key: EMBEDDING_BACKEND
+        value: tfidf
+      - key: CHROMA_PERSIST_DIR
+        value: /tmp/chroma
