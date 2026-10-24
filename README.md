@@ -79,7 +79,7 @@ The login screen features one-click quick-fill buttons for all four roles:
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/shwetarahate13/BrandGuard.git && cd BrandGuard-2
+git clone https://github.com/shwetarahate13/BrandGuard.git 
 
 # 2. Set up Python virtual environment and install dependencies
 python3.12 -m venv .venv && source .venv/bin/activate
