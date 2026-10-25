@@ -79,6 +79,7 @@ export interface Finding {
   status: FindingStatus;
   created_at: string;
   decisions: Decision[];
+  location?: { page?: number; bbox?: [number, number, number, number]; media?: string } | null;
 }
 
 export interface SubmissionVersion {
@@ -86,6 +87,14 @@ export interface SubmissionVersion {
   submission_id: string;
   version_no: number;
   text: string;
+  source_mime_type?: string;
+  source_filename?: string;
+  source_layout?: {
+    width?: number;
+    height?: number;
+    pages?: Array<{ page: number; width: number; height: number }>;
+    regions?: Array<{ page?: number; start: number; end: number; bbox: number[] }>;
+  } | null;
   created_by: string;
   created_at: string;
   creator?: User;
@@ -161,6 +170,7 @@ export interface Asset {
   kind: string;
   name: string;
   file_path?: string;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 

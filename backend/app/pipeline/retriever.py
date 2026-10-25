@@ -1,6 +1,7 @@
 """ChromaDB retrieval over approved sources with TF-IDF / Hashing embeddings."""
 import os
 import logging
+import json
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from sklearn.feature_extraction.text import HashingVectorizer
@@ -149,7 +150,8 @@ def index_all_sources(db: Session) -> int:
     # 4. Assets
     assets = db.query(Asset).all()
     for a in assets:
-        doc_text = f"Asset {a.name} ({a.kind.value}): {a.file_path or ''}".strip()
+        metadata_text = json.dumps(a.metadata_ or {}, sort_keys=True)
+        doc_text = f"Asset {a.name} ({a.kind.value}): {a.file_path or ''}. Metadata: {metadata_text}".strip()
         documents.append(doc_text)
         ids.append(f"asset_{a.id}")
         metadatas.append({

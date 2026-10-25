@@ -22,6 +22,7 @@ from backend.app.models.models import (
 from backend.app.pipeline.segmenter import segment_into_spans
 from backend.app.pipeline.rules_engine import run_rules_engine, RuleFinding
 from backend.app.pipeline.retriever import retrieve_sources, reindex_if_empty
+from backend.app.pipeline.content_handlers import get_content_handler
 from backend.app.pipeline.citation_validator import validate_citations
 from backend.app.pipeline.confidence import compute_confidence_and_routing, verify_intent_preserved
 from backend.app.llm.client import get_llm_client, check_content_with_llm, MockProvider
@@ -113,7 +114,8 @@ def run_pipeline(
     text = version.text
     intent = submission.intent or ""
 
-    if not text or not text.strip():
+    is_image = bool(version.source_mime_type and version.source_mime_type.startswith("image/"))
+    if (not text or not text.strip()) and not is_image:
         logger.info(f"Submission {submission.id} version {version.version_no} has empty text")
         return []
 
@@ -163,6 +165,20 @@ def run_pipeline(
             seen_source_ids.add(s_id)
             all_retrieved_sources.append(s)
 
+    visual_candidates: list[dict[str, Any]] = []
+    if is_image and version.source_file:
+        handler = get_content_handler(version.source_mime_type or "")
+        if handler:
+            try:
+                visual_candidates, visual_sources = handler.inspect(version.source_file, version.source_layout, db)
+                for source in visual_sources:
+                    source_id = str(source.get("id") or "")
+                    if source_id and source_id not in seen_source_ids:
+                        seen_source_ids.add(source_id)
+                        all_retrieved_sources.append(source)
+            except Exception:
+                logger.exception("Image visual inspection failed for submission %s", submission.id)
+
     # 4. Deterministic rules engine
     rule_results: List[RuleFinding] = run_rules_engine(text, terms, facts, clauses)
 
@@ -190,6 +206,8 @@ def run_pipeline(
             f_dict["source_quote"] = access_clause["text"][:150]
 
         candidate_findings.append(f_dict)
+
+    candidate_findings.extend(visual_candidates)
 
     # 5. LLM or Mock check
     llm_client = get_llm_client()
@@ -284,6 +302,12 @@ def run_pipeline(
             except ValueError:
                 source_type_enum = None
 
+        location = f_routed.get("location") or _map_finding_location(
+            f_routed.get("span_start"),
+            f_routed.get("span_end"),
+            version.source_layout,
+            version.source_mime_type,
+        )
         db_finding = Finding(
             submission_id=submission.id,
             version_id=version.id,
@@ -298,6 +322,7 @@ def run_pipeline(
             confidence=conf_enum,
             suggested_rewrite=verified_rewrite,
             needs_human=f_routed.get("needs_human", False),
+            location=location,
             status=FindingStatus.open,
         )
         db.add(db_finding)
@@ -306,3 +331,39 @@ def run_pipeline(
     db.commit()
     logger.info(f"Pipeline completed: {len(final_db_findings)} findings saved for submission {submission.id}")
     return final_db_findings
+
+
+def _map_finding_location(
+    span_start: int | None,
+    span_end: int | None,
+    source_layout: dict[str, Any] | None,
+    source_mime_type: str | None,
+) -> dict[str, Any] | None:
+    """Map an extracted span to its source page and bounding box."""
+    if not source_layout:
+        return None
+    regions = source_layout.get("regions", [])
+    matching = [
+        region for region in regions
+        if span_start is not None and span_end is not None
+        and region.get("start") is not None and region.get("end") is not None
+        and int(region["start"]) < span_end and int(region["end"]) > span_start
+        and isinstance(region.get("bbox"), list) and len(region["bbox"]) == 4
+    ]
+    if matching:
+        selected = matching[0]
+        page = selected.get("page", 1)
+        same_page = [region for region in matching if region.get("page", 1) == page]
+        boxes = [region["bbox"] for region in same_page]
+        bbox = [
+            min(float(box[0]) for box in boxes), min(float(box[1]) for box in boxes),
+            max(float(box[2]) for box in boxes), max(float(box[3]) for box in boxes),
+        ]
+        return {"page": page, "bbox": bbox, **({"media": "image"} if source_mime_type and source_mime_type.startswith("image/") else {})}
+
+    # PDF findings without span offsets still receive the relevant page's extent.
+    if source_mime_type == "application/pdf":
+        pages = source_layout.get("pages", [])
+        page = pages[0] if pages else {"page": 1, "width": 0, "height": 0}
+        return {"page": page.get("page", 1), "bbox": [0.0, 0.0, float(page.get("width", 0)), float(page.get("height", 0))]}
+    return None

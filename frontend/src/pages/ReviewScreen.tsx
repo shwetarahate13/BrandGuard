@@ -15,6 +15,10 @@ import { api } from "../api";
 import { Submission, Finding, User } from "../types";
 import { DiffViewer } from "../components/DiffViewer";
 
+const SourceMediaViewer = React.lazy(() =>
+  import("../components/SourceMediaViewer").then((module) => ({ default: module.SourceMediaViewer })),
+);
+
 interface ReviewScreenProps {
   submissionId: string;
   user: User;
@@ -46,6 +50,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
 
   // Expanded sources state
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const [sourceRetry, setSourceRetry] = useState(0);
 
   const loadData = async () => {
     try {
@@ -80,6 +87,33 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     : null;
 
   const currentText = latestVersion?.text || "";
+  const sourceMimeType = latestVersion?.source_mime_type;
+  const canPreviewSource = sourceMimeType === "application/pdf" || !!sourceMimeType?.startsWith("image/");
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+    if (!canPreviewSource || !latestVersion?.source_mime_type || !latestVersion.id) {
+      setSourceUrl(null);
+      setSourceError(null);
+      return;
+    }
+    setSourceUrl(null);
+    setSourceError(null);
+    api.getSubmissionSource(submissionId, latestVersion.id)
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSourceUrl(objectUrl);
+      })
+      .catch((err: unknown) => {
+        if (active) setSourceError(err instanceof Error ? err.message : "Unable to load the original document.");
+      });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [submissionId, latestVersion?.id, latestVersion?.source_mime_type, sourceRetry, canPreviewSource]);
 
   const handleAccept = async (finding: Finding) => {
     try {
@@ -319,6 +353,25 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Content with Span Highlights (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
+          {canPreviewSource && latestVersion?.source_mime_type && (
+            sourceUrl ? (
+              <React.Suspense fallback={<div className="bg-white border border-stone-200 rounded-2xl p-5 text-xs text-stone-500">Loading document renderer…</div>}>
+                <SourceMediaViewer
+                  mimeType={latestVersion.source_mime_type}
+                  sourceUrl={sourceUrl}
+                  sourceLayout={latestVersion.source_layout}
+                  findings={findings}
+                  selectedFindingId={selectedFindingId}
+                  onSelectFinding={setSelectedFindingId}
+                />
+              </React.Suspense>
+            ) : (
+              <div role={sourceError ? "alert" : undefined} className="bg-white border border-stone-200 rounded-2xl p-5 text-xs text-stone-500">
+                {sourceError || "Loading original document preview…"}
+                {sourceError && <button type="button" onClick={() => setSourceRetry((value) => value + 1)} className="ml-2 underline text-brand-700">Retry</button>}
+              </div>
+            )
+          )}
           <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
             <div className="px-6 py-3.5 bg-stone-50/80 border-b border-stone-200 flex items-center justify-between text-xs text-stone-500">
               <div className="flex items-center gap-2">

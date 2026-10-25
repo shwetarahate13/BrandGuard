@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     # ChromaDB
     CHROMA_PERSIST_DIR: str = "./data/chroma"
+    ASSET_STORAGE_DIR: str = "./data/assets"
 
     # LLM
     LLM_PROVIDER: str = "mock"  # "anthropic" or "mock"

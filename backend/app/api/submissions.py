@@ -1,6 +1,7 @@
 """Submissions API routes: create, upload, view, check, and add versions."""
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
@@ -16,7 +17,14 @@ from backend.app.schemas.schemas import (
 )
 from backend.app.services.auth import get_current_user
 from backend.app.utils.audit import log_action
-from backend.app.utils.text_extract import extract_text, read_upload_contents
+from backend.app.utils.text_extract import (
+    extract_text,
+    extract_pdf_text_with_layout,
+    get_upload_mime_type,
+    read_upload_contents,
+)
+from backend.app.pipeline.content_handlers import get_content_handler
+from urllib.parse import quote
 from backend.app.pipeline.runner import run_pipeline
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
@@ -93,17 +101,40 @@ async def upload_submission(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a submission by extracting text from a file upload (PDF, DOCX, TXT, MD)."""
+    """Create a submission from supported text, PDF, DOCX, or image uploads."""
     contents = await read_upload_contents(file)
     filename = file.filename or "uploaded_content.txt"
     try:
-        extracted = extract_text(contents, filename)
+        mime_type = get_upload_mime_type(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    source_layout = None
+    try:
+        if mime_type == "application/pdf":
+            extracted, source_layout = extract_pdf_text_with_layout(contents)
+        elif mime_type.startswith("image/"):
+            handler = get_content_handler(mime_type)
+            if handler is None:
+                raise ValueError(f"No content handler registered for {mime_type}")
+            extracted, source_layout = handler.extract_content(contents)
+        else:
+            extracted = extract_text(contents, filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     validate_submission_text(extracted)
 
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "text"
-    ctype = ContentType.pdf if ext == "pdf" else (ContentType.docx if ext == "docx" else ContentType.text)
+    if mime_type == "application/pdf":
+        ctype = ContentType.pdf
+    elif mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        ctype = ContentType.docx
+    elif mime_type.startswith("image/"):
+        ctype = ContentType.image
+    elif mime_type == "text/markdown":
+        ctype = ContentType.markdown
+    elif mime_type == "text/html":
+        ctype = ContentType.html
+    else:
+        ctype = ContentType.text
 
     submission = Submission(
         creator_id=current_user.id,
@@ -120,6 +151,10 @@ async def upload_submission(
         version_no=1,
         text=extracted,
         created_by=current_user.id,
+        source_file=contents,
+        source_mime_type=mime_type,
+        source_filename=filename,
+        source_layout=source_layout,
     )
     db.add(v1)
     db.flush()
@@ -128,6 +163,42 @@ async def upload_submission(
     db.commit()
     db.refresh(submission)
     return submission
+
+
+@router.get("/{submission_id}/versions/{version_id}/source")
+def get_submission_source(
+    submission_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Serve the original upload for an authorized review session."""
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    check_submission_access(submission, current_user)
+    version = (
+        db.query(SubmissionVersion)
+        .filter(
+            SubmissionVersion.id == version_id,
+            SubmissionVersion.submission_id == submission_id,
+        )
+        .first()
+    )
+    if not version or not version.source_file or not version.source_mime_type:
+        raise HTTPException(status_code=404, detail="Original source file not found")
+
+    filename = quote(version.source_filename or "source", safe="")
+    return Response(
+        content=version.source_file,
+        media_type=version.source_mime_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{filename}",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+        },
+    )
 
 
 @router.get("", response_model=List[SubmissionListResponse])

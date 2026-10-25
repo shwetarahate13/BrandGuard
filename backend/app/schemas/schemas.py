@@ -113,12 +113,14 @@ class AssetCreate(BaseModel):
     kind: str = "other"
     name: str
     file_path: Optional[str] = None
+    metadata: Optional[dict] = None
 
 class AssetResponse(BaseModel):
     id: str
     kind: str
     name: str
     file_path: Optional[str] = None
+    metadata: Optional[dict] = Field(default=None, validation_alias="metadata_")
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -162,6 +164,9 @@ class VersionResponse(BaseModel):
     submission_id: str
     version_no: int
     text: str
+    source_mime_type: Optional[str] = None
+    source_filename: Optional[str] = None
+    source_layout: Optional[dict] = None
     created_by: str
     created_at: datetime
     creator: Optional[UserResponse] = None
@@ -189,6 +194,7 @@ class FindingResponse(BaseModel):
     suggested_rewrite: Optional[str] = None
     needs_human: bool = False
     status: str
+    location: Optional[dict] = None
     created_at: datetime
     decisions: list["DecisionResponse"] = []
     model_config = {"from_attributes": True}

@@ -115,6 +115,26 @@ export const api = {
       method: "POST",
       body: formData,
     }),
+  getSubmissionSource: async (submissionId: string, versionId: string): Promise<Blob> => {
+    const token = getToken();
+    const response = await fetch(`${API_BASE}/submissions/${encodeURIComponent(submissionId)}/versions/${encodeURIComponent(versionId)}/source`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (response.status === 401) {
+      clearToken();
+      if (!window.location.pathname.includes("/login")) window.location.href = "/login";
+      throw new Error("Session expired. Please log in again.");
+    }
+    if (!response.ok) {
+      let message = `Unable to load source document (${response.status})`;
+      try {
+        const data = await response.json();
+        message = data.detail || message;
+      } catch { /* Response may not contain JSON. */ }
+      throw new Error(message);
+    }
+    return response.blob();
+  },
   checkSubmission: async (id: string) =>
     request<{ status: string; findings_count: number; submission_status: string }>(
       `/submissions/${id}/check`,
@@ -213,7 +233,7 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ text }),
     }),
-  createAsset: async (data: { kind: string; name: string; file_path?: string }) =>
+  createAsset: async (data: { kind: string; name: string; file_path?: string; metadata?: Record<string, unknown> }) =>
     request<Asset>("/admin/assets", {
       method: "POST",
       body: JSON.stringify(data),

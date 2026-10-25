@@ -3,7 +3,7 @@ import uuid
 import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Text, Integer, Float, Boolean, DateTime,
+    Column, String, Text, Integer, Float, Boolean, DateTime, LargeBinary,
     ForeignKey, Enum as SAEnum, JSON, Index
 )
 from sqlalchemy.orm import relationship
@@ -90,6 +90,7 @@ class ContentType(str, enum.Enum):
     docx = "docx"
     markdown = "markdown"
     html = "html"
+    image = "image"
 
 
 class AssetKind(str, enum.Enum):
@@ -204,6 +205,10 @@ class SubmissionVersion(Base):
     submission_id = Column(String, ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
     version_no = Column(Integer, nullable=False, default=1)
     text = Column(Text, nullable=False)
+    source_file = Column(LargeBinary, nullable=True)
+    source_mime_type = Column(String(100), nullable=True)
+    source_filename = Column(String(500), nullable=True)
+    source_layout = Column(JSON, nullable=True)
     created_by = Column(String, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=utcnow)
 

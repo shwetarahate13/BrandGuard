@@ -34,10 +34,10 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
               <strong>No Auto-Publishing:</strong> BrandGuard will never publish directly to social media or CMS platforms. Human managers must sign off and take final publishing action.
             </li>
             <li>
-              <strong>Plain Text Extraction:</strong> Uploaded PDF and DOCX files are extracted to plain text. Page-aware visual review (bounding boxes, layout coordinates) is planned for Round 3.
+              <strong>Document Review:</strong> Uploaded PDFs retain page and text bounding-box coordinates for visual review. DOCX files are checked as extracted text.
             </li>
             <li>
-              <strong>No Image Pixel Review:</strong> Image review (logo positioning, palette contrast, pixel inspection) is strictly scheduled for Round 3. Current accessibility checks examine markup alt-attributes and link text.
+              <strong>Image Review:</strong> PNG, JPEG, and SVG uploads are checked for approved palette colors, approved logo clear space, and detected text contrast. OCR and logo matching depend on readable source assets and installed image-processing services.
             </li>
             <li>
               <strong>No Real-time Multi-Cursor Co-editing:</strong> Governance occurs via revision drafts, word-level diff suggestions, and structured comments.

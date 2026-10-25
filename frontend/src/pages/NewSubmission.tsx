@@ -163,7 +163,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
                 }`}
               >
                 <Upload className="w-3.5 h-3.5" />
-                Upload Document (.txt, .docx, .pdf)
+              Upload Document or Image
               </button>
             </div>
 
@@ -186,17 +186,17 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
                 <input
                   type="file"
                   id="file-upload"
-                  accept=".txt,.md,.pdf,.docx"
+                  accept=".txt,.md,.html,.pdf,.docx,.png,.jpg,.jpeg,.svg"
                   onChange={handleFileChange}
                   className="hidden"
                 />
                 <label htmlFor="file-upload" className="cursor-pointer block">
                   <Upload className="w-8 h-8 text-stone-400 mx-auto mb-2" />
                   <p className="text-xs font-semibold text-stone-700">
-                    {file ? file.name : "Click to select or drag and drop document"}
+                    {file ? file.name : "Click to select or drag and drop a document or image"}
                   </p>
                   <p className="text-[11px] text-stone-400 mt-1">
-                    Supports plain text (.txt), Markdown (.md), PDF, and Word (.docx) up to 5 MB.
+                    Supports text, Markdown, HTML, PDF, Word, PNG, JPEG, and SVG files up to 5 MB.
                   </p>
                 </label>
               </div>

@@ -295,6 +295,7 @@ def create_asset(
         name=payload.name,
         kind=kind_enum,
         file_path=payload.file_path,
+        metadata_=payload.metadata,
     )
     db.add(asset)
     db.flush()

@@ -1,6 +1,7 @@
 """Text extraction from PDF and DOCX files."""
 import io
 import logging
+import mimetypes
 from pathlib import Path
 from fastapi import HTTPException
 
@@ -8,8 +9,26 @@ from backend.app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+SUPPORTED_UPLOAD_MIMES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "text/markdown",
+    "text/html",
+    "image/png",
+    "image/jpeg",
+    "image/svg+xml",
+}
+
 def max_file_size() -> int:
     return get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+
+def get_upload_mime_type(filename: str) -> str:
+    mime_type, _ = mimetypes.guess_type(filename)
+    if mime_type not in SUPPORTED_UPLOAD_MIMES:
+        raise ValueError(f"Unsupported file type: {Path(filename).suffix.lower()}")
+    return mime_type
 
 
 async def read_upload_contents(upload) -> bytes:
@@ -29,20 +48,62 @@ async def read_upload_contents(upload) -> bytes:
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract text from PDF bytes using pdfplumber."""
+    """Extract PDF text in layout order using pdfminer.six."""
+    return extract_pdf_text_with_layout(file_bytes)[0]
+
+
+def _walk_pdf_text_lines(element):
+    from pdfminer.layout import LTContainer, LTTextLine
+
+    if isinstance(element, LTTextLine):
+        yield element
+    elif isinstance(element, LTContainer):
+        for child in element:
+            yield from _walk_pdf_text_lines(child)
+
+
+def extract_pdf_text_with_layout(file_bytes: bytes) -> tuple[str, dict]:
+    """Extract PDF text and a source offset/bounding box map for each text line."""
     if len(file_bytes) > max_file_size():
         raise ValueError(f"File size exceeds {get_settings().MAX_UPLOAD_SIZE_MB} MB limit")
     try:
-        import pdfplumber
-        text_parts = []
-        with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
-        return "\n\n".join(text_parts)
+        from pdfminer.high_level import extract_pages
+
+        text_parts: list[str] = []
+        page_layouts = []
+        regions = []
+        offset = 0
+        for page_number, page in enumerate(extract_pages(io.BytesIO(file_bytes)), 1):
+            if page_number > 1:
+                text_parts.append("\n\n")
+                offset += 2
+            page_layouts.append({
+                "page": page_number,
+                "width": float(page.width),
+                "height": float(page.height),
+            })
+            lines = sorted(
+                _walk_pdf_text_lines(page),
+                key=lambda line: (-line.y1, line.x0),
+            )
+            visible_lines = [line for line in lines if line.get_text().strip()]
+            for line_index, line in enumerate(visible_lines):
+                line_text = line.get_text().strip()
+                start = offset
+                text_parts.append(line_text)
+                offset += len(line_text)
+                regions.append({
+                    "page": page_number,
+                    "start": start,
+                    "end": offset,
+                    "bbox": [float(line.x0), float(line.y0), float(line.x1), float(line.y1)],
+                })
+                if line_index < len(visible_lines) - 1:
+                    text_parts.append("\n")
+                    offset += 1
+        return "".join(text_parts), {"pages": page_layouts, "regions": regions}
     except Exception as e:
-        logger.error(f"PDF extraction failed: {e}")
+        logger.exception("PDF extraction failed")
         raise ValueError(f"Failed to extract text from PDF: {e}")
 
 
@@ -69,5 +130,13 @@ def extract_text(file_bytes: bytes, filename: str) -> str:
         return extract_text_from_docx(file_bytes)
     elif ext in (".txt", ".md", ".html"):
         return file_bytes.decode("utf-8", errors="replace")
+    elif ext in (".png", ".jpg", ".jpeg", ".svg"):
+        mime_type = get_upload_mime_type(filename)
+        from backend.app.pipeline.content_handlers import get_content_handler
+
+        handler = get_content_handler(mime_type)
+        if handler is None:
+            raise ValueError(f"No content handler registered for {mime_type}")
+        return handler.extract_content(file_bytes)[0]
     else:
         raise ValueError(f"Unsupported file type: {ext}")

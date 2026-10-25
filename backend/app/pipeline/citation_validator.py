@@ -11,6 +11,7 @@ Logs dropped count (count only, no content) for the insights dashboard.
 import re
 import difflib
 import logging
+import json
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 
@@ -129,8 +130,9 @@ def validate_citations(
         avoid_str = ", ".join(term.avoid) if isinstance(term.avoid, list) else str(term.avoid or "")
         valid_db_sources[str(term.id)] = ("term", f"Preferred: {term.preferred}. Avoid: {avoid_str}. {term.note or ''}")
 
-    for asset in db.query(Asset.id, Asset.name).all():
-        valid_db_sources[str(asset.id)] = ("asset", asset.name)
+    for asset in db.query(Asset.id, Asset.name, Asset.metadata_).all():
+        asset_text = f"{asset.name} {json.dumps(asset.metadata_ or {}, sort_keys=True)}"
+        valid_db_sources[str(asset.id)] = ("asset", asset_text)
 
     validated: List[Dict[str, Any]] = []
     dropped_count = 0
