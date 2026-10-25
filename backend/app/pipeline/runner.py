@@ -24,7 +24,13 @@ from backend.app.pipeline.rules_engine import run_rules_engine, RuleFinding
 from backend.app.pipeline.retriever import retrieve_sources, reindex_if_empty
 from backend.app.pipeline.content_handlers import get_content_handler
 from backend.app.pipeline.citation_validator import validate_citations
-from backend.app.pipeline.confidence import compute_confidence_and_routing, verify_intent_preserved
+from backend.app.pipeline.confidence import (
+    compute_confidence_and_routing,
+    rank_findings_by_acceptance,
+    should_suppress_finding,
+    suppressed_span_combinations,
+    verify_intent_preserved,
+)
 from backend.app.llm.client import get_llm_client, check_content_with_llm, MockProvider
 
 logger = logging.getLogger(__name__)
@@ -237,10 +243,25 @@ def run_pipeline(
                 lf["is_rule"] = False
                 candidate_findings.append(lf)
 
+    suppressed_combinations = suppressed_span_combinations(db)
+    unsuppressed_candidates = []
+    for candidate in candidate_findings:
+        start = candidate.get("span_start")
+        end = candidate.get("span_end")
+        original = text[max(0, start):min(len(text), end)] if start is not None and end is not None else ""
+        if not should_suppress_finding(candidate, original, suppressed_combinations):
+            unsuppressed_candidates.append(candidate)
+    if len(unsuppressed_candidates) != len(candidate_findings):
+        logger.info("Suppressed %d repeatedly disputed findings", len(candidate_findings) - len(unsuppressed_candidates))
+    candidate_findings = unsuppressed_candidates
+
     # 6. Non-negotiable Citation Validator
     validated_findings, dropped_count = validate_citations(
         candidate_findings, all_retrieved_sources, db
     )
+
+    # Rank candidate rewrites by their predicted reviewer acceptance probability.
+    validated_findings = rank_findings_by_acceptance(db, validated_findings, text)
 
     # 7. Confidence routing and intent-preserving rewrite verification
     final_db_findings: List[Finding] = []
@@ -256,6 +277,7 @@ def run_pipeline(
             source_similarity=source_sim,
             is_rule_based=is_rule,
             is_ambiguous=needs_human,
+            acceptance_probability=f_data.get("acceptance_probability"),
         )
 
         # Verify rewrite keeps intent
@@ -321,6 +343,7 @@ def run_pipeline(
             severity=sev_enum,
             confidence=conf_enum,
             suggested_rewrite=verified_rewrite,
+            acceptance_probability=f_routed.get("acceptance_probability"),
             needs_human=f_routed.get("needs_human", False),
             location=location,
             status=FindingStatus.open,

@@ -22,6 +22,7 @@ from backend.app.api.workflow import router as workflow_router
 from backend.app.api.insights import router as insights_router
 from backend.app.api.system import router as system_router
 from backend.app.api.guidelines import router as guidelines_router
+from backend.app.api.feedback import router as feedback_router
 from backend.app.pipeline.retriever import reindex_if_empty
 from backend.app.workers.dfi_worker import run_dfi_worker
 
@@ -103,6 +104,7 @@ app.include_router(workflow_router, prefix=api_prefix)
 app.include_router(insights_router, prefix=api_prefix)
 app.include_router(system_router, prefix=api_prefix)
 app.include_router(guidelines_router, prefix=api_prefix)
+app.include_router(feedback_router, prefix=api_prefix)
 
 # Static Files & SPA Fallback
 static_dir = Path(__file__).parent / "static"

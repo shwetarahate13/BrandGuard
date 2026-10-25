@@ -11,7 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { api } from "../api";
-import { Submission, SubmissionStatus, User } from "../types";
+import { FeedbackCategoryStats, Submission, SubmissionStatus, User } from "../types";
 
 interface DashboardProps {
   user: User;
@@ -24,6 +24,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, navigate }) => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [feedbackStats, setFeedbackStats] = useState<FeedbackCategoryStats[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(true);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const loadSubmissions = async () => {
     try {
@@ -39,8 +42,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, navigate }) => {
     }
   };
 
+  const loadFeedbackStats = async () => {
+    try {
+      setFeedbackLoading(true);
+      setFeedbackError(null);
+      const data = await api.getFeedbackStats();
+      setFeedbackStats(data.categories);
+    } catch (err) {
+      console.error("Failed to load feedback stats:", err);
+      setFeedbackError(err instanceof Error ? err.message : "Unable to load feedback stats.");
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadSubmissions();
+    loadFeedbackStats();
   }, []);
 
   const filtered = submissions.filter((s) => {
@@ -91,6 +109,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, navigate }) => {
           </button>
         )}
       </div>
+
+      <section aria-label="Reviewer feedback statistics" className="bg-white border border-stone-200 rounded-xl shadow-sm p-4 mb-6">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-xs font-bold text-stone-800">Reviewer feedback</h2>
+            <p className="text-[11px] text-stone-500 mt-0.5">Acceptance, edits, and repeated dismissals by category</p>
+          </div>
+          {feedbackError && <button onClick={loadFeedbackStats} className="text-[11px] font-semibold text-brand-700 underline">Retry</button>}
+        </div>
+        {feedbackLoading ? (
+          <p className="text-xs text-stone-400 animate-pulse">Loading reviewer feedback…</p>
+        ) : feedbackError ? (
+          <p role="alert" className="text-xs text-rose-700">{feedbackError}</p>
+        ) : feedbackStats.every((item) => item.decisions_count === 0 && item.suppression_count === 0) ? (
+          <p className="text-xs text-stone-400">No reviewer decisions recorded yet.</p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+            {feedbackStats.map((item) => (
+              <div key={item.category} className="rounded-lg bg-stone-50 border border-stone-100 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{item.category.replace(/_/g, " ")}</p>
+                <p className="text-xs text-stone-800 mt-1">
+                  {Math.round(item.acceptance_rate * 100)}% accepted · {Math.round(item.edit_rate * 100)}% edited
+                </p>
+                <p className="text-[10px] text-stone-500 mt-0.5">{item.suppression_count} suppressed patterns</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Filter Bar */}
       <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">

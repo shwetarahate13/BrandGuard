@@ -59,7 +59,7 @@ def get_insights_summary(
             if delta >= 0:
                 turnarounds.append(delta)
 
-    avg_turnaround = round(sum(turnarounds) / len(turnarounds), 1) if turnarounds else 2.4
+    avg_turnaround = round(sum(turnarounds) / len(turnarounds), 1) if turnarounds else None
 
     return InsightsSummary(
         total_submissions=total_submissions,

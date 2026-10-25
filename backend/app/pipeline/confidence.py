@@ -1,7 +1,13 @@
 """Confidence routing and intent-preserving rewrite verification."""
 import difflib
 import logging
+import re
+from collections import Counter, defaultdict
 from typing import Dict, Any, Optional
+from sqlalchemy.orm import Session
+
+from backend.app.models.models import Decision, DecisionAction, Finding, SourceType, SubmissionVersion
+from backend.app.pipeline.preference_model import score_acceptance
 
 logger = logging.getLogger(__name__)
 
@@ -11,11 +17,15 @@ def compute_confidence_and_routing(
     source_similarity: float = 0.8,
     is_rule_based: bool = False,
     is_ambiguous: bool = False,
+    acceptance_probability: float | None = None,
 ) -> Dict[str, Any]:
     """Label finding confidence as High / Medium / Low.
     
     Low confidence or ambiguous findings are flagged with needs_human=True.
     """
+    if acceptance_probability is not None:
+        finding["acceptance_probability"] = acceptance_probability
+
     if is_ambiguous:
         finding["confidence"] = "low"
         finding["needs_human"] = True
@@ -37,6 +47,81 @@ def compute_confidence_and_routing(
         finding["needs_human"] = True
 
     return finding
+
+
+def _normalize_span(span: str) -> str:
+    return re.sub(r"\s+", " ", span).strip().casefold()
+
+
+def _dismissed_pattern_counts(db: Session) -> Counter[tuple[str, str, str]]:
+    """Count disputed clause/span pairs in this single-brand workspace."""
+    dismissed = (
+        db.query(
+            Decision.original_span,
+            Finding.source_id,
+            Finding.category,
+            Finding.span_start,
+            Finding.span_end,
+            SubmissionVersion.text,
+            Decision.finding_id,
+        )
+        .join(Finding, Finding.id == Decision.finding_id)
+        .join(SubmissionVersion, SubmissionVersion.id == Finding.version_id)
+        .filter(
+            Decision.action == DecisionAction.dispute,
+            Finding.source_type == SourceType.guideline_clause,
+            Finding.source_id.isnot(None),
+        )
+        .all()
+    )
+    dismissed_findings: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    for original_span, clause_id, category, span_start, span_end, version_text, finding_id in dismissed:
+        span = original_span
+        if not span and span_start is not None and span_end is not None:
+            span = version_text[max(0, span_start):max(span_start, span_end)]
+        normalized = _normalize_span(span or "")
+        if normalized:
+            category_name = category.value if hasattr(category, "value") else str(category)
+            dismissed_findings[(str(clause_id), normalized, category_name)].add(str(finding_id))
+    return Counter({key: len(finding_ids) for key, finding_ids in dismissed_findings.items()})
+
+
+def suppressed_span_combinations(db: Session, threshold: int = 3) -> set[tuple[str, str]]:
+    """Find guideline/span pairs disputed repeatedly in this single-brand workspace."""
+    counts = _dismissed_pattern_counts(db)
+    return {(clause_id, span) for (clause_id, span, _), count in counts.items() if count >= threshold}
+
+
+def suppressed_counts_by_category(db: Session, threshold: int = 3) -> Counter[str]:
+    counts = _dismissed_pattern_counts(db)
+    suppressed = {key for key, count in counts.items() if count >= threshold}
+    return Counter(category for _, _, category in suppressed)
+
+
+def should_suppress_finding(
+    finding: Dict[str, Any],
+    original_span: str,
+    suppressed: set[tuple[str, str]],
+) -> bool:
+    if finding.get("source_type") != SourceType.guideline_clause.value:
+        return False
+    source_id = str(finding.get("source_id") or "")
+    normalized = _normalize_span(original_span)
+    return bool(source_id and normalized and (source_id, normalized) in suppressed)
+
+
+def rank_findings_by_acceptance(db: Session, findings: list[Dict[str, Any]], source_text: str) -> list[Dict[str, Any]]:
+    """Attach learned acceptance probabilities and return highest-ranked rewrites first."""
+    for finding in findings:
+        start = finding.get("span_start")
+        end = finding.get("span_end")
+        original = source_text[max(0, start):min(len(source_text), end)] if start is not None and end is not None else ""
+        finding["acceptance_probability"] = score_acceptance(db, original, finding.get("suggested_rewrite"))
+    return sorted(
+        findings,
+        key=lambda item: item.get("acceptance_probability") if item.get("acceptance_probability") is not None else 0.5,
+        reverse=True,
+    )
 
 
 def verify_intent_preserved(

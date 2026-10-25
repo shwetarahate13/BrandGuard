@@ -191,6 +191,7 @@ class FindingResponse(BaseModel):
     source_quote: Optional[str] = None
     severity: str
     confidence: str
+    acceptance_probability: Optional[float] = None
     suggested_rewrite: Optional[str] = None
     needs_human: bool = False
     status: str
@@ -206,6 +207,9 @@ class DecisionCreate(BaseModel):
     action: str  # accept, edit, dispute
     edited_text: Optional[str] = None
     reason: Optional[str] = None
+
+class DecisionRequest(DecisionCreate):
+    finding_id: str = Field(min_length=1, max_length=64)
 
 class DecisionResponse(BaseModel):
     id: str
@@ -290,6 +294,18 @@ class RepeatedIssue(BaseModel):
 
 class InsightsRepeatedResponse(BaseModel):
     repeated_issues: list[RepeatedIssue] = []
+
+
+class FeedbackCategoryStats(BaseModel):
+    category: str
+    decisions_count: int = 0
+    acceptance_rate: float = 0.0
+    edit_rate: float = 0.0
+    suppression_count: int = 0
+
+
+class FeedbackStatsResponse(BaseModel):
+    categories: list[FeedbackCategoryStats] = Field(default_factory=list)
 
 
 # ── System ──

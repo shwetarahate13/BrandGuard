@@ -13,6 +13,7 @@ import {
   InsightsSummary,
   RepeatedIssue,
   GuidelineHealthClause,
+  FeedbackCategoryStats,
 } from "./types";
 
 const API_BASE = "/api";
@@ -155,9 +156,9 @@ export const api = {
     edited_text?: string,
     reason?: string
   ) =>
-    request<Decision>(`/findings/${findingId}/decision`, {
+    request<Decision>("/decisions", {
       method: "POST",
-      body: JSON.stringify({ action, edited_text, reason }),
+      body: JSON.stringify({ finding_id: findingId, action, edited_text, reason }),
     }),
 
   // Workflow
@@ -250,6 +251,8 @@ export const api = {
   getInsightsSummary: async () => request<InsightsSummary>("/insights/summary"),
   getRepeatedIssues: async () =>
     request<{ repeated_issues: RepeatedIssue[] }>("/insights/repeated-issues"),
+  getFeedbackStats: async () =>
+    request<{ categories: FeedbackCategoryStats[] }>("/feedback/stats"),
 
   // System
   getSystemStatus: async () => request<SystemStatus>("/system/status"),

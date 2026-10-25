@@ -237,6 +237,7 @@ class Finding(Base):
     severity = Column(SAEnum(FindingSeverity), nullable=False)
     confidence = Column(SAEnum(FindingConfidence), nullable=False, default=FindingConfidence.high)
     suggested_rewrite = Column(Text, nullable=True)
+    acceptance_probability = Column(Float, nullable=True)
     needs_human = Column(Boolean, default=False)
     status = Column(SAEnum(FindingStatus), default=FindingStatus.open, nullable=False)
     location = Column(JSON, nullable=True)  # For future format-aware review
@@ -256,11 +257,23 @@ class Decision(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     action = Column(SAEnum(DecisionAction), nullable=False)
     edited_text = Column(Text, nullable=True)
+    original_span = Column(Text, nullable=True)
+    suggested_rewrite = Column(Text, nullable=True)
+    human_edited_text = Column(Text, nullable=True)
     reason = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
     finding = relationship("Finding", back_populates="decisions")
     user = relationship("User", back_populates="decisions")
+
+
+class PreferenceModelState(Base):
+    __tablename__ = "preference_model_states"
+
+    id = Column(String(50), primary_key=True)
+    model_blob = Column(LargeBinary, nullable=False)
+    sample_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
 class Comment(Base):

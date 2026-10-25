@@ -74,6 +74,7 @@ export interface Finding {
   source_quote?: string;
   severity: FindingSeverity;
   confidence: FindingConfidence;
+  acceptance_probability?: number | null;
   suggested_rewrite?: string;
   needs_human: boolean;
   status: FindingStatus;
@@ -202,4 +203,12 @@ export interface RepeatedIssue {
   category: string;
   severity: string;
   count: number;
+}
+
+export interface FeedbackCategoryStats {
+  category: string;
+  decisions_count: number;
+  acceptance_rate: number;
+  edit_rate: number;
+  suppression_count: number;
 }
