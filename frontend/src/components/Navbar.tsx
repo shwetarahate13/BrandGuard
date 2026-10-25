@@ -33,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { label: "Dashboard", path: "/", icon: FileText, roles: ["creator", "manager", "reviewer", "admin"] },
     { label: "New Check", path: "/new", icon: PlusCircle, roles: ["creator", "manager", "admin"] },
     { label: "Approved Sources", path: "/sources", icon: Database, roles: ["manager", "admin"] },
+    { label: "Guideline Health", path: "/dashboard/guideline-health", icon: BarChart3, roles: ["manager", "admin"] },
     { label: "Insights", path: "/insights", icon: BarChart3, roles: ["creator", "manager", "reviewer", "admin"] },
     { label: "Limitations", path: "/limitations", icon: HelpCircle, roles: ["creator", "manager", "reviewer", "admin"] },
   ];

@@ -122,6 +122,23 @@ export interface GuidelineDoc {
   clauses: GuidelineClause[];
 }
 
+export interface GuidelineDisputeCluster {
+  count: number;
+  examples: string[];
+}
+
+export interface GuidelineHealthClause {
+  id: string;
+  doc_id: string;
+  doc_title: string;
+  code?: string;
+  title?: string;
+  text: string;
+  dispute_friction_index: number;
+  dispute_clusters: GuidelineDisputeCluster[];
+  proposed_revision?: string | null;
+}
+
 export interface ApprovedFact {
   id: string;
   statement: string;

@@ -2,8 +2,11 @@
 import os
 import logging
 from contextlib import asynccontextmanager
+from datetime import timezone
 from pathlib import Path
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +21,9 @@ from backend.app.api.findings import router as findings_router
 from backend.app.api.workflow import router as workflow_router
 from backend.app.api.insights import router as insights_router
 from backend.app.api.system import router as system_router
+from backend.app.api.guidelines import router as guidelines_router
 from backend.app.pipeline.retriever import reindex_if_empty
+from backend.app.workers.dfi_worker import run_dfi_worker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("brandguard")
@@ -51,9 +56,21 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Chroma reindex on boot encountered: {e}")
 
-    yield
-
-    logger.info("Shutting down BrandGuard")
+    scheduler = BackgroundScheduler(timezone=timezone.utc)
+    scheduler.add_job(
+        run_dfi_worker,
+        CronTrigger(hour=2, minute=0, timezone=timezone.utc),
+        id="nightly-guideline-dfi",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.start()
+    try:
+        yield
+    finally:
+        scheduler.shutdown(wait=False)
+        logger.info("Shutting down BrandGuard")
 
 
 settings = get_settings()
@@ -85,6 +102,7 @@ app.include_router(findings_router, prefix=api_prefix)
 app.include_router(workflow_router, prefix=api_prefix)
 app.include_router(insights_router, prefix=api_prefix)
 app.include_router(system_router, prefix=api_prefix)
+app.include_router(guidelines_router, prefix=api_prefix)
 
 # Static Files & SPA Fallback
 static_dir = Path(__file__).parent / "static"

@@ -48,6 +48,25 @@ class GuidelineClauseResponse(BaseModel):
     order_index: int
     model_config = {"from_attributes": True}
 
+class GuidelineClauseRevision(BaseModel):
+    text: str = Field(min_length=1, max_length=50000)
+
+class GuidelineDisputeCluster(BaseModel):
+    count: int
+    examples: list[str] = Field(default_factory=list)
+
+class GuidelineHealthClause(BaseModel):
+    id: str
+    doc_id: str
+    doc_title: str
+    code: Optional[str] = None
+    title: Optional[str] = None
+    text: str
+    dispute_friction_index: float
+    dispute_clusters: list[GuidelineDisputeCluster] = Field(default_factory=list)
+    proposed_revision: Optional[str] = None
+    model_config = {"from_attributes": True}
+
 class GuidelineClauseCreate(BaseModel):
     code: Optional[str] = None
     title: Optional[str] = None

@@ -10,6 +10,7 @@ import { ReviewScreen } from "./pages/ReviewScreen";
 import { ApprovalView } from "./pages/ApprovalView";
 import { AdminSources } from "./pages/AdminSources";
 import { Insights } from "./pages/Insights";
+import { GuidelineHealth } from "./pages/GuidelineHealth";
 import { Limitations } from "./pages/Limitations";
 
 export const App: React.FC = () => {
@@ -103,6 +104,8 @@ export const App: React.FC = () => {
     content = user ? <AdminSources /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/insights") {
     content = user ? <Insights /> : <Login onLoginSuccess={handleLoginSuccess} />;
+  } else if (currentPath === "/dashboard/guideline-health") {
+    content = user ? <GuidelineHealth /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/limitations") {
     content = <Limitations navigate={navigate} />;
   } else {

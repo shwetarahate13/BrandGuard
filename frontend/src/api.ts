@@ -12,6 +12,7 @@ import {
   SystemStatus,
   InsightsSummary,
   RepeatedIssue,
+  GuidelineHealthClause,
 } from "./types";
 
 const API_BASE = "/api";
@@ -206,6 +207,12 @@ export const api = {
     request<any>(`/admin/terms/${id}`, { method: "DELETE" }),
 
   getAssets: async () => request<Asset[]>("/admin/assets"),
+  getGuidelineHealth: async () => request<GuidelineHealthClause[]>("/guidelines/health"),
+  applyGuidelineRevision: async (clauseId: string, text: string) =>
+    request<any>(`/guidelines/clauses/${encodeURIComponent(clauseId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ text }),
+    }),
   createAsset: async (data: { kind: string; name: string; file_path?: string }) =>
     request<Asset>("/admin/assets", {
       method: "POST",

@@ -3,7 +3,7 @@ import uuid
 import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Text, Integer, Boolean, DateTime,
+    Column, String, Text, Integer, Float, Boolean, DateTime,
     ForeignKey, Enum as SAEnum, JSON, Index
 )
 from sqlalchemy.orm import relationship
@@ -139,6 +139,7 @@ class GuidelineClause(Base):
     title = Column(String(500), nullable=True)
     text = Column(Text, nullable=False)
     order_index = Column(Integer, default=0)
+    dispute_friction_index = Column(Float, nullable=False, default=0.0, server_default="0")
     created_at = Column(DateTime, default=utcnow)
 
     doc = relationship("GuidelineDoc", back_populates="clauses")
