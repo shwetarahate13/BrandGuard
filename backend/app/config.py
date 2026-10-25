@@ -45,10 +45,15 @@ class Settings(BaseSettings):
 
     @property
     def database_url_sync(self) -> str:
-        """Get sync database URL, normalizing postgres:// to postgresql://."""
+        """Get a synchronous database URL using the installed PostgreSQL driver."""
         url = self.DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
+        # This project installs psycopg2-binary. Some providers or copied
+        # SQLAlchemy examples specify psycopg 3 explicitly; normalize that
+        # driver name rather than failing at startup with ModuleNotFoundError.
+        if url.startswith("postgresql+psycopg://"):
+            url = url.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
         return url
 
     @property
