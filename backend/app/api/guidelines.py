@@ -1,7 +1,7 @@
 """Guideline health analytics and clause revision routes."""
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path as APIPath
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -62,8 +62,8 @@ def get_guideline_health(
 
 @router.patch("/clauses/{clause_id}", response_model=GuidelineClauseResponse)
 def apply_clause_revision(
-    clause_id: str,
     payload: GuidelineClauseRevision,
+    clause_id: str = APIPath(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.manager, UserRole.admin)),
 ):

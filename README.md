@@ -3,7 +3,7 @@
 > **Pre-publication brand governance with explainable AI checks and humans in control.**
 > Built by Team **Nexora** (Shweta Rahate, Janvi Thakre) for Round 2 of the Inkloom AI Hackathon.
 
-BrandGuard sits between content drafting and publishing to review text, DOCX, and PDF content against **approved brand sources only**. It detects tone deviations, banned terminology, unapproved messaging, factual discrepancies, outdated statistics, and text accessibility issues.
+BrandGuard sits between content drafting and publishing to review text, DOCX, PDF, PNG, JPEG, and SVG content against **approved brand sources only**. It detects tone deviations, banned terminology, unapproved messaging, factual discrepancies, outdated statistics, and text accessibility issues.
 
 Every finding is **grounded in a cited source with an exact quote**, and suggested fixes are rendered as **word-level diffs** that preserve the creator's stated purpose.
 
@@ -26,7 +26,9 @@ flowchart TD
         CHROMA["ChromaDB Vector Store (TF-IDF Hashing Embeddings)"]
         LLM["Provider-Agnostic LLM / Offline Mock Engine"]
         VAL["Citation Validator (Strict Source & Quote Verification)"]
-        CONF["Confidence Router (High / Med / Needs Human)"]
+        CONF["Confidence Router + Online Acceptance Ranking"]
+        MEDIA["PDF Layout + OCR / Image Brand Inspection"]
+        DFI["Nightly Guideline Friction Worker"]
     end
 
     subgraph Storage["Managed Database (Neon)"]
@@ -35,12 +37,14 @@ flowchart TD
 
     UI -->|REST API with JWT| FASTAPI
     FASTAPI --> NORM
+    FASTAPI --> MEDIA
+    DFI --> PG
     NORM --> RULES
     NORM --> CHROMA
     CHROMA -.->|Top-k Source Snippets| LLM
     RULES & LLM --> VAL
     VAL --> CONF
-    CONF -->|Persist Findings| PG
+    CONF -->|Persist Findings + Feedback| PG
     FASTAPI -->|Read/Write Source of Truth| PG
     PG -.->|Re-index on Boot if Empty| CHROMA
 ```
@@ -57,6 +61,9 @@ flowchart TD
 6. **Multi-Role Governance Workflow**: Role-based access control (Creator, Brand Manager, Reviewer, Admin) with submission history, comments, and approval sign-off.
 7. **Document Extraction**: Seamless text extraction from `.txt`, `.docx`, and `.pdf` uploads under 5 MB.
 8. **Deterministic Offline Mode**: Fully functional with zero API keys required; seamless toggle to Anthropic Claude via environment variables.
+9. **Guideline-Gap Insights**: A nightly job calculates a dispute-friction index for each clause. Managers can inspect the highest-friction clauses at `/dashboard/guideline-health`; active LLM providers draft proposed revisions for clauses above 30%.
+10. **Image and Spatial PDF Review**: PNG, JPEG, and SVG uploads receive OCR, palette checks against colors in approved asset metadata, approved-logo matching, clear-space checks where a guideline specifies a measurable minimum, and detected-text contrast checks. PDF findings carry page coordinates, which the review screen highlights on the rendered page.
+11. **Reviewer Feedback Loop**: Accept, edit, and dispute decisions train a persisted online logistic-regression model. Future rewrites are ranked by estimated acceptance probability; repeated disputed clause/span pairs are suppressed after three distinct findings. Suppression uses the current single-brand workspace because this deployment has no separate team table.
 
 ---
 
@@ -100,6 +107,7 @@ Open `http://localhost:$PORT` in your browser.
 
 For Vite development, set `BRANDGUARD_API_PROXY_TARGET` to the backend origin and
 `CORS_ORIGINS` to the Vite origin; the Vite server uses its standard default port unless configured separately.
+Image OCR and SVG rasterization also require Tesseract OCR and Cairo on the host. The Docker image installs these system packages.
 
 ---
 
@@ -123,6 +131,7 @@ Open `http://localhost:$HOST_PORT` in your browser (`HOST_PORT` defaults to the 
 | `LLM_MODEL` | `claude-sonnet-4-20250514` | Target LLM model name |
 | `LLM_API_KEY` | `None` | Anthropic Claude API Key (optional) |
 | `CHROMA_PERSIST_DIR` | `./data/chroma` | Persistent vector directory (`/tmp/chroma` on Render) |
+| `ASSET_STORAGE_DIR` | `./data/assets` | Allowed local root for approved logo files referenced by asset records |
 | `AUTO_SEED` | `false` | Idempotently seed Aurelia Foods brand kit and demo users |
 | `PORT` | `8000` | Container port for web server; configurable in deployment |
 | `CORS_ORIGINS` | Empty | Comma-separated frontend origins when running the UI on a separate host |
@@ -132,7 +141,7 @@ Open `http://localhost:$HOST_PORT` in your browser (`HOST_PORT` defaults to the 
 ## Running Tests and Evaluations
 
 ```bash
-# Run full unit and integration test suite (15 tests)
+# Run full unit and integration test suite
 pytest -v
 
 # Run automated evaluation script against ground-truth fixtures
@@ -153,6 +162,6 @@ python scripts/smoke_test.py http://127.0.0.1:8000
 - [`docs/EVALUATION.md`](docs/EVALUATION.md): Precision, recall, and citation drop rate numbers.
 - [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): Transparent disclosures and known limitations.
 - [`docs/PLAN_CHANGES.md`](docs/PLAN_CHANGES.md): Full explanation of changes from Round 1.
-- [`docs/ROUND3_IMPROVEMENTS.md`](docs/ROUND3_IMPROVEMENTS.md): The three major planned Round 3 improvements.
+- [`docs/ROUND3_IMPROVEMENTS.md`](docs/ROUND3_IMPROVEMENTS.md): The three delivered Round 3 improvements.
 - [`docs/PROJECT_SUMMARY.md`](docs/PROJECT_SUMMARY.md): 1-2 page summary for project slide deck.
 - [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md): Recorded engineering assumptions.

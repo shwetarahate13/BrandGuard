@@ -1,7 +1,7 @@
 """Pydantic v2 schemas for BrandGuard API."""
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field, EmailStr
+from typing import Literal, Optional
+from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator
 
 
 # ── Auth ──
@@ -50,6 +50,13 @@ class GuidelineClauseResponse(BaseModel):
 
 class GuidelineClauseRevision(BaseModel):
     text: str = Field(min_length=1, max_length=50000)
+
+    @field_validator("text")
+    @classmethod
+    def reject_blank_revision(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Revision text cannot be blank")
+        return value
 
 class GuidelineDisputeCluster(BaseModel):
     count: int
@@ -209,7 +216,16 @@ class DecisionCreate(BaseModel):
     reason: Optional[str] = None
 
 class DecisionRequest(DecisionCreate):
-    finding_id: str = Field(min_length=1, max_length=64)
+    finding_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
+    action: Literal["accept", "edit", "dispute"]
+    edited_text: Optional[str] = Field(default=None, max_length=50000)
+    reason: Optional[str] = Field(default=None, max_length=5000)
+
+    @model_validator(mode="after")
+    def edited_action_requires_text(self):
+        if self.action == "edit" and not (self.edited_text or "").strip():
+            raise ValueError("edited_text is required for edit decisions")
+        return self
 
 class DecisionResponse(BaseModel):
     id: str

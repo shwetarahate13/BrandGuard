@@ -1,21 +1,26 @@
-# Known Limitations & Responsible Disclosures
+# Known Limitations & Responsible Disclosures (Round 3)
 
-In accordance with Hackathon Round 2 standards, BrandGuard provides clear and honest disclosures regarding its current architectural boundaries, performance envelope, and security controls.
+In accordance with Hackathon Round 3 standards, BrandGuard provides clear and honest disclosures regarding its current architectural boundaries, performance envelope, and security controls.
 
 ---
 
-## 1. Scope Boundaries (Round 2 Build)
+## 1. Scope Boundaries
 
 1. **No Automated Publishing**:
    - BrandGuard does not auto-publish to CMS systems, social media APIs, or advertising platforms.
    - All content publishing requires an authorized human manager or reviewer sign-off.
-2. **Text-Only Extraction for Document Uploads**:
-   - Uploaded PDF and Word (.docx) files are converted into plain text streams for review.
-   - Spatial layout inspection, page-coordinate bounding boxes, and column-aware formatting are out of scope for Round 2 and scheduled for Round 3.
-3. **No Image Pixel or Logo Contrast Review**:
-   - Image files (.png, .jpeg) are registered as brand assets but are not analyzed at the raw pixel level.
-   - Text accessibility checks verify markup-level attributes (empty alt attributes on `<img>` tags and vague link text like `[click here]`). Image color contrast and visual logo clear-space inspection are scheduled for Round 3.
-4. **No Real-Time Collaborative Co-Editing**:
+2. **DOCX and Complex PDF Layouts**:
+   - DOCX content is extracted as text. PDF findings include page and line bounding boxes, but complex columns, rotated text, and decorative typography may not align perfectly with a highlight.
+3. **Image Inspection Depends on Source Records and OCR**:
+   - PNG, JPEG, and SVG checks need color values in approved asset metadata to compare palettes. Logo clear-space checks need a readable approved logo file and a measurable minimum in a guideline.
+   - OCR can miss text or misread stylized lettering. Contrast checks cover detected text regions and do not inspect EXIF/IPTC metadata.
+4. **Single-Brand Workspace Scope**:
+   - The current data model has no separate team entity. Repeated-dispute suppression and feedback statistics therefore use the database's single brand workspace.
+5. **LLM-Generated Guideline Revisions**:
+   - Proposed wording is generated only when a live LLM provider is configured. Offline mock mode does not create draft revisions.
+6. **Process-Local Rate Limits**:
+   - API request counters are held in each application process. Deployments with multiple workers or replicas do not share quotas.
+7. **No Real-Time Collaborative Co-Editing**:
    - Content is governed through distinct revisions (`v1 -> v2 -> v3`), structured comments, and diff-based decisions rather than multi-cursor live editing.
 
 ---

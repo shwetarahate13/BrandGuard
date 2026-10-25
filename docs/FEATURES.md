@@ -1,4 +1,4 @@
-# BrandGuard Completed Features Matrix (Round 2 Build)
+# BrandGuard Completed Features Matrix (Round 3 Build)
 
 This document tracks all completed features for the Round 2 build of **BrandGuard** by Team **Nexora** (Shweta Rahate, Janvi Thakre).
 
@@ -19,6 +19,12 @@ This document tracks all completed features for the Round 2 build of **BrandGuar
 | **13** | **Provider-Agnostic LLM Client & Mock Mode** | `Working` | `backend/app/llm/client.py` | UI displays active engine badge; runs completely offline without API keys; seamless Claude API toggle. |
 | **14** | **Cold-Start Resilience UI** | `Working` | `frontend/src/components/ColdStartBanner.tsx` | Graceful notification banner when initial free-tier boot request takes > 2.5s. |
 | **15** | **Single Docker Web Service on Render** | `Working` | `Dockerfile`, `render.yaml`, `scripts/smoke_test.py` | Multi-stage Docker build verified locally; passes full automated smoke test. |
+| **16** | **Guideline-Gap Insights** | `Working` | `backend/app/workers/dfi_worker.py`, `backend/app/api/guidelines.py` | Nightly dispute-friction index by clause, TF-IDF reason clusters, manager health API, and one-click clause revision. |
+| **17** | **Guideline Health Analytics** | `Working` | `frontend/src/pages/GuidelineHealth.tsx` | `/dashboard/guideline-health` sorts clauses by DFI, highlights risk bands, and offers proposed wording when an active LLM is configured. |
+| **18** | **Image Review and Brand Checks** | `Working` | `backend/app/pipeline/content_handlers.py`, `frontend/src/components/SourceMediaViewer.tsx` | OCR, dominant palette comparison (±15 RGB/channel), approved logo template matching, measurable clear-space checks, and WCAG AA contrast checks. |
+| **19** | **Spatial PDF Inspection** | `Working` | `backend/app/utils/text_extract.py`, `frontend/src/components/SourceMediaViewer.tsx` | pdfminer page layout coordinates are stored on findings and rendered as translucent highlights in the PDF review. |
+| **20** | **Reinforcement Feedback Loop** | `Working` | `backend/app/pipeline/preference_model.py`, `backend/app/pipeline/confidence.py`, `/feedback/stats` | Accept/edit/dispute decisions update a persisted SGD logistic model; suggestions are ranked by acceptance probability and repeated disputed clause/span pairs are suppressed after three distinct findings. Suppression is workspace-scoped because the current deployment model has one brand workspace. |
+| **21** | **Round 3 API Hardening** | `Working` | `backend/app/services/rate_limit.py`, `tests/integration/test_round3_endpoints.py` | Validated request and path inputs, rate limits on added APIs, and integration coverage for each added endpoint. |
 
 ---
 
@@ -30,6 +36,8 @@ This document tracks all completed features for the Round 2 build of **BrandGuar
 - **Word-Level Diff Fix (Improvement 1)**: View proposed replacements rendered as strikethrough red deletions and green additions.
 - **Decision buttons**: Click **Accept Fix** to generate a new version `v2`, or click **Edit** or **Dispute**.
 - **Audit comments**: Add a reviewer comment at the bottom of the review page.
+- **Image review**: PNG, JPEG, and SVG previews show canvas-drawn finding boxes linked to the findings list.
+- **PDF review**: Extracted page coordinates are highlighted over rendered PDF pages.
 
 ### 2. Approval Dossier (`/approval/:id`)
 - Accessible by Managers, Reviewers, and Admins.
@@ -48,3 +56,9 @@ This document tracks all completed features for the Round 2 build of **BrandGuar
 - Breakdown of issues by category: `tone`, `terminology`, `messaging`, `factual_accuracy`, `unsupported_claim`, `accessibility`.
 - Severity distribution: `critical`, `major`, `minor`, `info`.
 - Top recurring violations table.
+- The main dashboard also shows acceptance rate, edit rate, and suppressed patterns by category.
+
+### 5. Guideline Health (`/dashboard/guideline-health`)
+- Clauses are sorted by dispute-friction index, with green, amber, and red risk bands.
+- Clauses above 30% can show an LLM-drafted revision when a live provider is configured.
+- Managers can accept, edit, or dismiss the proposed revision.

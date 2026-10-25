@@ -1,6 +1,6 @@
 """Submissions API routes: create, upload, view, check, and add versions."""
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Path as APIPath, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -167,8 +167,8 @@ async def upload_submission(
 
 @router.get("/{submission_id}/versions/{version_id}/source")
 def get_submission_source(
-    submission_id: str,
-    version_id: str,
+    submission_id: str = APIPath(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$"),
+    version_id: str = APIPath(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

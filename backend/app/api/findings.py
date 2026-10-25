@@ -1,7 +1,7 @@
 """Findings API routes: view findings and make decisions (accept, edit, dispute)."""
 from typing import List
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path as APIPath
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -148,8 +148,8 @@ def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, curr
 
 @router.post("/findings/{finding_id}/decision", response_model=DecisionResponse)
 def submit_decision(
-    finding_id: str,
     payload: DecisionCreate,
+    finding_id: str = APIPath(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
