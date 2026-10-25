@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -97,14 +97,14 @@ if assets_dir.exists():
 
 
 @app.get("/{full_path:path}")
-async def serve_spa(request: Request, full_path: str):
+def serve_spa(full_path: str):
     """Serve built React single-page app or fall back to index.html for client routing."""
     # Don't intercept API routes
     if full_path.startswith("api/"):
         return JSONResponse(status_code=404, content={"detail": "API endpoint not found"})
 
-    target_file = static_dir / full_path
-    if full_path and target_file.is_file():
+    target_file = (static_dir / full_path).resolve()
+    if full_path and target_file.is_relative_to(static_dir.resolve()) and target_file.is_file():
         return FileResponse(str(target_file))
 
     index_file = static_dir / "index.html"

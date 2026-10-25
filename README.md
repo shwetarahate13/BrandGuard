@@ -93,18 +93,23 @@ alembic upgrade head
 python scripts/generate_fixtures.py
 
 # 5. Start BrandGuard server
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+export PORT="${PORT:-8000}"
+uvicorn backend.app.main:app --host 127.0.0.1 --port "$PORT"
 ```
-Open [http://localhost:8000](http://localhost:8000) in your browser.
+Open `http://localhost:$PORT` in your browser.
+
+For Vite development, set `BRANDGUARD_API_PROXY_TARGET` to the backend origin and
+`CORS_ORIGINS` to the Vite origin; the Vite server uses its standard default port unless configured separately.
 
 ---
 
 ### Option B: Docker Compose
 
 ```bash
+# Set a URL-safe database password in .env as POSTGRES_PASSWORD first.
 docker compose up --build
 ```
-Open [http://localhost:8000](http://localhost:8000) in your browser.
+Open `http://localhost:$HOST_PORT` in your browser (`HOST_PORT` defaults to the configured Compose mapping).
 
 ---
 
@@ -113,15 +118,14 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
 | `DATABASE_URL` | `sqlite:///./brandguard.db` | PostgreSQL connection string (Neon in production) |
-| `JWT_SECRET` | `dev-jwt-secret...` | Secret key for JWT session signature |
-| `SECRET_KEY` | `dev-secret-key...` | Application secret key |
+| `JWT_SECRET` | Generated per process when unset | Secret key for JWT session signature; set a stable value for deployments |
 | `LLM_PROVIDER` | `mock` | `mock` (offline deterministic) or `anthropic` |
 | `LLM_MODEL` | `claude-sonnet-4-20250514` | Target LLM model name |
 | `LLM_API_KEY` | `None` | Anthropic Claude API Key (optional) |
-| `EMBEDDING_BACKEND` | `tfidf` | `tfidf` (production default for 512MB RAM) |
 | `CHROMA_PERSIST_DIR` | `./data/chroma` | Persistent vector directory (`/tmp/chroma` on Render) |
-| `AUTO_SEED` | `true` | Idempotently seed Aurelia Foods brand kit and demo users |
-| `PORT` | `8000` | Port for web server |
+| `AUTO_SEED` | `false` | Idempotently seed Aurelia Foods brand kit and demo users |
+| `PORT` | `8000` | Container port for web server; configurable in deployment |
+| `CORS_ORIGINS` | Empty | Comma-separated frontend origins when running the UI on a separate host |
 
 ---
 
@@ -142,13 +146,13 @@ python scripts/smoke_test.py http://127.0.0.1:8000
 
 ## Project Documentation Directory
 
-- [`docs/DEPLOYMENT.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/DEPLOYMENT.md): Click-by-click deployment guide for Render + Neon.
-- [`docs/DEMO_SCRIPT.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/DEMO_SCRIPT.md): 3-minute click-by-click walkthrough for judges.
-- [`docs/FEATURES.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/FEATURES.md): Working / Partial / Planned status of all features.
-- [`docs/TECHNOLOGY.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/TECHNOLOGY.md): In-depth technical architecture and design decisions.
-- [`docs/EVALUATION.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/EVALUATION.md): Precision, recall, and citation drop rate numbers.
-- [`docs/LIMITATIONS.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/LIMITATIONS.md): Transparent disclosures and known limitations.
-- [`docs/PLAN_CHANGES.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/PLAN_CHANGES.md): Full explanation of changes from Round 1.
-- [`docs/ROUND3_IMPROVEMENTS.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/ROUND3_IMPROVEMENTS.md): The three major planned Round 3 improvements.
-- [`docs/PROJECT_SUMMARY.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/PROJECT_SUMMARY.md): 1-2 page summary for project slide deck.
-- [`docs/ASSUMPTIONS.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/ASSUMPTIONS.md): Recorded engineering assumptions.
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): Click-by-click deployment guide for Render + Neon.
+- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md): 3-minute click-by-click walkthrough for judges.
+- [`docs/FEATURES.md`](docs/FEATURES.md): Working / Partial / Planned status of all features.
+- [`docs/TECHNOLOGY.md`](docs/TECHNOLOGY.md): In-depth technical architecture and design decisions.
+- [`docs/EVALUATION.md`](docs/EVALUATION.md): Precision, recall, and citation drop rate numbers.
+- [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): Transparent disclosures and known limitations.
+- [`docs/PLAN_CHANGES.md`](docs/PLAN_CHANGES.md): Full explanation of changes from Round 1.
+- [`docs/ROUND3_IMPROVEMENTS.md`](docs/ROUND3_IMPROVEMENTS.md): The three major planned Round 3 improvements.
+- [`docs/PROJECT_SUMMARY.md`](docs/PROJECT_SUMMARY.md): 1-2 page summary for project slide deck.
+- [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md): Recorded engineering assumptions.

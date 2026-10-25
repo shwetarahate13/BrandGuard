@@ -1,6 +1,6 @@
 """Findings API routes: view findings and make decisions (accept, edit, dispute)."""
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db

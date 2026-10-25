@@ -1,45 +1,41 @@
 import React, { useEffect, useState } from "react";
 import {
-  BarChart3,
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
   Clock,
-  ShieldAlert,
   ThumbsUp,
-  ThumbsDown,
   Layers,
 } from "lucide-react";
 import { api } from "../api";
-import { InsightsSummary, RepeatedIssue, User } from "../types";
+import { InsightsSummary, RepeatedIssue } from "../types";
 
-interface InsightsProps {
-  user: User;
-  navigate: (path: string) => void;
-}
-
-export const Insights: React.FC<InsightsProps> = ({ user, navigate }) => {
+export const Insights: React.FC = () => {
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [repeated, setRepeated] = useState<RepeatedIssue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadInsights = async () => {
+    try {
+      setLoading(true);
+      setLoadError(null);
+      const [s, r] = await Promise.all([
+        api.getInsightsSummary(),
+        api.getRepeatedIssues(),
+      ]);
+      setSummary(s);
+      setRepeated(r.repeated_issues || []);
+    } catch (err) {
+      console.error("Failed to load insights:", err);
+      setLoadError(err instanceof Error ? err.message : "Unable to load insights.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const [s, r] = await Promise.all([
-          api.getInsightsSummary(),
-          api.getRepeatedIssues(),
-        ]);
-        setSummary(s);
-        setRepeated(r.repeated_issues || []);
-      } catch (err) {
-        console.error("Failed to load insights:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    loadInsights();
   }, []);
 
   if (loading) {
@@ -50,18 +46,23 @@ export const Insights: React.FC<InsightsProps> = ({ user, navigate }) => {
     );
   }
 
-  if (!summary) return null;
+  if (loadError || !summary) {
+    return (
+      <div role="alert" className="max-w-xl mx-auto px-4 py-16 text-center">
+        <p className="text-sm font-semibold text-rose-800">Could not load insights</p>
+        <p className="text-xs text-rose-700 mt-1">{loadError || "No insight data was returned."}</p>
+        <button onClick={loadInsights} className="mt-3 px-3 py-1.5 text-xs font-semibold bg-white border border-rose-300 rounded-lg text-rose-800">
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   const totalDecisions = summary.accepted_count + summary.disputed_count;
   const acceptRate =
     totalDecisions > 0
       ? Math.round((summary.accepted_count / totalDecisions) * 100)
       : 88;
-  const disputeRate =
-    totalDecisions > 0
-      ? Math.round((summary.disputed_count / totalDecisions) * 100)
-      : 12;
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Title */}

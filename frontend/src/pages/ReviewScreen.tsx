@@ -3,21 +3,16 @@ import {
   ArrowLeft,
   Check,
   Edit2,
-  AlertOctagon,
-  Clock,
   ShieldCheck,
   Send,
   MessageSquare,
   HelpCircle,
-  ExternalLink,
   ChevronDown,
   ChevronUp,
   FileText,
-  RotateCcw,
-  Sparkles,
 } from "lucide-react";
 import { api } from "../api";
-import { Submission, Finding, User, FindingStatus } from "../types";
+import { Submission, Finding, User } from "../types";
 import { DiffViewer } from "../components/DiffViewer";
 
 interface ReviewScreenProps {
@@ -34,6 +29,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
 
   // Edit modal state
@@ -54,6 +50,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const sub = await api.getSubmission(submissionId);
       setSubmission(sub);
       const fList = await api.getFindings(submissionId);
@@ -67,6 +64,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       }
     } catch (err) {
       console.error("Failed to load review data:", err);
+      setLoadError(err instanceof Error ? err.message : "Unable to load review data.");
+      setSubmission(null);
     } finally {
       setLoading(false);
     }
@@ -253,7 +252,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   if (!submission) {
     return (
       <div className="max-w-xl mx-auto py-16 text-center">
-        <p className="text-sm text-stone-600">Submission not found.</p>
+        <p role={loadError ? "alert" : undefined} className="text-sm text-stone-600">{loadError || "Submission not found."}</p>
+        {loadError && <button onClick={loadData} className="mt-4 text-xs font-semibold text-brand-700 underline">Try again</button>}
         <button onClick={() => navigate("/")} className="mt-4 text-xs font-semibold text-brand-700">
           Back to Dashboard
         </button>

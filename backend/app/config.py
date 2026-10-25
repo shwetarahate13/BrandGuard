@@ -1,7 +1,7 @@
 """BrandGuard application configuration."""
-import os
-from pathlib import Path
+import secrets
 from functools import lru_cache
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -12,9 +12,10 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "BrandGuard"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = False
-    SECRET_KEY: str = "dev-secret-key-change-in-production"
-    JWT_SECRET: str = "dev-jwt-secret-change-in-production"
+    # Use a fresh local-only key when no environment secret is configured.
+    # Production deployments should provide JWT_SECRET so tokens remain valid
+    # across restarts and multiple application instances.
+    JWT_SECRET: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 480  # 8 hours
 
@@ -31,9 +32,6 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: int = 30
     LLM_MAX_RETRIES: int = 2
 
-    # Embeddings
-    EMBEDDING_BACKEND: str = "tfidf"  # "tfidf" or "sentence_transformer"
-
     # Upload limits
     MAX_UPLOAD_SIZE_MB: int = 5
     MAX_TEXT_WORDS: int = 5000
@@ -41,12 +39,8 @@ class Settings(BaseSettings):
     # Seeding
     AUTO_SEED: bool = False
 
-    # CORS (local dev only)
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
-
-    # Rate limiting
-    RATE_LIMIT_AUTH: str = "10/minute"
-    RATE_LIMIT_CHECK: str = "20/minute"
+    # Set this only when the frontend is hosted on a separate origin.
+    CORS_ORIGINS: str = ""
 
     @property
     def database_url_sync(self) -> str:

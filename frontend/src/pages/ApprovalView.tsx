@@ -3,31 +3,25 @@ import {
   ArrowLeft,
   ShieldCheck,
   AlertTriangle,
-  XCircle,
   Clock,
-  User as UserIcon,
-  CheckCircle2,
-  FileText,
-  RotateCcw,
 } from "lucide-react";
 import { api } from "../api";
-import { Submission, Finding, User } from "../types";
+import { Submission, Finding } from "../types";
 
 interface ApprovalViewProps {
   submissionId: string;
-  user: User;
   navigate: (path: string) => void;
 }
 
 export const ApprovalView: React.FC<ApprovalViewProps> = ({
   submissionId,
-  user,
   navigate,
 }) => {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [history, setHistory] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Approval modal
   const [decisionModal, setDecisionModal] = useState<"approved" | "changes_requested" | "rejected" | null>(null);
@@ -37,6 +31,7 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const sub = await api.getSubmission(submissionId);
       setSubmission(sub);
       const fList = await api.getFindings(submissionId);
@@ -45,6 +40,8 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
       setHistory(hist);
     } catch (err) {
       console.error("Failed to load approval view:", err);
+      setLoadError(err instanceof Error ? err.message : "Unable to load approval details.");
+      setSubmission(null);
     } finally {
       setLoading(false);
     }
@@ -84,7 +81,8 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
   if (!submission) {
     return (
       <div className="max-w-xl mx-auto py-16 text-center text-xs text-stone-600">
-        Submission not found.
+        <p role={loadError ? "alert" : undefined}>{loadError || "Submission not found."}</p>
+        {loadError && <button onClick={loadData} className="mt-3 underline font-semibold">Try again</button>}
       </div>
     );
   }

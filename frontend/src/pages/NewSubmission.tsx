@@ -1,14 +1,11 @@
 import React, { useState } from "react";
 import { Upload, FileText, ArrowLeft, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import { api } from "../api";
-import { User } from "../types";
-
 interface NewSubmissionProps {
-  user: User;
   navigate: (path: string) => void;
 }
 
-export const NewSubmission: React.FC<NewSubmissionProps> = ({ user, navigate }) => {
+export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
   const [tab, setTab] = useState<"paste" | "upload">("paste");
   const [title, setTitle] = useState("");
   const [intent, setIntent] = useState("");

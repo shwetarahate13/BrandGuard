@@ -92,17 +92,17 @@ export const App: React.FC = () => {
   } else if (currentPath === "/login") {
     content = <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/new") {
-    content = user ? <NewSubmission user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    content = user ? <NewSubmission navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath.startsWith("/review/")) {
     const id = currentPath.replace("/review/", "");
     content = user ? <ReviewScreen submissionId={id} user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath.startsWith("/approval/")) {
     const id = currentPath.replace("/approval/", "");
-    content = user ? <ApprovalView submissionId={id} user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    content = user ? <ApprovalView submissionId={id} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/sources") {
-    content = user ? <AdminSources user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    content = user ? <AdminSources /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/insights") {
-    content = user ? <Insights user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    content = user ? <Insights /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/limitations") {
     content = <Limitations navigate={navigate} />;
   } else {

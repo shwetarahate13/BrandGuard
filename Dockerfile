@@ -14,7 +14,6 @@ FROM python:3.12-slim AS production
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=. \
-    EMBEDDING_BACKEND=tfidf \
     CHROMA_PERSIST_DIR=/tmp/chroma \
     AUTO_SEED=true
 
@@ -41,9 +40,7 @@ RUN chmod +x ./entrypoint.sh
 # Copy built frontend assets from Stage 1 into backend/app/static
 COPY --from=frontend-builder /app/backend/app/static ./backend/app/static
 
-EXPOSE 8000
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/api/health || exit 1
+    CMD curl -f "http://localhost:${PORT}/api/health" || exit 1
 
 ENTRYPOINT ["./entrypoint.sh"]

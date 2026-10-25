@@ -11,7 +11,7 @@ BrandGuard is engineered to run on **Render's free tier** (512 MB RAM, 0.1 CPU) 
                          Single URL (HTTPS)
                        ┌─────────────────────────┐
                        │  FastAPI (Uvicorn)      │
-                       │  Port: $PORT (8000)     │
+                       │  Port: $PORT (runtime)  │
                        ├────────────┬────────────┤
                        │  /api/*    │  /* (SPA)  │
                        │  Endpoints │ Static UI  │
@@ -58,16 +58,15 @@ git push -u origin main
 1. Log into your [Render Dashboard](https://dashboard.render.com).
 2. Click the **New +** button in the top navigation bar and select **Blueprint**.
 3. Connect your GitHub account and select your `BrandGuard` repository.
-4. Render will automatically detect the [`render.yaml`](file:///Users/shwetarahate/Downloads/BrandGuard-2/render.yaml) file in the root directory.
+4. Render will automatically detect the [`render.yaml`](../render.yaml) file in the root directory.
 5. In the configuration prompt, provide the environment variables:
    - `DATABASE_URL`: Paste the Neon connection string copied in Step 1.
    - `JWT_SECRET`: Render will auto-generate a secure random value.
-   - `SECRET_KEY`: Render will auto-generate a secure random value.
    - `LLM_PROVIDER`: Keep as `mock` for deterministic zero-key demo mode, or set to `anthropic` if you have an API key.
    - `LLM_API_KEY`: *(Optional)* Leave blank if using `mock`, or paste your Anthropic API key.
    - `AUTO_SEED`: Keep as `true` (idempotently seeds demo users, 26 facts, brand guidelines, and sample submissions).
 6. Click **Apply**.
-7. Render will pull the multi-stage [`Dockerfile`](file:///Users/shwetarahate/Downloads/BrandGuard-2/Dockerfile), build the React static bundle, install the lightweight Python dependencies, and start the service.
+7. Render will pull the multi-stage [`Dockerfile`](../Dockerfile), build the React static bundle, install the lightweight Python dependencies, and start the service.
 
 ---
 

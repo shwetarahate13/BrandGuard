@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
+from backend.app.config import get_settings
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, SubmissionStatus,
@@ -15,10 +16,19 @@ from backend.app.schemas.schemas import (
 )
 from backend.app.services.auth import get_current_user
 from backend.app.utils.audit import log_action
-from backend.app.utils.text_extract import extract_text
+from backend.app.utils.text_extract import extract_text, read_upload_contents
 from backend.app.pipeline.runner import run_pipeline
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
+
+
+def validate_submission_text(text: str) -> None:
+    max_words = get_settings().MAX_TEXT_WORDS
+    if len(text.split()) > max_words:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Submission exceeds the {max_words}-word limit",
+        )
 
 
 def check_submission_access(submission: Submission, user: User):
@@ -58,6 +68,7 @@ def create_submission(
 
     # Create Version 1
     text_content = payload.text or ""
+    validate_submission_text(text_content)
     v1 = SubmissionVersion(
         submission_id=submission.id,
         version_no=1,
@@ -83,12 +94,13 @@ async def upload_submission(
     current_user: User = Depends(get_current_user),
 ):
     """Create a submission by extracting text from a file upload (PDF, DOCX, TXT, MD)."""
-    contents = await file.read()
+    contents = await read_upload_contents(file)
     filename = file.filename or "uploaded_content.txt"
     try:
         extracted = extract_text(contents, filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    validate_submission_text(extracted)
 
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "text"
     ctype = ContentType.pdf if ext == "pdf" else (ContentType.docx if ext == "docx" else ContentType.text)
@@ -243,6 +255,7 @@ def add_version(
         raise HTTPException(status_code=404, detail="Submission not found")
 
     check_submission_access(submission, current_user)
+    validate_submission_text(payload.text)
 
     # Get current max version
     max_ver = (

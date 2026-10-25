@@ -1,33 +1,23 @@
 import React, { useEffect, useState } from "react";
 import {
-  Database,
   BookOpen,
   CheckCircle,
-  FileText,
-  Upload,
   Plus,
-  Trash2,
   RefreshCw,
-  AlertCircle,
-  Calendar,
   Layers,
   Image as ImageIcon,
 } from "lucide-react";
 import { api } from "../api";
-import { GuidelineDoc, ApprovedFact, Term, Asset, User } from "../types";
+import { GuidelineDoc, ApprovedFact, Term, Asset } from "../types";
 
-interface AdminSourcesProps {
-  user: User;
-  navigate: (path: string) => void;
-}
-
-export const AdminSources: React.FC<AdminSourcesProps> = ({ user, navigate }) => {
+export const AdminSources: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"guidelines" | "facts" | "terms" | "assets">("guidelines");
   const [guidelines, setGuidelines] = useState<GuidelineDoc[]>([]);
   const [facts, setFacts] = useState<ApprovedFact[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [reindexing, setReindexing] = useState(false);
   const [reindexMsg, setReindexMsg] = useState<string | null>(null);
 
@@ -51,6 +41,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ user, navigate }) =>
   const loadAll = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const [g, f, t, a] = await Promise.all([
         api.getGuidelines(),
         api.getFacts(),
@@ -63,6 +54,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ user, navigate }) =>
       setAssets(a);
     } catch (err) {
       console.error("Failed to load sources:", err);
+      setLoadError(err instanceof Error ? err.message : "Unable to load approved sources.");
     } finally {
       setLoading(false);
     }
@@ -168,6 +160,18 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ user, navigate }) =>
       {reindexMsg && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-medium">
           {reindexMsg}
+        </div>
+      )}
+
+      {loading && (
+        <div role="status" className="text-center py-4 text-xs text-stone-500 animate-pulse">
+          Loading approved brand sources...
+        </div>
+      )}
+      {loadError && (
+        <div role="alert" className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800">
+          <span>Could not load approved sources: {loadError}</span>
+          <button onClick={loadAll} className="ml-3 underline font-semibold">Try again</button>
         </div>
       )}
 

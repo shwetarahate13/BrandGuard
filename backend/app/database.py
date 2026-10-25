@@ -1,7 +1,7 @@
 """Database engine and session management."""
 import logging
 import time
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
 from backend.app.config import get_settings
 

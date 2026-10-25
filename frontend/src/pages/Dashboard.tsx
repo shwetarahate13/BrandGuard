@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   XCircle,
   Search,
-  Filter,
   ArrowRight,
   ShieldCheck,
 } from "lucide-react";
@@ -22,16 +21,19 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ user, navigate }) => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const loadSubmissions = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const data = await api.getSubmissions();
       setSubmissions(data);
     } catch (err) {
       console.error("Failed to load submissions:", err);
+      setLoadError(err instanceof Error ? err.message : "Unable to load submissions.");
     } finally {
       setLoading(false);
     }
@@ -131,6 +133,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, navigate }) => {
       {loading ? (
         <div className="text-center py-16 text-stone-400 text-xs animate-pulse">
           Loading governance submissions...
+        </div>
+      ) : loadError ? (
+        <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-center">
+          <p className="text-sm font-semibold text-rose-800">Could not load submissions</p>
+          <p className="text-xs text-rose-700 mt-1">{loadError}</p>
+          <button onClick={loadSubmissions} className="mt-3 px-3 py-1.5 text-xs font-semibold bg-white border border-rose-300 rounded-lg text-rose-800">
+            Try again
+          </button>
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white border border-stone-200 rounded-xl p-12 text-center">

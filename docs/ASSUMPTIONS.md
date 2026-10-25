@@ -13,7 +13,7 @@ This document records sensible assumptions made during the autonomous build of *
   - Accessibility (alt text in markdown recipes, descriptive links, readability).
 
 ## 2. Embeddings Strategy on 512 MB RAM Budget
-- **Assumption**: We defaulted `EMBEDDING_BACKEND=tfidf` using Scikit-Learn's `HashingVectorizer(n_features=256, norm='l2')` for production.
+- **Assumption**: Retrieval uses Scikit-Learn's `HashingVectorizer(n_features=256, norm='l2')` for production.
 - **Rationale**: PyTorch and sentence-transformers consume > 400 MB of resident memory upon initialization. Using TF-IDF hashing embeddings reduces memory to < 5 MB and total container footprint to ~200 MB, guaranteeing zero Out-Of-Memory crashes on Render's free tier.
 
 ## 3. Substring Citation Matching Tolerance

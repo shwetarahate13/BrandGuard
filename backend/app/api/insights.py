@@ -1,13 +1,11 @@
 """Insights API routes: summary stats, category/severity breakdowns, and repeated issues."""
-from typing import List, Dict, Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.app.database import get_db
 from backend.app.models.models import (
-    User, Submission, Finding, Decision, Approval,
-    FindingCategory, FindingSeverity, FindingStatus, DecisionAction
+    User, Submission, Finding, Approval, FindingStatus
 )
 from backend.app.schemas.schemas import InsightsSummary, InsightsRepeatedResponse, RepeatedIssue
 from backend.app.services.auth import get_current_user

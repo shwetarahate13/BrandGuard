@@ -4,7 +4,7 @@
 > The features outlined below are **planned for Round 3 and are NOT coded in the Round 2 build**.
 > In accordance with hackathon instructions, the Round 2 codebase contains the foundational architectural hooks (content-type registry, source-type enums, location JSON schemas) but zero stub screens or half-built endpoints.
 >
-> *(Note: **Improvement 1: Intent-Preserving Fixes with Word-Level Diff** was completed in Round 2 and is documented in [`docs/FEATURES.md`](file:///Users/shwetarahate/Downloads/BrandGuard-2/docs/FEATURES.md)).*
+> *(Note: **Improvement 1: Intent-Preserving Fixes with Word-Level Diff** was completed in Round 2 and is documented in [`docs/FEATURES.md`](FEATURES.md).)*
 
 ---
 

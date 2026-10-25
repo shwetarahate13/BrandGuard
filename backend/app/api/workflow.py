@@ -1,6 +1,5 @@
 """Workflow API routes: comments, request review, approvals, rejections, and audit history."""
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db

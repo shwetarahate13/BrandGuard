@@ -8,7 +8,6 @@ import {
   HelpCircle,
   LogOut,
   Cpu,
-  User as UserIcon,
 } from "lucide-react";
 import { User } from "../types";
 import { TransparencyModal } from "./TransparencyModal";

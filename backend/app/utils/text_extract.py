@@ -2,16 +2,36 @@
 import io
 import logging
 from pathlib import Path
+from fastapi import HTTPException
+
+from backend.app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+def max_file_size() -> int:
+    return get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+
+async def read_upload_contents(upload) -> bytes:
+    """Read at most the configured upload limit and report client read errors."""
+    limit = max_file_size()
+    try:
+        contents = await upload.read(limit + 1)
+    except Exception as exc:
+        logger.exception("Upload read failed")
+        raise HTTPException(status_code=400, detail="Unable to read uploaded file") from exc
+    if len(contents) > limit:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size exceeds {get_settings().MAX_UPLOAD_SIZE_MB} MB limit",
+        )
+    return contents
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     """Extract text from PDF bytes using pdfplumber."""
-    if len(file_bytes) > MAX_FILE_SIZE:
-        raise ValueError(f"File size exceeds {MAX_FILE_SIZE // (1024*1024)} MB limit")
+    if len(file_bytes) > max_file_size():
+        raise ValueError(f"File size exceeds {get_settings().MAX_UPLOAD_SIZE_MB} MB limit")
     try:
         import pdfplumber
         text_parts = []
@@ -28,8 +48,8 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
     """Extract text from DOCX bytes using python-docx."""
-    if len(file_bytes) > MAX_FILE_SIZE:
-        raise ValueError(f"File size exceeds {MAX_FILE_SIZE // (1024*1024)} MB limit")
+    if len(file_bytes) > max_file_size():
+        raise ValueError(f"File size exceeds {get_settings().MAX_UPLOAD_SIZE_MB} MB limit")
     try:
         from docx import Document
         doc = Document(io.BytesIO(file_bytes))

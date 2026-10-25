@@ -1,5 +1,4 @@
 """Authentication service: password hashing, JWT, dependencies."""
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt
@@ -11,8 +10,6 @@ from sqlalchemy.orm import Session
 from backend.app.config import get_settings
 from backend.app.database import get_db
 from backend.app.models.models import User, UserRole
-
-logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 

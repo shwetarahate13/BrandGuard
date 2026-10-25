@@ -5,10 +5,10 @@ services:
     restart: always
     environment:
       POSTGRES_USER: brandguard
-      POSTGRES_PASSWORD: brandguard_dev_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: brandguard
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -27,17 +27,14 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://brandguard:brandguard_dev_password@postgres:5432/brandguard
-      JWT_SECRET: dev-super-secret-jwt-key-for-local-testing
-      SECRET_KEY: dev-super-secret-app-key
+      DATABASE_URL: postgresql://brandguard:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/brandguard
       LLM_PROVIDER: mock
       LLM_MODEL: claude-sonnet-4-20250514
       AUTO_SEED: "true"
-      EMBEDDING_BACKEND: tfidf
       CHROMA_PERSIST_DIR: /tmp/chroma
-      PORT: "8000"
+      PORT: ${PORT:-8000}
     ports:
-      - "8000:8000"
+      - "${HOST_PORT:-8000}:${PORT:-8000}"
 
 volumes:
   pgdata:

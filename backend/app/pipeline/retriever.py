@@ -1,10 +1,9 @@
 """ChromaDB retrieval over approved sources with TF-IDF / Hashing embeddings."""
 import os
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from sklearn.feature_extraction.text import HashingVectorizer
-import numpy as np
 
 from backend.app.config import get_settings
 from backend.app.models.models import GuidelineClause, ApprovedFact, Term, Asset

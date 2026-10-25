@@ -19,7 +19,7 @@ from backend.app.models.models import (
     FindingCategory, FindingSeverity, FindingConfidence, FindingStatus, SourceType,
     GuidelineClause, ApprovedFact, Term
 )
-from backend.app.pipeline.segmenter import segment_into_spans, normalize_text
+from backend.app.pipeline.segmenter import segment_into_spans
 from backend.app.pipeline.rules_engine import run_rules_engine, RuleFinding
 from backend.app.pipeline.retriever import retrieve_sources, reindex_if_empty
 from backend.app.pipeline.citation_validator import validate_citations

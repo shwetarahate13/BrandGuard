@@ -1,5 +1,5 @@
 import React from "react";
-import { ShieldCheck, Info, X, ExternalLink, Cpu } from "lucide-react";
+import { ShieldCheck, X, ExternalLink, Cpu } from "lucide-react";
 
 interface TransparencyModalProps {
   isOpen: boolean;

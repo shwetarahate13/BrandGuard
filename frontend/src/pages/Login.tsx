@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Shield, Sparkles, UserCheck, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Shield, Sparkles, CheckCircle2 } from "lucide-react";
 import { api, setToken } from "../api";
 import { User } from "../types";
 

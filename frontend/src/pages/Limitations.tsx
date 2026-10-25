@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, ShieldAlert, CheckCircle2, Lock, EyeOff, AlertCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Lock, AlertCircle } from "lucide-react";
 
 interface LimitationsProps {
   navigate: (path: string) => void;

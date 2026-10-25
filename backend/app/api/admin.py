@@ -1,7 +1,7 @@
 """Admin API routes for managing approved sources (guidelines, facts, terms, assets)."""
 import re
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -9,12 +9,12 @@ from backend.app.models.models import (
     User, UserRole, GuidelineDoc, GuidelineClause, ApprovedFact, Term, Asset, AssetKind
 )
 from backend.app.schemas.schemas import (
-    GuidelineDocCreate, GuidelineDocResponse, GuidelineClauseResponse, GuidelineClauseCreate,
+    GuidelineDocCreate, GuidelineDocResponse,
     ApprovedFactCreate, ApprovedFactResponse, TermCreate, TermResponse, AssetCreate, AssetResponse
 )
 from backend.app.services.auth import get_current_user, require_role
 from backend.app.utils.audit import log_action
-from backend.app.utils.text_extract import extract_text
+from backend.app.utils.text_extract import extract_text, read_upload_contents
 from backend.app.pipeline.retriever import index_all_sources
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -131,7 +131,7 @@ async def import_guideline_file(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin, UserRole.manager)),
 ):
-    contents = await file.read()
+    contents = await read_upload_contents(file)
     filename = file.filename or "upload.txt"
     try:
         extracted = extract_text(contents, filename)
