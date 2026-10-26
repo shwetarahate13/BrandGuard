@@ -17,6 +17,7 @@ import { api } from "../../api";
 import { CreatorPersonalStats, Submission, SubmissionStatus, User } from "../../types";
 import { Skeleton } from "../Skeleton";
 import { useToast } from "../Toast";
+import { SavedViews } from "../SavedViews";
 
 interface CreatorDashboardProps {
   user: User;
@@ -202,6 +203,15 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
                 </select>
               </div>
             </div>
+
+            <SavedViews
+              userId={user.id}
+              role="creator"
+              search={search}
+              setSearch={setSearch}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+            />
 
             {/* Submissions List */}
             {filtered.length === 0 ? (

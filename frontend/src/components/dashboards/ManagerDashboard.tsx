@@ -15,6 +15,7 @@ import { api } from "../../api";
 import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthClause, ActivityEvent, FeedbackCategoryStats } from "../../types";
 import { Skeleton } from "../Skeleton";
 import { useToast } from "../Toast";
+import { SavedViews } from "../SavedViews";
 
 interface ManagerDashboardProps {
   user: User;
@@ -333,6 +334,15 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
             </select>
           </div>
         </div>
+
+        <SavedViews
+          userId={user.id}
+          role="manager"
+          search={search}
+          setSearch={setSearch}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+        />
 
         {/* Submissions Table */}
         <div className="overflow-x-auto">

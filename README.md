@@ -161,6 +161,9 @@ source .venv/bin/activate
 # Run full unit and integration test suite
 python -m pytest -v
 
+# Run frontend API-client and saved-view regression tests
+npm test --prefix frontend
+
 # Run automated evaluation script against ground-truth fixtures
 python scripts/eval.py
 
