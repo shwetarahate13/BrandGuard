@@ -11,9 +11,9 @@ In accordance with Hackathon Round 3 standards, BrandGuard provides clear and ho
    - All content publishing requires an authorized human manager or reviewer sign-off.
 2. **DOCX and Complex PDF Layouts**:
    - DOCX content is extracted as text. PDF findings include page and line bounding boxes, but complex columns, rotated text, and decorative typography may not align perfectly with a highlight.
-3. **Image Inspection Depends on Source Records and OCR**:
-   - PNG, JPEG, and SVG checks need color values in approved asset metadata to compare palettes. Logo clear-space checks need a readable approved logo file and a measurable minimum in a guideline.
-   - OCR can miss text or misread stylized lettering. Contrast checks cover detected text regions and do not inspect EXIF/IPTC metadata.
+3. **Image Inspection Depends on Source Records and Instance Memory**:
+   - PNG, JPEG, and SVG review uses RapidOCR/ONNX, with a 12-megapixel dimension cap. It is disabled by default; set `IMAGE_REVIEW_ENABLED=true` only on an instance with enough memory. The measured full-app + OCR + OpenCV peak on the development machine was about 611 MB, above the 450 MB target and the Render free-tier 512 MB limit, so leave it disabled on Render free.
+   - Palette checks need RGB/HEX values in approved asset metadata. Logo clear-space checks need a readable approved logo file and an explicit measurable minimum in a guideline. OCR may miss or misread stylized text; contrast checks cover detected word regions only. EXIF/IPTC metadata is not read.
 4. **Single-Brand Workspace Scope**:
    - The current data model has no separate team entity. Repeated-dispute suppression and feedback statistics therefore use the database's single brand workspace.
 5. **LLM-Generated Guideline Revisions**:

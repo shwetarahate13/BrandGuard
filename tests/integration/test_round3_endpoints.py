@@ -1,6 +1,7 @@
 """Integration coverage for the new guideline, media, and feedback APIs."""
 import uuid
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.app.api import guidelines as guidelines_api
+from backend.app.api import submissions as submissions_api
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.models import (
@@ -262,6 +264,35 @@ def test_get_submission_source_returns_authorized_uploaded_bytes(api_client):
     assert response.content == b"actual-test-image-bytes"
     assert response.headers["content-type"].startswith("image/png")
     assert response.headers["cache-control"] == "private, no-store"
+
+
+def test_image_upload_requires_explicit_memory_budget_opt_in(api_client, monkeypatch):
+    client, session_factory, _manager = api_client
+    creator = User(
+        id="image-upload-creator",
+        name="Image Creator",
+        email="image-creator@example.test",
+        password_hash="unused",
+        role=UserRole.creator,
+        is_active=True,
+    )
+    with session_factory.begin() as db:
+        db.add(creator)
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+    monkeypatch.setattr(
+        submissions_api,
+        "get_settings",
+        lambda: SimpleNamespace(IMAGE_REVIEW_ENABLED=False),
+    )
+
+    response = client.post(
+        "/api/submissions/upload",
+        data={"title": "Image campaign"},
+        files={"file": ("campaign.png", b"image bytes", "image/png")},
+    )
+
+    assert response.status_code == 503
+    assert "IMAGE_REVIEW_ENABLED" in response.json()["detail"]
 
 
 def test_post_decisions_snapshots_pair_and_updates_model(api_client, monkeypatch):

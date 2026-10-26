@@ -5,11 +5,10 @@ import io
 import json
 import logging
 import re
+import threading
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 
 from backend.app.config import get_settings
@@ -18,10 +17,14 @@ from backend.app.models.models import Asset, AssetKind, GuidelineClause
 logger = logging.getLogger(__name__)
 
 SUPPORTED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/svg+xml"}
-MAX_IMAGE_PIXELS = 40_000_000
+MAX_IMAGE_PIXELS = 12_000_000
+_OCR_ENGINE = None
+_OCR_ENGINE_LOCK = threading.Lock()
 
 
-def _open_image(contents: bytes, mime_type: str) -> Image.Image:
+def _open_image(contents: bytes, mime_type: str) -> Any:
+    from PIL import Image
+
     if mime_type == "image/svg+xml":
         from defusedxml import ElementTree
         import cairosvg
@@ -58,7 +61,6 @@ def _open_image(contents: bytes, mime_type: str) -> Image.Image:
         image = Image.open(io.BytesIO(contents))
     if image.width < 1 or image.height < 1 or image.width * image.height > MAX_IMAGE_PIXELS:
         raise ValueError("Image dimensions exceed the supported limit")
-    image = ImageOps.exif_transpose(image)
     if image.mode in {"RGBA", "LA"}:
         rgba = image.convert("RGBA")
         background = Image.new("RGBA", rgba.size, "white")
@@ -67,26 +69,80 @@ def _open_image(contents: bytes, mime_type: str) -> Image.Image:
     return image.convert("RGB")
 
 
-def _ocr(image: Image.Image) -> tuple[str, list[dict[str, Any]]]:
-    try:
-        import pytesseract
-        from pytesseract import Output
+def _get_ocr_engine():
+    global _OCR_ENGINE
+    if _OCR_ENGINE is None:
+        with _OCR_ENGINE_LOCK:
+            if _OCR_ENGINE is None:
+                from rapidocr import RapidOCR
 
-        data = pytesseract.image_to_data(image, output_type=Output.DICT, config="--psm 11")
+                _OCR_ENGINE = RapidOCR(params={
+                    "Global.use_cls": False,
+                    "EngineConfig.onnxruntime.intra_op_num_threads": 1,
+                    "EngineConfig.onnxruntime.inter_op_num_threads": 1,
+                    "EngineConfig.onnxruntime.enable_cpu_mem_arena": False,
+                })
+    return _OCR_ENGINE
+
+
+def _box_bounds(box: Any) -> list[float] | None:
+    points = box.tolist() if hasattr(box, "tolist") else box
+    if not isinstance(points, (list, tuple)):
+        return None
+    if len(points) == 4 and all(isinstance(value, (int, float)) for value in points):
+        x0, y0, x1, y1 = (float(value) for value in points)
+        return [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+    coordinates = []
+    for point in points:
+        if isinstance(point, (list, tuple)) and len(point) >= 2:
+            try:
+                coordinates.append((float(point[0]), float(point[1])))
+            except (TypeError, ValueError):
+                continue
+    if not coordinates:
+        return None
+    xs, ys = zip(*coordinates)
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
+def _sequence(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    return list(value)
+
+
+def _ocr(image: Any) -> tuple[str, list[dict[str, Any]]]:
+    try:
+        result = _get_ocr_engine()(image, return_word_box=True)
     except Exception as exc:
         logger.exception("Image OCR failed")
-        raise ValueError("Unable to read text from image; ensure Tesseract OCR is installed") from exc
+        raise ValueError("Unable to read text from image; the RapidOCR runtime could not process it") from exc
 
     pieces: list[str] = []
     regions: list[dict[str, Any]] = []
     offset = 0
-    for i, value in enumerate(data.get("text", [])):
+    word_lines = _sequence(getattr(result, "word_results", None))
+    words = [word for line in word_lines for word in line]
+    if not words:
+        boxes = _sequence(getattr(result, "boxes", None))
+        texts = _sequence(getattr(result, "txts", None))
+        scores = _sequence(getattr(result, "scores", None))
+        words = list(zip(texts, scores, boxes))
+    for word_data in words:
+        if len(word_data) != 3:
+            continue
+        value, raw_confidence, box = word_data
         word = str(value).strip()
         try:
-            confidence = float(data["conf"][i])
-        except (TypeError, ValueError, KeyError):
+            confidence = float(raw_confidence)
+        except (TypeError, ValueError):
             confidence = 0
-        if not word or confidence < 35:
+        if not word or confidence < 0.35:
+            continue
+        bbox = _box_bounds(box)
+        if bbox is None:
             continue
         if pieces:
             pieces.append(" ")
@@ -94,9 +150,12 @@ def _ocr(image: Image.Image) -> tuple[str, list[dict[str, Any]]]:
         start = offset
         pieces.append(word)
         offset += len(word)
-        x = int(data["left"][i]); y = int(data["top"][i])
-        width = int(data["width"][i]); height = int(data["height"][i])
-        regions.append({"start": start, "end": offset, "bbox": [x, y, x + width, y + height], "confidence": confidence})
+        regions.append({
+            "start": start,
+            "end": offset,
+            "bbox": [round(value, 2) for value in bbox],
+            "confidence": confidence,
+        })
     return "".join(pieces), regions
 
 
@@ -194,6 +253,8 @@ class ImageContentHandler:
 
     def extract_content(self, contents: bytes) -> tuple[str, dict[str, Any]]:
         try:
+            if not get_settings().IMAGE_REVIEW_ENABLED:
+                raise ValueError("Image review is disabled on this instance; enable IMAGE_REVIEW_ENABLED on a larger-memory instance")
             image = _open_image(contents, self.mime_type)
             text, regions = _ocr(image)
             return text, {"media": "image", "width": image.width, "height": image.height, "regions": regions}
@@ -204,6 +265,11 @@ class ImageContentHandler:
             raise ValueError("Failed to process uploaded image") from exc
 
     def inspect(self, contents: bytes, layout: dict[str, Any] | None, db: Session) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        if not get_settings().IMAGE_REVIEW_ENABLED:
+            raise ValueError("Image review is disabled on this instance")
+        import numpy as np
+        from PIL import Image
+
         image = _open_image(contents, self.mime_type)
         pixels = np.asarray(image)
         height, width = pixels.shape[:2]
@@ -224,7 +290,7 @@ class ImageContentHandler:
                 palette_assets.append((asset, colors))
         if palette_assets:
             quantized = image.quantize(colors=8, method=Image.Quantize.MEDIANCUT).convert("RGB")
-            dominant = [color for color, _ in quantized.getcolors(maxcolors=width * height) or []]
+            dominant = [color for _, color in quantized.getcolors(maxcolors=width * height) or []]
             approved = [(asset, color) for asset, colors in palette_assets for color in colors]
             mismatch = next((tuple(color) for color in dominant if not any(all(abs(int(color[i]) - approved_color[i]) <= 15 for i in range(3)) for _, approved_color in approved)), None)
             if mismatch:

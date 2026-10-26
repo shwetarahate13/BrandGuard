@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # Upload limits
     MAX_UPLOAD_SIZE_MB: int = 5
     MAX_TEXT_WORDS: int = 5000
+    # RapidOCR/ONNX can exceed small-instance memory budgets; opt in only on
+    # instances sized for image processing. PDF text extraction stays enabled.
+    IMAGE_REVIEW_ENABLED: bool = False
 
     # Seeding
     AUTO_SEED: bool = False

@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Phase**: Phase 3 (Improvement A, Guideline-Gap Insights)
+- **Current Phase**: Phase 4 complete; Phase 5 (Improvement C, Reinforcement Feedback Loop) is next
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -28,16 +28,16 @@
     - [x] Proposed clearer wording only when a live LLM provider is configured
     - [x] `PATCH /api/guidelines/clauses/{clause_id}` applies edits and refreshes the source index
     - [x] "Recompute now" action, DB-stored compute time, 24-hour stale check, and invalidation on new reviews/disputes/revisions
-  - [ ] **Phase 4: Improvement B, Image Review and Spatial PDF Inspection**
-    - [ ] Pip-only OCR (`rapidocr-onnxruntime`, no system Tesseract) and `opencv-python-headless`
-    - [ ] Dominant color extraction vs approved asset RGB
-    - [ ] OpenCV template matching for approved logos
-    - [ ] Measurable clear-space checking from guideline text (only when logo file + explicit minimum exist)
-    - [ ] WCAG AA contrast calculation for OCR-detected text regions
-    - [ ] Canvas-drawn visual bounding boxes linked to findings in review UI
-    - [ ] PDF inspection with `pdfminer.six` page coordinates and bounding boxes in `location`
-    - [ ] Semi-transparent visual highlight on PDF pages in review UI
-    - [ ] Lazy loading & RSS memory budget (< 450 MB) / environment flag
+  - [x] **Phase 4: Improvement B, Image Review and Spatial PDF Inspection**
+    - [x] Pip-only RapidOCR/ONNX runtime (no Tesseract) with word-level OCR boxes; `opencv-python-headless` remains lazy-loaded
+    - [x] Dominant color extraction against approved asset RGB metadata, ±15 per channel
+    - [x] OpenCV template matching for readable approved logo files
+    - [x] Measurable clear-space checks only when a logo file and explicit minimum both exist
+    - [x] WCAG AA contrast calculation for OCR-detected text regions with an approved accessibility clause
+    - [x] Canvas overlays and linked finding selection in the image/PDF review screen
+    - [x] PDF inspection with `pdfminer.six` page coordinates and finding `location` boxes
+    - [x] Semi-transparent PDF page highlights
+    - [x] Lazy-loaded OCR/CV and explicit `IMAGE_REVIEW_ENABLED` memory gate; measured image review exceeds the 450 MB target and is disabled by default
   - [ ] **Phase 5: Improvement C, Reinforcement Feedback Loop**
     - [ ] Snapshot original span, proposed rewrite, human edit on decisions
     - [ ] Online SGD logistic regression (sentence length change, Flesch delta, formality delta)
@@ -59,13 +59,14 @@
 
 ## Decisions Made
 1. **Migrations & Database**: SQLite default locally, PostgreSQL (Neon) in production. Database migrations must always be executed via `alembic upgrade head`. Added dispute friction, media layout, and preference state migrations.
-2. **Pip-only OCR**: Render free has no apt package manager and 512MB RAM cap. We will replace `pytesseract` with `rapidocr-onnxruntime` and `opencv-python-headless` with lazy loading to ensure memory consumption stays under 450 MB.
+2. **Pip-only OCR**: Image OCR uses RapidOCR and ONNX Runtime without system Tesseract. OpenCV and OCR modules are lazy-loaded. Because measured peak memory exceeded Render free's 512 MB cap, image review is opt-in through `IMAGE_REVIEW_ENABLED` and remains off on the free tier.
 3. **Offline Flesch Calculation**: Avoid reliance on external NLTK network downloads for cmudict by implementing a deterministic syllable-counter fallback for Flesch reading ease in `preference_model.py`.
 4. **Role policy**: Only creators create submissions and decide findings; managers handle standard-risk workflow and assign active reviewers; reviewers resolve escalations and sign off high-risk assigned items; admins manage the system but cannot approve. High-risk submissions are not manager-approved.
 5. **Manager observability**: Trends and activity come from persisted submissions, findings, and audit records. Creator notifications are derived from actual approvals and review comments; empty accounts show an empty state instead of demo copy.
 6. **Public system metadata**: `/system/mode` exposes only the active LLM mode for the navigation badge; detailed `/system/status` requires the Admin permission.
 7. **Phase 2 verification**: 111 targeted permission/API tests passed, Vite production build passed, full SQLite migration chain applied with the reviewer FK verified, and the isolated end-to-end workflow smoke passed. Browser checks confirmed Creator, Manager, Reviewer, and Admin dashboards/nav; browser console had no errors or warnings. A local Vite proxy target was supplied through `BRANDGUARD_API_PROXY_TARGET` during UI verification; native local defaults are scheduled for Phase 6.
 8. **Phase 3 verification**: DFI session ownership now supports both request Sessions and APScheduler session factories. Newly computed timestamps and source-data invalidation prevent stale scores; a read recomputes stale data. SQLite Alembic upgrade to head and `npm run build` passed; the targeted permission/API suite passed 113 tests. One existing Chroma embedding-function deprecation warning remains.
+9. **Phase 4 verification**: RapidOCR 3.10.0 (packaged ONNX models) processed the real 1020×1320 sample image into 455 characters and 77 word boxes; `pdfminer.six` extracted page/line boxes from the real PDF fixture. Palette, logo clear-space, OCR geometry, PDF location, and image-memory-gate tests passed (17 targeted tests). Full-app OCR plus OpenCV peak RSS measured 611 MB on the development Mac, so image uploads/reviews require explicit `IMAGE_REVIEW_ENABLED=true`; `docs/LIMITATIONS.md` records the Render-free-tier restriction. `pip check`, Python compile, and diff checks passed.
 
 ## Exact Next Step
-Commit the completed Phase 3 guideline-health implementation, then start Phase 4 by tracing the existing image and PDF handler paths and their stored source-layout/location schemas before changing them. Keep OCR and OpenCV imports lazy and measure memory with real sample files.
+Commit the completed Phase 4 image/PDF inspection changes, then start Phase 5 by tracing decision snapshot persistence, the existing SGD model blob, confidence ranking, and workspace-scoped dispute suppression before extending them.

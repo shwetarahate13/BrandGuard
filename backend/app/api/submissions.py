@@ -106,6 +106,11 @@ async def upload_submission(
         mime_type = get_upload_mime_type(filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if mime_type.startswith("image/") and not get_settings().IMAGE_REVIEW_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Image review is disabled on this instance. Enable IMAGE_REVIEW_ENABLED on a larger-memory instance.",
+        )
     source_layout = None
     try:
         if mime_type == "application/pdf":
@@ -350,6 +355,12 @@ def check_submission(
     )
     if not latest_version:
         raise HTTPException(status_code=400, detail="Submission has no content versions")
+    if (
+        latest_version.source_mime_type
+        and latest_version.source_mime_type.startswith("image/")
+        and not get_settings().IMAGE_REVIEW_ENABLED
+    ):
+        raise HTTPException(status_code=503, detail="Image review is disabled on this instance")
 
     # Clear old findings for this version before re-checking
     db.query(Finding).filter(Finding.version_id == latest_version.id).delete()
