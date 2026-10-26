@@ -1,7 +1,7 @@
 # BrandGuard
 
 > **Pre-publication brand governance with explainable AI checks and humans in control.**
-> Built by Team **Nexora** (Shweta Rahate, Janvi Thakre) for Round 2 of the Inkloom AI Hackathon.
+> Built by Team **Nexora** (Shweta Rahate, Janvi Thakre) for the Inkloom AI Hackathon.
 
 BrandGuard sits between content drafting and publishing to review text, DOCX, PDF, PNG, JPEG, and SVG content against **approved brand sources only**. It detects tone deviations, banned terminology, unapproved messaging, factual discrepancies, outdated statistics, and text accessibility issues.
 
@@ -19,7 +19,7 @@ flowchart TD
         COLD["Cold-Start Resilience Banner"]
     end
 
-    subgraph Service["Render Python Web Service (Free Tier: 512MB RAM)"]
+    subgraph Service["Render Python Web Service"]
         FASTAPI["FastAPI App (uvicorn on $PORT)"]
         NORM["Normalizer & Segmenter (Regex)"]
         RULES["Deterministic Rules Engine"]
@@ -31,8 +31,8 @@ flowchart TD
         DFI["Nightly Guideline Friction Worker"]
     end
 
-    subgraph Storage["Managed Database (Neon)"]
-        PG[("PostgreSQL 16: Users, Guidelines, 26 Facts, Submissions, Revisions, Audit Log")]
+    subgraph Storage["Database"]
+        PG[("PostgreSQL in production / SQLite locally: Users, Guidelines, Facts, Submissions, Revisions, Audit Log")]
     end
 
     UI -->|REST API with JWT| FASTAPI
@@ -58,31 +58,32 @@ flowchart TD
 3. **Zero-Disruption Explicit Accept**: The AI never auto-edits or auto-publishes. Accepting a fix creates a clean new revision (`v+1`), preserving the audit trail.
 4. **Outdated Fact Detection**: Identifies expired statistics (e.g. historical 2022 pricing or legacy renewable energy metrics) by comparing numbers against dated truth entries.
 5. **Text-Level Accessibility**: Checks for vague link text (`[click here]`), missing image alt attributes in markdown/HTML, long all-caps blocks, and overly complex sentence structures.
-6. **Multi-Role Governance Workflow**: Role-based access control (Creator, Brand Manager, Reviewer, Admin) with submission history, comments, and approval sign-off.
-7. **Document Extraction**: Seamless text extraction from `.txt`, `.docx`, and `.pdf` uploads under 5 MB.
+6. **Multi-Role Governance Workflow**: Creator, Brand Manager, Reviewer, and Admin workspaces have distinct routes and permissions. Managers approve standard-risk copy; assigned reviewers approve high-risk copy. Self-approval is forbidden and admins cannot approve submissions.
+7. **Document and Media Review**: Text extraction from `.txt`, `.docx`, and `.pdf` uploads; optional OCR and visual checks for `.png`, `.jpg`, `.jpeg`, and sanitized `.svg` uploads. Uploads are capped at 5 MB.
 8. **Deterministic Offline Mode**: Fully functional with zero API keys required; seamless toggle to Anthropic Claude via environment variables.
-9. **Guideline-Gap Insights**: A nightly job calculates a dispute-friction index for each clause. Managers can inspect the highest-friction clauses at `/dashboard/guideline-health`; active LLM providers draft proposed revisions for clauses above 30%.
-10. **Image and Spatial PDF Review**: PNG, JPEG, and SVG uploads receive OCR, palette checks against colors in approved asset metadata, approved-logo matching, clear-space checks where a guideline specifies a measurable minimum, and detected-text contrast checks. PDF findings carry page coordinates, which the review screen highlights on the rendered page.
+9. **Guideline-Gap Insights**: A nightly UTC job calculates dispute friction for each clause. Managers and admins can recompute scores and inspect recurring disputes; a configured Anthropic provider can draft proposed revisions for clauses above the high-friction threshold.
+10. **Image and Spatial PDF Review**: When `IMAGE_REVIEW_ENABLED=true`, image uploads receive OCR, approved-palette checks, logo matching, measurable clear-space checks, and detected-text contrast checks. PDF findings carry page coordinates, which the review screen highlights on the rendered page.
 11. **Reviewer Feedback Loop**: Accept, edit, and dispute decisions train a persisted online logistic-regression model. Future rewrites are ranked by estimated acceptance probability; repeated disputed clause/span pairs are suppressed after three distinct findings. Suppression uses the current single-brand workspace because this deployment has no separate team table.
+12. **Account and Operations Controls**: bcrypt password hashing, a 12-character password minimum, expiring JWTs, login lockout, request rate limits, role-scoped access, security headers, request IDs, and Alembic-managed schema changes.
 
 ---
 
 ## Demo Accounts for Judges
 
-When `DEMO_MODE=true`, the login screen shows these throwaway accounts and a one-click **Fill / Sign in** button for each role. The demo seed is the only code path that creates them; keep demo mode off for private workspaces.
+When `DEMO_MODE=true`, an empty database receives four throwaway accounts and the login screen shows their credentials with a one-click **Fill / Sign in** button. With the default `DEMO_MODE=false`, the login page shows no demo credentials and the demo seed creates no accounts. Create a real first admin with `python scripts/create_admin.py` instead. Never reuse the throwaway passwords for real accounts.
 
 | Role | Email | Password | Responsibilities |
 | :--- | :--- | :--- | :--- |
 | **Creator** | `creator@nexora.dev` | `CreatorDemo2026!` | Submits copy, declares intent, accepts/edits/disputes diff fixes |
-| **Brand Manager** | `manager@nexora.dev` | `ManagerDemo2026!` | Company-wide visibility, reviews recurring mistakes, final sign-off |
-| **Reviewer** | `reviewer@nexora.dev` | `ReviewerDemo2026!` | Compliance authority for health/regulatory claims and sensitive copy |
+| **Brand Manager** | `manager@nexora.dev` | `ManagerDemo2026!` | Company-wide visibility, reviewer assignment, standard-risk sign-off, and guideline health |
+| **Reviewer** | `reviewer@nexora.dev` | `ReviewerDemo2026!` | Assigned high-risk and escalated compliance review |
 | **Admin** | `admin@nexora.dev` | `AdminDemo2026!` | Manages guidelines, users, settings, audit logs, and feedback model |
 
 ---
 
 ## Local Setup (No Docker)
 
-Requires Python 3.12, Node.js 18+, npm, and Tesseract OCR (`brew install tesseract` on macOS; `sudo apt-get install tesseract-ocr` on Debian or Ubuntu). The backend defaults to a local SQLite database; Vite proxies `/api` requests to FastAPI, so local development needs no CORS configuration.
+Requires Python 3.12, Node.js 18+, and npm. Tesseract is needed only when enabling local image review (`brew install tesseract` on macOS; `sudo apt-get install tesseract-ocr` on Debian or Ubuntu). Image review is disabled by default. The backend defaults to a local SQLite database; Vite proxies `/api` requests to FastAPI, so local development needs no CORS configuration.
 
 ```bash
 git clone https://github.com/shwetarahate13/BrandGuard.git
@@ -95,7 +96,7 @@ npm ci --prefix frontend
 alembic upgrade head
 ```
 
-With the default `DEMO_MODE=false`, create the first real administrator once. The password is entered through a hidden prompt and the command refuses to run if any user already exists:
+With the default `DEMO_MODE=false`, create the first real administrator once. The password is entered through a hidden prompt and must be at least 12 characters. The command refuses to run if any user already exists:
 
 ```bash
 python scripts/create_admin.py
@@ -118,9 +119,9 @@ Open `http://127.0.0.1:5173`. To use demo data instead of creating a real admin,
 
 ### Render Free Runtime
 
-`render.yaml` keeps the existing Docker deployment for Render because image review uses the Tesseract system package, which is not included in Render's native runtime. The Dockerfile builds the SPA, installs backend dependencies and Tesseract, then FastAPI serves the SPA on `$PORT`; `entrypoint.sh` runs `alembic upgrade head` before starting the server. `build.sh` remains available for a local/native production build. Set `DATABASE_URL` to PostgreSQL and keep the generated `JWT_SECRET`; the hackathon deployment sets `DEMO_MODE=true`, `IMAGE_REVIEW_ENABLED=true`, and `OCR_BACKEND=tesseract`.
+`render.yaml` keeps the working Docker deployment for Render because image review uses the Tesseract system package, which is not installed by the native build. The Dockerfile builds the SPA, installs backend dependencies and Tesseract, then FastAPI serves the SPA on `$PORT`; `entrypoint.sh` runs `alembic upgrade head` before starting the server. `./build.sh` is available for a local or separately configured native environment with Node.js 18+: it installs backend requirements, builds the frontend, and applies Alembic migrations. Set `DATABASE_URL` to PostgreSQL and use the generated strong `JWT_SECRET`. The hackathon Render environment sets `DEMO_MODE=true`, `IMAGE_REVIEW_ENABLED=true`, and `OCR_BACKEND=tesseract`.
 
-The memory-intensive RapidOCR backend remains available with `OCR_BACKEND=rapidocr` for larger machines. The Render free configuration uses Tesseract to stay within the memory budget.
+The optional RapidOCR backend is available with `OCR_BACKEND=rapidocr` for larger machines. Tesseract is the configured default and the Render deployment choice; its sample combined app/OCR memory measurement was about 299 MB. RapidOCR with OpenCV measured about 611 MB on the development Mac, so it is not selected for Render free.
 
 Docker files remain available for container-based deployment and are not needed for local setup.
 
@@ -130,6 +131,7 @@ Docker files remain available for container-based deployment and are not needed 
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
+| `ENVIRONMENT` | `development` | Production mode enforces PostgreSQL and a strong JWT secret |
 | `DATABASE_URL` | `sqlite:///./brandguard.db` | PostgreSQL connection string (Neon in production) |
 | `JWT_SECRET` | Generated per process in development | JWT signing secret; required in production |
 | `JWT_EXPIRE_MINUTES` | `480` | JWT expiration interval |
@@ -142,16 +144,21 @@ Docker files remain available for container-based deployment and are not needed 
 | `IMAGE_REVIEW_ENABLED` | `false` | Enable image OCR and visual checks |
 | `OCR_BACKEND` | `tesseract` | `tesseract` (lower-memory system package) or `rapidocr` (pip-only ONNX runtime) |
 | `MAX_UPLOAD_SIZE_MB` | `5` | Maximum uploaded file size |
+| `MAX_TEXT_WORDS` | `5000` | Maximum words checked in one submission |
 | `PORT` | `8000` locally | Web server port; Render supplies `$PORT` |
 | `CORS_ORIGINS` | Empty | Comma-separated exact origin allowlist when hosting the UI separately |
+
+Production requires `ENVIRONMENT=production` (or Render's production environment), a `JWT_SECRET` of at least 32 bytes, and a PostgreSQL `DATABASE_URL`. If `LLM_PROVIDER=anthropic`, also set `LLM_API_KEY`. Keep `DEMO_MODE=false` for private deployments.
 
 ---
 
 ## Running Tests and Evaluations
 
 ```bash
+source .venv/bin/activate
+
 # Run full unit and integration test suite
-pytest -v
+python -m pytest -v
 
 # Run automated evaluation script against ground-truth fixtures
 python scripts/eval.py
@@ -164,13 +171,6 @@ python scripts/smoke_test.py http://127.0.0.1:8000
 
 ## Project Documentation Directory
 
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md): Click-by-click deployment guide for Render + Neon.
-- [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md): 3-minute click-by-click walkthrough for judges.
-- [`docs/FEATURES.md`](docs/FEATURES.md): Working / Partial / Planned status of all features.
-- [`docs/TECHNOLOGY.md`](docs/TECHNOLOGY.md): In-depth technical architecture and design decisions.
-- [`docs/EVALUATION.md`](docs/EVALUATION.md): Precision, recall, and citation drop rate numbers.
-- [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): Transparent disclosures and known limitations.
-- [`docs/PLAN_CHANGES.md`](docs/PLAN_CHANGES.md): Full explanation of changes from Round 1.
-- [`docs/ROUND3_IMPROVEMENTS.md`](docs/ROUND3_IMPROVEMENTS.md): The three delivered Round 3 improvements.
-- [`docs/PROJECT_SUMMARY.md`](docs/PROJECT_SUMMARY.md): 1-2 page summary for project slide deck.
-- [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md): Recorded engineering assumptions.
+- [`docs/FEATURES.md`](docs/FEATURES.md): Implemented capabilities and current product boundaries.
+- [`docs/ROUND3_IMPROVEMENTS.md`](docs/ROUND3_IMPROVEMENTS.md): Implementation and verification notes for Improvements A, B, and C.
+- [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): Deployment, image-processing, data-scope, and security disclosures.

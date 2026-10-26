@@ -18,7 +18,7 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
         </button>
         <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Known Limitations & Disclosures</h1>
         <p className="text-xs text-stone-500 mt-1">
-          Honest disclosures on Round 2 capabilities, security model, and out-of-scope boundaries.
+          Current review, security, and deployment boundaries.
         </p>
       </div>
 
@@ -27,20 +27,20 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
         <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm space-y-3">
           <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
             <AlertCircle className="w-4 h-4 text-amber-600" />
-            <span>Deliberately Out of Scope (Round 2 Build)</span>
+            <span>Review Boundaries</span>
           </div>
           <ul className="space-y-2 text-xs text-stone-600 list-disc list-inside">
             <li>
-              <strong>No Auto-Publishing:</strong> BrandGuard will never publish directly to social media or CMS platforms. Human managers must sign off and take final publishing action.
+              <strong>No auto-publishing:</strong> BrandGuard does not publish to a CMS, social network, or advertising platform. Publishing happens outside the app after human review.
             </li>
             <li>
-              <strong>Document Review:</strong> Uploaded PDFs retain page and text bounding-box coordinates for visual review. DOCX files are checked as extracted text.
+              <strong>Document review:</strong> TXT, DOCX, and PDF uploads are reviewed as extracted text. PDF finding highlights use extracted page coordinates and may be approximate for complex, rotated, or decorative layouts. DOCX is not reviewed as rendered pages.
             </li>
             <li>
-              <strong>Image Review:</strong> PNG, JPEG, and SVG uploads are checked for approved palette colors, approved logo clear space, and detected text contrast. OCR and logo matching depend on readable source assets and installed image-processing services.
+              <strong>Image review:</strong> PNG, JPEG, and sanitized SVG checks require <code>IMAGE_REVIEW_ENABLED=true</code>. OCR can miss stylized text; palette and logo checks depend on approved asset records, and clear-space checks need a measurable guideline.
             </li>
             <li>
-              <strong>No Real-time Multi-Cursor Co-editing:</strong> Governance occurs via revision drafts, word-level diff suggestions, and structured comments.
+              <strong>Input limits:</strong> Uploads are capped at 5 MB, raster images at 12 megapixels, and text checks at 5,000 words.
             </li>
           </ul>
         </div>
@@ -49,23 +49,23 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
         <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm space-y-3">
           <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
             <Lock className="w-4 h-4 text-emerald-600" />
-            <span>Honest Security & Encryption Model</span>
+            <span>Application Security</span>
           </div>
           <ul className="space-y-2 text-xs text-stone-600 list-disc list-inside">
             <li>
-              <strong>In-Transit Security:</strong> Encrypted via HTTPS/TLS 1.3 terminated at the host (Render).
+              <strong>Passwords:</strong> New passwords are hashed with bcrypt and must be at least 12 characters (maximum 72 UTF-8 bytes).
             </li>
             <li>
-              <strong>At-Rest Security:</strong> Storage at rest is managed and encrypted by Neon managed PostgreSQL and host volume providers.
+              <strong>Authentication:</strong> API sessions use bearer JWTs with an eight-hour default lifetime. Production requires a 32-byte-or-longer signing secret.
             </li>
             <li>
-              <strong>Authentication:</strong> Passwords hashed with standard bcrypt. Session access managed through expiring JWT tokens.
+              <strong>Rate limits:</strong> Login lockout and endpoint limits are stored in process memory and are not shared across multiple workers or replicas.
             </li>
             <li>
-              <strong>Prompt Injection Defense:</strong> All user content passed to review models is delimited with strict unverified markers and prompt directives preventing execution of user instructions.
+              <strong>Transport and storage:</strong> The app sets security headers, but HTTPS termination, database encryption at rest, backups, and retention depend on your hosting and database providers.
             </li>
             <li>
-              <strong>Privacy Boundary:</strong> Complete brand source libraries are never submitted to external LLMs; only top-k retrieved source snippets are supplied per evaluation window.
+              <strong>External LLMs:</strong> When Anthropic is enabled, each reviewed text segment, the creator's stated intent, and retrieved source excerpts are sent to the provider. Guideline rewrite requests send the current clause and dispute examples. Mock/offline mode makes no external LLM request.
             </li>
           </ul>
         </div>
@@ -74,10 +74,10 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
         <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm space-y-3">
           <div className="flex items-center gap-2 text-stone-900 font-bold text-sm">
             <CheckCircle2 className="w-4 h-4 text-brand-600" />
-            <span>Responsible AI Principles</span>
+            <span>Workspace and Feedback Boundaries</span>
           </div>
           <p className="text-xs text-stone-600 leading-relaxed">
-            BrandGuard is architected on the hard principle of <strong>Grounded or Silent</strong>: every finding must cite a verified source in the brand kit with an exact quote. When confidence is low or ambiguous, findings are flagged for human reviewer resolution rather than asserting artificial claims.
+            This deployment has one workspace and no team/tenant boundary. Dispute statistics and repeated-pattern suppression are shared across that workspace. Creator dashboard activity messages are derived from decisions and review comments; there is no persistent inbox or reviewer assignment alert. Human review is required before content is published.
           </p>
         </div>
       </div>

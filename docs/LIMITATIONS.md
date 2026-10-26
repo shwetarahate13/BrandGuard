@@ -1,53 +1,33 @@
-# Known Limitations & Responsible Disclosures (Round 3)
+# Known Limitations and Disclosures
 
-In accordance with Hackathon Round 3 standards, BrandGuard provides clear and honest disclosures regarding its current architectural boundaries, performance envelope, and security controls.
+This page describes the current implementation in the repository. Hosting providers and their service plans can add their own operational behavior and controls.
 
----
+## Review scope
 
-## 1. Scope Boundaries
+- BrandGuard does not publish content to a CMS, social network, or advertising platform. A human must complete any publishing step outside the app.
+- TXT, DOCX, and PDF uploads are extracted for text review. PDF findings include page coordinates for visual highlights; complex columns, rotated text, or decorative layouts can make a highlight approximate. DOCX is checked as extracted text rather than rendered page layout.
+- PNG, JPEG, and sanitized SVG files can be checked for OCR text, approved palette metadata, logo matches, measurable clear space, and detected-text contrast. SVG external references and active content are rejected. Image review is disabled by default and requires `IMAGE_REVIEW_ENABLED=true`.
+- The OCR backend is configurable. Tesseract is the configured default and is used by the Render Docker deployment; RapidOCR/ONNX is optional. A real Tesseract image-review run measured about 240 MB for the app process plus 59 MB for its OCR child process (about 299 MB combined). A separate RapidOCR/OpenCV run reached about 611 MB on the development Mac. These are sample measurements, not deployment guarantees; use Tesseract for the Render free configuration.
+- OCR can miss or misread stylized text. Palette checks need color values in approved asset metadata. Logo matching needs a readable approved logo file. Clear-space checks need an explicit measurable minimum. Contrast checks cover detected word regions. EXIF/IPTC metadata is not read.
+- PDF and image uploads are capped at 5 MB. Raster image dimensions are capped at 12 megapixels. Text review is capped at 5,000 words per check.
+- The data model has no separate organization or team boundary. Submission access is scoped by role and creator/reviewer assignment, but guideline feedback statistics and repeated-dispute suppression apply across the single workspace. A repeated clause/span is suppressed after three distinct findings.
+- Creator dashboard notifications are derived from recent decision outcomes and review comments. There is no persistent inbox, read/unread state, or reviewer assignment notification yet.
+- Proposed guideline wording is created only when the Anthropic provider is configured with an API key. In mock/offline mode, the app computes friction metrics but does not draft wording. When Anthropic is enabled for content review, each text segment, the creator's declared intent, and retrieved source excerpts are sent to the provider; guideline rewrite requests send the current clause and dispute examples. Review the provider's current terms and data controls before using it with sensitive content.
+- Rate limits and login lockouts are stored in process memory. Multiple workers or replicas do not share their counters.
+- There is no real-time collaborative editing. Users create distinct revisions, review word-level diffs, and exchange structured comments.
 
-1. **No Automated Publishing**:
-   - BrandGuard does not auto-publish to CMS systems, social media APIs, or advertising platforms.
-   - All content publishing requires an authorized human manager or reviewer sign-off.
-2. **DOCX and Complex PDF Layouts**:
-   - DOCX content is extracted as text. PDF findings include page and line bounding boxes, but complex columns, rotated text, and decorative typography may not align perfectly with a highlight.
-3. **Image Inspection Depends on Source Records and Instance Memory**:
-   - PNG, JPEG, and SVG review uses RapidOCR/ONNX, with a 12-megapixel dimension cap. It is disabled by default; set `IMAGE_REVIEW_ENABLED=true` only on an instance with enough memory. The measured full-app + OCR + OpenCV peak on the development machine was about 611 MB, above the 450 MB target and the Render free-tier 512 MB limit, so leave it disabled on Render free.
-   - Palette checks need RGB/HEX values in approved asset metadata. Logo clear-space checks need a readable approved logo file and an explicit measurable minimum in a guideline. OCR may miss or misread stylized text; contrast checks cover detected word regions only. EXIF/IPTC metadata is not read.
-4. **Single-Brand Workspace Scope**:
-   - The current data model has no separate team entity. Repeated-dispute suppression and feedback statistics therefore use the database's single brand workspace.
-5. **LLM-Generated Guideline Revisions**:
-   - Proposed wording is generated only when a live LLM provider is configured. Offline mock mode does not create draft revisions.
-6. **Process-Local Rate Limits**:
-   - API request counters are held in each application process. Deployments with multiple workers or replicas do not share quotas.
-7. **No Real-Time Collaborative Co-Editing**:
-   - Content is governed through distinct revisions (`v1 -> v2 -> v3`), structured comments, and diff-based decisions rather than multi-cursor live editing.
+## Deployment and data
 
----
+- SQLite is the local default. Production configuration requires PostgreSQL. Apply schema changes with `alembic upgrade head`.
+- Render remains on the repository's Docker runtime because image review needs the Tesseract system package. `render.yaml` enables image review for the demo service and selects Tesseract. The repository's `build.sh` can build the frontend, install backend requirements, and apply migrations in a native environment that has Node.js 18+; it does not change the configured Render runtime.
+- Render's Chroma index is stored under `/tmp/chroma`, so it is disposable. PostgreSQL stores approved source records; the app rebuilds an empty vector index from those records at startup. Keep backups of PostgreSQL data using the database provider's controls.
+- The application exposes liveness routes at `/healthz`, `/api/health`, and `/api/healthz`. A liveness response does not verify the database, LLM provider, or OCR runtime; detailed system status is restricted to admins.
 
-## 2. Infrastructure & Hosting Characteristics
+## Security and privacy boundaries
 
-1. **Render Free Tier Cold Starts**:
-   - The application runs on a free Render container (512 MB RAM, 0.1 CPU). When idle for more than 15 minutes, the container sleeps and takes approximately 40-50 seconds to wake on the initial incoming request.
-   - The frontend includes a responsive notification banner (`ColdStartBanner`) informing users during cold starts to prevent confusion.
-2. **Disposable Ephemeral Container Storage**:
-   - Render's container disk is ephemeral. The local ChromaDB vector directory (`/tmp/chroma`) is disposable.
-   - **PostgreSQL is the sole source of truth**: on every application boot, BrandGuard automatically inspects ChromaDB and re-indexes all approved guidelines, facts, and terms from PostgreSQL if the vector collection is empty.
-3. **Word & Document Limits**:
-   - Content uploads are capped at 5 MB per document.
-   - Text evaluation is capped at approximately 5,000 words per single check to ensure responsive performance within the 512 MB memory budget.
-
----
-
-## 3. Honest Security & Privacy Disclosures
-
-1. **Encryption**:
-   - **In-Transit**: Encrypted via HTTPS / TLS 1.3 terminated at Render's edge load balancer.
-   - **At-Rest**: Managed and encrypted at rest by Neon's serverless AWS storage layer. BrandGuard does not implement proprietary disk-level encryption.
-2. **Authentication & Password Protection**:
-   - Passwords are salted and hashed using standard `bcrypt`.
-   - API authentication uses stateless JSON Web Tokens (JWT) signed with `HS256` and an 8-hour expiration window.
-3. **Excerpt-Only Data Transmission**:
-   - When external LLMs (such as Anthropic Claude) are enabled, BrandGuard never transmits whole document libraries. It transmits only the specific text span under evaluation and the top-k retrieved source snippets.
-4. **Prompt Injection Defense**:
-   - All user-supplied text sent to reasoning engines is encapsulated in explicit boundary tags (`--- BEGIN UNTRUSTED CONTENT ---`) with system prompt directives instructing the model never to execute embedded commands.
+- Passwords are hashed with bcrypt. New passwords must be at least 12 characters and no more than 72 UTF-8 bytes. JWTs use HS256 and default to an eight-hour lifetime; production requires a configured secret of at least 32 bytes.
+- Login lockout and endpoint rate limiting are process-local, as described above. The application does not provide a shared distributed rate-limit store.
+- CORS uses an explicit origin allowlist. Local Vite development proxies API requests and does not need a CORS entry.
+- If an external LLM provider is enabled, it processes the review or rewrite inputs described above. Mock/offline mode makes no external LLM request.
+- This repository configures application security headers. HTTPS termination, database encryption at rest, backups, and retention depend on the selected hosting and database providers and their settings; the application does not independently verify those controls.
+- Demo credentials are created only when `DEMO_MODE=true` and the database is empty. Keep demo mode off for private workspaces and never use the throwaway demo passwords for real accounts.

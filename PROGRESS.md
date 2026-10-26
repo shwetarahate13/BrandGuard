@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Steps 1–3 complete; Step 4 (Tests and Docs) is next
+- **Current Step**: Steps 1–4 complete; Step 5 optional features is next if quota permits
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -29,7 +29,7 @@
     - [x] `PATCH /api/guidelines/clauses/{clause_id}` applies edits and refreshes the source index
     - [x] "Recompute now" action, DB-stored compute time, 24-hour stale check, and invalidation on new reviews/disputes/revisions
   - [x] **Phase 4: Improvement B, Image Review and Spatial PDF Inspection**
-    - [x] Pip-only RapidOCR/ONNX runtime (no Tesseract) with word-level OCR boxes; `opencv-python-headless` remains lazy-loaded
+    - [x] Selectable Tesseract (configured default) or RapidOCR/ONNX OCR with word-level boxes; `opencv-python-headless` remains lazy-loaded
     - [x] Dominant color extraction against approved asset RGB metadata, ±15 per channel
     - [x] OpenCV template matching for readable approved logo files
     - [x] Measurable clear-space checks only when a logo file and explicit minimum both exist
@@ -37,7 +37,7 @@
     - [x] Canvas overlays and linked finding selection in the image/PDF review screen
     - [x] PDF inspection with `pdfminer.six` page coordinates and finding `location` boxes
     - [x] Semi-transparent PDF page highlights
-    - [x] Lazy-loaded OCR/CV and explicit `IMAGE_REVIEW_ENABLED` memory gate; measured image review exceeds the 450 MB target and is disabled by default
+    - [x] Lazy-loaded OCR/CV and explicit `IMAGE_REVIEW_ENABLED` memory gate; image review is disabled by default, and the Render demo enables Tesseract explicitly
   - [x] **Phase 5: Improvement C, Reinforcement Feedback Loop**
     - [x] Snapshot original span, proposed rewrite, human edit on decisions; compliance dismissals also create dispute decisions
     - [x] Online SGD logistic regression features: sentence length, Flesch readability, and formality deltas
@@ -53,26 +53,26 @@
     - [x] Render free deployment stays on the existing Docker runtime because the image workflow needs Tesseract; Docker builds frontend, installs backend, runs Alembic, and serves the SPA on `$PORT`. `build.sh` supports a local/native build when system packages are installed.
     - [x] Production configuration requires a strong JWT secret and PostgreSQL; bcrypt/password policy, login rate limiting and lockout, JWT expiry, exact CORS allowlist, security headers, 5 MB upload validation/type sniffing, pagination, request IDs, structured logs, `/healthz`, and friendly global error responses are implemented.
     - [x] `DEMO_MODE` defaults false and gates demo seeding, role switching, demo login, and the four-role login credentials panel.
-  - [ ] **Phase 7: Tests and Docs**
-    - [ ] Permission matrix tests
-    - [ ] Improvement tests (A, B, C)
-    - [ ] Update `FEATURES.md`, `ROUND3_IMPROVEMENTS.md`, `LIMITATIONS.md`, `README.md`
+  - [x] **Phase 7: Tests and Docs**
+    - [x] Permission matrix tests cover every role/action cell and row-level/self-approval policy
+    - [x] Improvement tests cover guideline health/recompute (A), OCR/PDF/media checks (B), and model training/suppression (C)
+    - [x] Update `docs/FEATURES.md`, `docs/ROUND3_IMPROVEMENTS.md`, `docs/LIMITATIONS.md`, and `README.md`
 
 ## Decisions Made
 1. **Migrations & Database**: SQLite default locally, PostgreSQL (Neon) in production. Database migrations must always be executed via `alembic upgrade head`. Added dispute friction, media layout, and preference state migrations.
-2. **OCR runtime**: Tesseract is the default lower-memory backend; RapidOCR/ONNX remains optional for larger machines. Render free uses the working Docker runtime to install Tesseract and enables image review. OpenCV and OCR modules are loaded only as needed.
+2. **OCR runtime**: Tesseract is the configured default lower-memory backend; RapidOCR/ONNX remains optional for larger machines. Render free uses the working Docker runtime to install Tesseract and enables image review. OpenCV and OCR modules are loaded only as needed.
 3. **Offline Flesch Calculation**: Avoid reliance on external NLTK network downloads for cmudict by implementing a deterministic syllable-counter fallback for Flesch reading ease in `preference_model.py`.
 4. **Role policy**: Only creators create submissions and decide findings; managers handle standard-risk workflow and assign active reviewers; reviewers resolve escalations and sign off high-risk assigned items; admins manage the system but cannot approve. High-risk submissions are not manager-approved.
 5. **Manager observability**: Trends and activity come from persisted submissions, findings, and audit records. Creator notifications are derived from actual approvals and review comments; empty accounts show an empty state instead of demo copy.
 6. **Public system metadata**: `/system/mode` exposes only the active LLM mode for the navigation badge; detailed `/system/status` requires the Admin permission.
 7. **Phase 2 verification**: 111 targeted permission/API tests passed, Vite production build passed, full SQLite migration chain applied with the reviewer FK verified, and the isolated end-to-end workflow smoke passed. Browser checks confirmed Creator, Manager, Reviewer, and Admin dashboards/nav; browser console had no errors or warnings. A local Vite proxy target was supplied through `BRANDGUARD_API_PROXY_TARGET` during UI verification; native local defaults are scheduled for Phase 6.
 8. **Phase 3 verification**: DFI session ownership now supports both request Sessions and APScheduler session factories. Newly computed timestamps and source-data invalidation prevent stale scores; a read recomputes stale data. SQLite Alembic upgrade to head and `npm run build` passed; the targeted permission/API suite passed 113 tests. One existing Chroma embedding-function deprecation warning remains.
-9. **Phase 4 verification**: RapidOCR 3.10.0 (packaged ONNX models) processed the real 1020×1320 sample image into 455 characters and 77 word boxes; `pdfminer.six` extracted page/line boxes from the real PDF fixture. Palette, logo clear-space, OCR geometry, PDF location, and image-memory-gate tests passed (17 targeted tests). Full-app OCR plus OpenCV peak RSS measured 611 MB on the development Mac, so image uploads/reviews require explicit `IMAGE_REVIEW_ENABLED=true`; `docs/LIMITATIONS.md` records the Render-free-tier restriction. `pip check`, Python compile, and diff checks passed.
+9. **Phase 4 verification**: RapidOCR 3.10.0 (packaged ONNX models) processed the real 1020×1320 sample image into 455 characters and 77 word boxes; `pdfminer.six` extracted page/line boxes from the real PDF fixture. Palette, logo clear-space, OCR geometry, PDF location, and image-memory-gate tests passed (17 targeted tests). A RapidOCR/OpenCV run measured 611 MB peak RSS on the development Mac; a later Tesseract run measured 240.4 MB for the app plus a 58.6 MB OCR child (299.0 MB conservative combined). Image review remains opt-in by default; Render explicitly enables the lower-memory Tesseract backend. `pip check`, Python compile, and diff checks passed.
 10. **Feedback training and suppression**: A dispute invalidates clause-health freshness and trains a negative rewrite example; compliance reviewer dismissals now follow the same path. Suppression groups distinct findings across categories for each clause and normalized span. This deployment has one workspace database, so suppression is workspace-wide; it is not yet tenant-isolated.
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Complete Step 4: reconcile README, FEATURES.md, ROUND3_IMPROVEMENTS.md, and LIMITATIONS.md with the implemented behavior; retain focused permission/workflow/Improvement A, B, and C tests; then commit the docs and test changes.
+Step 4 is committed. If quota permits, begin Step 5 with the highest-priority feature: persistent in-app notifications for reviewer assignments and workflow decisions. Complete it end to end with role-specific delivery, tests, and feature documentation before considering due dates/SLA enhancements.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -99,3 +99,10 @@ Complete Step 4: reconcile README, FEATURES.md, ROUND3_IMPROVEMENTS.md, and LIMI
 - Browser sweep with the four demo roles confirmed distinct Creator My Work, Manager Team Command Center, Reviewer Compliance Desk, and Admin Console dashboards/nav. Checked manager search/filter queue and reviewer assignment, reviewer high-risk sign-off, Admin user/settings/audit/feedback/source screens, Org Insights, Approved Sources, Limitations, and Guideline Health. `Recompute now` returned “Guideline friction recomputed.” Browser console reported no errors or warnings.
 - End-to-end review checks included an image OCR submission (26 findings), PDF inspection with 8 page-highlighted findings, and reviewer approval recorded in the audit trail. Manager feedback stats displayed persisted decision outcomes; the targeted feedback tests cover suppression after three disputes. The completed PDF sample remained in the isolated local demo database.
 - Verification on a fresh isolated SQLite database: full backend suite **154 passed**; `npm run build --prefix frontend` passed; `git diff --check` passed. Earlier Phase 6 memory measurement for a real image plus PDF was 299 MB conservative combined peak RSS, below the ~450 MB target.
+
+## Step 4: Tests and Documentation (2026-10-26)
+- Verified the independent permission matrix covers every role/action cell, creator/reviewer row visibility, manager/reviewer approval boundaries, admin denial, and self-approval prevention.
+- Verified the Improvement A/B/C endpoint and unit tests cover DFI calculation/recompute/invalidation, OCR/PDF geometry and image gates, preference-model persistence/training/ranking, and suppression after three distinct disputed findings.
+- Created `docs/FEATURES.md` and `docs/ROUND3_IMPROVEMENTS.md` because README linked those files but they were missing. Rewrote `docs/LIMITATIONS.md` to match the current configuration and measured OCR backends; removed unsupported TLS/at-rest and obsolete OCR claims.
+- Updated README with exact local setup/run/test commands, production environment requirements, Render's retained Docker runtime rationale, and truthful role responsibilities. Removed the unsupported `EMBEDDING_BACKEND` setting from `.env.example`.
+- Updated the in-app Limitations screen so its security, LLM, image, and workspace disclosures match the current code. The Markdown links resolve, `npm run build --prefix frontend` passed, `git diff --check` passed, and the Step 3 full suite remained **154 passed** on its fresh isolated database.
