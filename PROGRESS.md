@@ -77,5 +77,6 @@ Finish the Phase 6 startup/configuration, authentication, upload, deployment, an
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
 - The remaining failure is `test_full_governance_workflow_and_rbac`: accepting a rewrite creates a new draft revision, but the test requests review without checking that revision again. Confirm the intended UI flow and repair the integration coverage/workflow before declaring the full sweep green.
-- Local settings use SQLite and `DEMO_MODE=false`. Role sign-in checks are still pending.
+- Local settings use SQLite and `DEMO_MODE=false`. In a separate migrated SQLite instance with `DEMO_MODE=true`, signed in as Creator and Manager, then switched to Reviewer and Admin. Each showed its role-specific dashboard and navigation; the mobile demo-role switcher worked. Vite on `:5173` reached the backend on `:8000` through its `/api` proxy.
+- The login page still lacks the requested demo-credentials panel; add it in the next implementation step. Keep the role switcher hidden when demo mode is off.
 - Phase 6 changes were already present but uncommitted when this resume began; audit and complete those changes before committing them with the finished phase.
