@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Step 1 complete; Step 2 (Demo Credentials on the Login Page) is next
+- **Current Step**: Steps 1–2 complete; Step 3 (Full Bug Sweep) is next
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -52,7 +52,7 @@
     - [x] Local non-Docker setup (uvicorn :8000, Vite :5173 with `/api` proxy, SQLite default, first-admin bootstrap)
     - [x] Render free deployment stays on the existing Docker runtime because the image workflow needs Tesseract; Docker builds frontend, installs backend, runs Alembic, and serves the SPA on `$PORT`. `build.sh` supports a local/native build when system packages are installed.
     - [x] Production configuration requires a strong JWT secret and PostgreSQL; bcrypt/password policy, login rate limiting and lockout, JWT expiry, exact CORS allowlist, security headers, 5 MB upload validation/type sniffing, pagination, request IDs, structured logs, `/healthz`, and friendly global error responses are implemented.
-    - [x] `DEMO_MODE` defaults false and gates demo seeding and role switching; demo login endpoint is unavailable when disabled. The login credentials panel remains Step 2.
+    - [x] `DEMO_MODE` defaults false and gates demo seeding, role switching, demo login, and the four-role login credentials panel.
   - [ ] **Phase 7: Tests and Docs**
     - [ ] Permission matrix tests
     - [ ] Improvement tests (A, B, C)
@@ -72,7 +72,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Implement and verify the four-role demo-credentials panel on the login page. Then commit Step 2 before starting the full role/workflow bug sweep in Step 3.
+Complete the full role and screen sweep in Step 3, repair the known workflow integration failure, and exercise the main workflow plus Improvements A, B, and C end to end.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -84,3 +84,9 @@ Implement and verify the four-role demo-credentials panel on the login page. The
 - Image review with Tesseract processed a real 1020×1320 campaign image and the PDF fixture, producing 437 OCR characters/73 boxes and 8 PDF highlights. Peak app RSS was 240.4 MB and the Tesseract child peak was 58.6 MB (299.0 MB conservative combined), below the ~450 MB target. RapidOCR measured above the target, so it is not used by the free Render configuration.
 - `DEMO_MODE=false` is the local/default configuration; demo users are created only for an empty database when demo mode is enabled. `.gitignore` now covers `.env`, SQLite databases, Chroma directories, uploads, and the frontend build output; `.env.example` remains trackable.
 - Final backend suite for Step 1: 151 passed, 1 failed. The remaining existing workflow test still requests review immediately after accepting a revision; the new revision is a draft and needs a fresh check. This is intentionally carried to Step 3, where the full workflow sweep will fix its test and verify the UI behavior. Chroma emits five existing embedding-function deprecation warnings.
+
+## Step 2: Demo Credentials on the Login Page (2026-10-26)
+- Added a responsive “Demo accounts” panel gated by `/api/system/mode`'s `demo_mode` value. It lists Admin, Manager, Reviewer, and Creator usernames/passwords and provides a **Fill / Sign in** button for each; each button fills the login fields and authenticates through the regular password-login endpoint.
+- In the browser with `DEMO_MODE=true`, verified the four cards and successfully signed in through each button. The resulting pages showed the matching Admin Console, Manager Command Center, Reviewer Compliance Desk, and Creator My Work dashboard.
+- Restarted with `DEMO_MODE=false` and a newly migrated empty SQLite database. The login panel was absent, the database contained zero users, and `/api/auth/demo-login` returned 404.
+- `npm run build --prefix frontend` passed. No real user password is shown or logged; the displayed values are throwaway credentials from the demo seed.

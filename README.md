@@ -69,7 +69,7 @@ flowchart TD
 
 ## Demo Accounts for Judges
 
-The demo seed creates these throwaway accounts only when `DEMO_MODE=true`; keep demo mode off for private workspaces.
+When `DEMO_MODE=true`, the login screen shows these throwaway accounts and a one-click **Fill / Sign in** button for each role. The demo seed is the only code path that creates them; keep demo mode off for private workspaces.
 
 | Role | Email | Password | Responsibilities |
 | :--- | :--- | :--- | :--- |

@@ -101,51 +101,52 @@ export const App: React.FC = () => {
   }
 
   // Routing logic with strict Role-based UI mirroring
+  const renderLogin = () => <Login onLoginSuccess={handleLoginSuccess} demoMode={demoMode} />;
   let content = null;
   if (!user && currentPath !== "/limitations") {
-    content = <Login onLoginSuccess={handleLoginSuccess} />;
+    content = renderLogin();
   } else if (currentPath === "/login") {
-    content = <Login onLoginSuccess={handleLoginSuccess} />;
+    content = renderLogin();
   } else if (currentPath === "/new") {
     // Only creators can create submissions.
     if (user && user.role !== "creator") {
       content = <Dashboard user={user} navigate={navigate} />;
     } else {
-      content = user ? <NewSubmission navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+      content = user ? <NewSubmission navigate={navigate} /> : renderLogin();
     }
   } else if (currentPath.startsWith("/review/")) {
     const id = currentPath.replace("/review/", "");
-    content = user ? <ReviewScreen submissionId={id} user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    content = user ? <ReviewScreen submissionId={id} user={user} navigate={navigate} /> : renderLogin();
   } else if (currentPath.startsWith("/approval/")) {
     const id = currentPath.replace("/approval/", "");
     content = user && (user.role === "manager" || user.role === "reviewer")
       ? <ApprovalView submissionId={id} user={user} navigate={navigate} />
-      : user ? <Dashboard user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+      : user ? <Dashboard user={user} navigate={navigate} /> : renderLogin();
   } else if (currentPath === "/sources") {
     // Creators cannot manage or view sources registry
     if (user && user.role === "creator") {
       content = <Dashboard user={user} navigate={navigate} />;
     } else {
-      content = user ? <AdminSources canManage={user.role === "admin"} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+      content = user ? <AdminSources canManage={user.role === "admin"} /> : renderLogin();
     }
   } else if (currentPath === "/insights") {
     // Only managers and admins can view organization-wide insights.
     if (user && user.role !== "manager" && user.role !== "admin") {
       content = <Dashboard user={user} navigate={navigate} />;
     } else {
-      content = user ? <Insights /> : <Login onLoginSuccess={handleLoginSuccess} />;
+      content = user ? <Insights /> : renderLogin();
     }
   } else if (currentPath === "/dashboard/guideline-health") {
     // Only Managers and Admins can view Guideline Health
     if (user && (user.role === "manager" || user.role === "admin")) {
       content = <GuidelineHealth />;
     } else {
-      content = user ? <Dashboard user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+      content = user ? <Dashboard user={user} navigate={navigate} /> : renderLogin();
     }
   } else if (currentPath === "/limitations") {
     content = <Limitations navigate={navigate} />;
   } else {
-    content = user ? <Dashboard user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    content = user ? <Dashboard user={user} navigate={navigate} /> : renderLogin();
   }
 
   return (
