@@ -1,9 +1,11 @@
 """Integration coverage for the new guideline, media, and feedback APIs."""
 import uuid
+import io
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
+import pdfplumber
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -25,6 +27,8 @@ from backend.app.models.models import (
     GuidelineClause,
     GuidelineDoc,
     Notification,
+    Approval,
+    ApprovalDecision,
     PreferenceModelState,
     SourceType,
     Submission,
@@ -626,6 +630,80 @@ def test_assignment_due_dates_are_manager_only_and_expose_overdue_state(api_clie
         f"/api/submissions/{unassigned.id}/due-date",
         json={"assignment_due_at": "2030-01-01T00:00:00Z"},
     ).status_code == 409
+
+
+def test_approval_report_exports_are_role_protected_and_filterable(api_client, monkeypatch):
+    client, session_factory, manager = api_client
+    creator = User(
+        id="report-creator", name="Report Creator", email="report-creator@example.test",
+        password_hash="unused", role=UserRole.creator, is_active=True,
+    )
+    admin = User(
+        id="report-admin", name="Report Admin", email="report-admin@example.test",
+        password_hash="unused", role=UserRole.admin, is_active=True,
+    )
+    approved = Submission(
+        id="report-approved", creator_id=creator.id, title="=1+1 injected title",
+        status=SubmissionStatus.approved,
+    )
+    rejected = Submission(
+        id="report-rejected", creator_id=creator.id, title="Rejected campaign",
+        status=SubmissionStatus.rejected,
+    )
+    with session_factory.begin() as db:
+        db.add_all([creator, admin, approved, rejected])
+        db.flush()
+        db.add_all([
+            Approval(
+                id="report-approval-one", submission_id=approved.id, user_id=manager.id,
+                decision=ApprovalDecision.approved, note="Approved for release",
+                created_at=datetime(2026, 10, 1),
+            ),
+            Approval(
+                id="report-approval-two", submission_id=rejected.id, user_id=manager.id,
+                decision=ApprovalDecision.rejected, note="Missing evidence",
+                created_at=datetime(2026, 10, 10),
+            ),
+        ])
+
+    csv_response = client.get("/api/reports/approvals.csv")
+    assert csv_response.status_code == 200
+    assert "text/csv" in csv_response.headers["content-type"]
+    assert 'attachment; filename="brandguard_approval_report.csv"' == csv_response.headers["content-disposition"]
+    assert "'=1+1 injected title" in csv_response.text
+    assert "Approved for release" in csv_response.text
+    filtered = client.get("/api/reports/approvals.csv?start_date=2026-10-05T00:00:00Z")
+    assert filtered.status_code == 200
+    assert "Rejected campaign" in filtered.text
+    assert "=1+1 injected title" not in filtered.text
+    assert client.get(
+        "/api/reports/approvals.csv?start_date=2026-10-20T00:00:00Z&end_date=2026-10-01T00:00:00Z"
+    ).status_code == 422
+
+    pdf_response = client.get("/api/reports/approvals.pdf")
+    assert pdf_response.status_code == 200
+    assert pdf_response.headers["content-type"] == "application/pdf"
+    assert pdf_response.content.startswith(b"%PDF-1.4")
+    assert b"Approved for release" in pdf_response.content
+    assert b"Rejected campaign" in pdf_response.content
+    with pdfplumber.open(io.BytesIO(pdf_response.content)) as document:
+        extracted_pdf_text = "\n".join(page.extract_text() or "" for page in document.pages)
+    assert "BrandGuard Approval Report" in extracted_pdf_text
+    assert "Approved for release" in extracted_pdf_text
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+    assert client.get("/api/reports/approvals.csv").status_code == 403
+    assert client.get("/api/reports/approvals.pdf").status_code == 403
+    reviewer = User(
+        id="report-reviewer", name="Report Reviewer", email="report-reviewer@example.test",
+        password_hash="unused", role=UserRole.reviewer, is_active=True,
+    )
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: reviewer)
+    assert client.get("/api/reports/approvals.csv").status_code == 403
+    assert client.get("/api/reports/approvals.pdf").status_code == 403
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: admin)
+    assert client.get("/api/reports/approvals.csv").status_code == 200
+    assert client.get("/api/reports/approvals.pdf").status_code == 200
 
 
 def test_reviewer_dismissal_trains_feedback_and_invalidates_guideline_health(api_client, monkeypatch):

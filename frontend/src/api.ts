@@ -97,6 +97,35 @@ async function request<T>(
   }
 }
 
+async function downloadFile(endpoint: string, fallbackName: string) {
+  const token = getToken();
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (response.status === 401) {
+    clearToken();
+    if (!window.location.pathname.includes("/login")) window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
+  }
+  if (!response.ok) {
+    let message = `Download failed (${response.status})`;
+    try {
+      const data = await response.json();
+      message = data.detail || message;
+    } catch { /* Response may not contain JSON. */ }
+    throw new Error(message);
+  }
+  const filename = response.headers.get("Content-Disposition")?.match(/filename="?([^";]+)"?/i)?.[1] || fallbackName;
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 export const api = {
   // Auth
   login: async (email: string, password: string) =>
@@ -201,6 +230,10 @@ export const api = {
     }),
   getHistory: async (submissionId: string) =>
     request<any>(`/submissions/${submissionId}/history`),
+  downloadApprovalReport: async (format: "csv" | "pdf") =>
+    downloadFile(`/reports/approvals.${format}`, `brandguard_approval_report.${format}`),
+  downloadAuditLogCsv: async () =>
+    downloadFile("/admin/audit-logs/export", "brandguard_audit_log.csv"),
   getNotifications: async (params?: { unread_only?: boolean; limit?: number; offset?: number }) => {
     const query = new URLSearchParams();
     if (params?.unread_only) query.set("unread_only", "true");

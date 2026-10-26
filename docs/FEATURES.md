@@ -17,6 +17,8 @@ This inventory reflects behavior present in the current application. It does not
 - **Reviewer:** Compliance Desk, assigned submissions and escalated findings, assignment deadlines and overdue state, source lookup, compliance notes, and high-risk sign-off for assigned submissions.
 - **Admin:** User and role management, account activation and password reset, approved-source management, runtime settings, system status, audit log and CSV export, feedback statistics/reset, and organization insights.
 
+Managers and admins can export the full workflow approval/changes/rejection history as CSV or PDF. Both formats include decision, submission, creator, reviewer, timestamp, status, deadline, and review note; optional ISO date filters are available on the authenticated API.
+
 The notification bell is available to signed-in roles. Reviewer assignment events go to the assigned reviewer; approval, changes-requested, and rejection decisions go to the creator. Notifications have read/unread state and open the related submission.
 
 ## Guideline health (Improvement A)
@@ -47,7 +49,6 @@ The notification bell is available to signed-in roles. Reviewer assignment event
 
 - The Creator dashboard's activity summary remains derived from decisions and comments. Persistent in-app notifications cover reviewer assignments and workflow decisions, but not finding-level decisions, comments, or email delivery.
 - Saved views store the current search and status filter in browser local storage, isolated by user and role; they do not sync across browsers or devices.
-- CSV export covers audit logs. A dedicated approval-report CSV/PDF export is not implemented.
 - Admins can reset another user's password; self-service password change is not implemented.
 - Dark mode and first-login onboarding tips are not implemented.
 - See [LIMITATIONS.md](LIMITATIONS.md) for image-processing, data-scope, rate-limit, and hosting constraints.

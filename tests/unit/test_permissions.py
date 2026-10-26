@@ -43,6 +43,7 @@ EXPECTED = {
         Action.SOURCES_READ,
         Action.FEEDBACK_STATS_VIEW,
         Action.ORG_INSIGHTS_VIEW,
+        Action.APPROVAL_REPORT_EXPORT,
     },
     UserRole.reviewer: {
         Action.SUBMISSION_VIEW_ASSIGNED,
@@ -65,6 +66,7 @@ EXPECTED = {
         Action.FEEDBACK_STATS_VIEW,
         Action.FEEDBACK_RESET,
         Action.ORG_INSIGHTS_VIEW,
+        Action.APPROVAL_REPORT_EXPORT,
     },
 }
 

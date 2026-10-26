@@ -10,6 +10,7 @@ import {
   BarChart3,
   Flame,
   ExternalLink,
+  Download,
 } from "lucide-react";
 import { api } from "../../api";
 import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthClause, ActivityEvent, FeedbackCategoryStats } from "../../types";
@@ -90,6 +91,15 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
       await loadData();
     } catch (err: any) {
       showToast(err.message || "Due date update failed", "error");
+    }
+  };
+
+  const downloadApprovalReport = async (format: "csv" | "pdf") => {
+    try {
+      await api.downloadApprovalReport(format);
+      showToast(`Approval report downloaded as ${format.toUpperCase()}`, "success");
+    } catch (err: any) {
+      showToast(err.message || "Approval report download failed", "error");
     }
   };
 
@@ -343,6 +353,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
         />
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={() => downloadApprovalReport("csv")} className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50">
+            <Download className="h-3.5 w-3.5" />Export CSV
+          </button>
+          <button type="button" onClick={() => downloadApprovalReport("pdf")} className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-stone-800">
+            <Download className="h-3.5 w-3.5" />Export PDF
+          </button>
+        </div>
 
         {/* Submissions Table */}
         <div className="overflow-x-auto">

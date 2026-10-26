@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Saved views for Creator and Manager are complete; remaining Step 5 features are deferred at 94% quota usage
+- **Current Step**: Approval-report CSV/PDF export is complete; remaining Step 5 features continue in listed order
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -64,7 +64,7 @@
   - [ ] **Remaining Step 5 features (resume when quota allows)**
     - [x] Assignment due dates and SLA/overdue indicators
     - [x] Saved views (basic creator/manager search and filters already exist)
-    - [ ] Approval-report CSV/PDF export (audit-log CSV already exists)
+    - [x] Approval-report CSV/PDF export (audit-log CSV already exists)
     - [ ] Self-service password change (admin-triggered password reset already exists)
     - [ ] Dark mode
     - [ ] First-login onboarding tips
@@ -83,7 +83,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Assignment due dates, manager-only updates, and manager/reviewer overdue indicators are implemented, tested, and committed in `9015376`. Saved views are now implemented for Creator and Manager with browser persistence isolated by account and role. Usage is 94% used (6% remaining), so stop at this clean checkpoint. The next feature in order is approval-report CSV/PDF export, followed by self-service password change, dark mode, and first-login onboarding tips. Admin password reset, basic search/filter controls, and audit CSV export already exist.
+Assignment due dates, manager-only updates, and manager/reviewer overdue indicators are implemented, tested, and committed in `9015376`. Saved views are implemented for Creator and Manager with browser persistence isolated by account and role. Approval-report CSV/PDF export is now implemented and verified. Next in order: self-service password change, dark mode, and first-login onboarding tips. Admin password reset, basic search/filter controls, and audit CSV export already exist.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -145,3 +145,8 @@ Assignment due dates, manager-only updates, and manager/reviewer overdue indicat
 - Added save, apply, overwrite-by-name, and delete controls to Creator My Work and the Manager Approval Queue. Each view stores its search text and status filter in browser local storage, scoped by user ID and role; views do not sync across browsers or devices.
 - Added regression tests for persistence, per-user/per-role isolation, overwrite, deletion, and blank-name validation. `npm test --prefix frontend` passed (**4 tests** total), `npm run build --prefix frontend` passed, and `git diff --check` passed.
 - Quota check: **94% used (6% remaining)**. Stop optional feature work at this clean checkpoint. Next in order: approval-report CSV/PDF export; then self-service password change, dark mode, and first-login onboarding tips.
+
+## Approval Report Export (2026-10-27)
+- Added Manager/Admin-only CSV and PDF exports for approval, changes-requested, and rejection decisions, with optional start/end filters and spreadsheet formula protection in CSV output. Reports include content, creator, assigned reviewer, decision maker, UTC timestamps, current status, due date, and review note.
+- Wired authenticated export actions into Manager and Admin screens. Replaced the Admin audit CSV link with an authenticated download so it sends the required bearer token.
+- Added integration coverage for role permissions, date filtering and invalid ranges, CSV content/disposition/formula protection, and PDF generation/content extraction. The full backend suite passed (**161 tests**); frontend tests passed (**4 tests**); frontend production build and `git diff --check` passed.

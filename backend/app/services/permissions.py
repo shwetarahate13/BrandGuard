@@ -36,6 +36,7 @@ class Action(str, Enum):
     SYSTEM_STATUS_VIEW = "system:status_view"
     AUDIT_LOG_VIEW = "audit_log:view"
     AUDIT_LOG_EXPORT = "audit_log:export"
+    APPROVAL_REPORT_EXPORT = "approval_report:export"
     FEEDBACK_STATS_VIEW = "feedback:stats_view"
     FEEDBACK_RESET = "feedback:reset"
     PERSONAL_STATS_VIEW = "insights:personal"
@@ -63,6 +64,7 @@ PERMISSION_MATRIX: Dict[UserRole, Set[Action]] = {
         Action.SOURCES_READ,
         Action.FEEDBACK_STATS_VIEW,
         Action.ORG_INSIGHTS_VIEW,
+        Action.APPROVAL_REPORT_EXPORT,
     },
     UserRole.reviewer: {
         Action.SUBMISSION_VIEW_ASSIGNED,
@@ -85,6 +87,7 @@ PERMISSION_MATRIX: Dict[UserRole, Set[Action]] = {
         Action.FEEDBACK_STATS_VIEW,
         Action.FEEDBACK_RESET,
         Action.ORG_INSIGHTS_VIEW,
+        Action.APPROVAL_REPORT_EXPORT,
     },
 }
 

@@ -148,6 +148,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
     }
   };
 
+  const downloadApprovalReport = async (format: "csv" | "pdf") => {
+    try {
+      await api.downloadApprovalReport(format);
+      showToast(`Approval report downloaded as ${format.toUpperCase()}`, "success");
+    } catch (err: any) {
+      showToast(err.message || "Approval report download failed", "error");
+    }
+  };
+
+  const downloadAuditCsv = async () => {
+    try {
+      await api.downloadAuditLogCsv();
+      showToast("Audit log downloaded as CSV", "success");
+    } catch (err: any) {
+      showToast(err.message || "Audit log download failed", "error");
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -424,15 +442,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
               <h2 className="text-lg font-bold text-stone-900">Audit Logs & Export</h2>
               <p className="text-xs text-stone-500 mt-0.5">Immutable record of all submission checks, fix decisions, revisions, and approvals.</p>
             </div>
-            <a
-              href="/api/admin/audit-logs/export"
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={downloadAuditCsv}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-sm"
             >
               <Download className="w-4 h-4" />
-              Export CSV
-            </a>
+              Export Audit CSV
+            </button>
+            <button type="button" onClick={() => downloadApprovalReport("csv")} className="inline-flex items-center gap-1.5 px-4 py-2 border border-stone-300 hover:bg-stone-50 text-stone-800 rounded-xl text-xs font-bold">
+              <Download className="w-4 h-4" />Approval CSV
+            </button>
+            <button type="button" onClick={() => downloadApprovalReport("pdf")} className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold">
+              <Download className="w-4 h-4" />Approval PDF
+            </button>
           </div>
 
           <div className="overflow-x-auto">
