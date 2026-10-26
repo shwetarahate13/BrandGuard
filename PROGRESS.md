@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Approval-report CSV/PDF export is complete; remaining Step 5 features continue in listed order
+- **Current Step**: Self-service password change is complete; dark mode and onboarding remain
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -65,7 +65,7 @@
     - [x] Assignment due dates and SLA/overdue indicators
     - [x] Saved views (basic creator/manager search and filters already exist)
     - [x] Approval-report CSV/PDF export (audit-log CSV already exists)
-    - [ ] Self-service password change (admin-triggered password reset already exists)
+    - [x] Self-service password change (admin-triggered password reset already exists)
     - [ ] Dark mode
     - [ ] First-login onboarding tips
 
@@ -83,7 +83,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Assignment due dates, manager-only updates, and manager/reviewer overdue indicators are implemented, tested, and committed in `9015376`. Saved views are implemented for Creator and Manager with browser persistence isolated by account and role. Approval-report CSV/PDF export is now implemented and verified. Next in order: self-service password change, dark mode, and first-login onboarding tips. Admin password reset, basic search/filter controls, and audit CSV export already exist.
+Assignment due dates, manager-only updates, and manager/reviewer overdue indicators are implemented, tested, and committed in `9015376`. Saved views are implemented for Creator and Manager with browser persistence isolated by account and role. Approval-report CSV/PDF export and self-service password change are implemented and verified. Next in order: dark mode, then first-login onboarding tips. Admin password reset, basic search/filter controls, and audit CSV export already exist.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -150,3 +150,8 @@ Assignment due dates, manager-only updates, and manager/reviewer overdue indicat
 - Added Manager/Admin-only CSV and PDF exports for approval, changes-requested, and rejection decisions, with optional start/end filters and spreadsheet formula protection in CSV output. Reports include content, creator, assigned reviewer, decision maker, UTC timestamps, current status, due date, and review note.
 - Wired authenticated export actions into Manager and Admin screens. Replaced the Admin audit CSV link with an authenticated download so it sends the required bearer token.
 - Added integration coverage for role permissions, date filtering and invalid ranges, CSV content/disposition/formula protection, and PDF generation/content extraction. The full backend suite passed (**161 tests**); frontend tests passed (**4 tests**); frontend production build and `git diff --check` passed.
+
+## Self-Service Password Change (2026-10-27)
+- Added authenticated current-password verification, new-password policy validation, same-password rejection, bcrypt update, and audit logging. Shared seeded demo accounts cannot change their passwords while demo mode is enabled, preserving the visible one-click demo credentials.
+- Added a Navbar password form with current/new/confirmation fields and success/error states, available to all signed-in account roles.
+- Integration coverage verifies incorrect current password, same password, short and over-byte-limit passwords, changed-password login, and fixed shared demo credentials. The full backend suite passed (**162 tests**); frontend tests passed (**4 tests**); frontend build and `git diff --check` passed.

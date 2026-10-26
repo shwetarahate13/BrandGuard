@@ -14,6 +14,7 @@ import {
   Bell,
   CheckCheck,
   X as CloseIcon,
+  LockKeyhole,
 } from "lucide-react";
 import { User, UserRole } from "../types";
 import { Notification } from "../types";
@@ -44,6 +45,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordChanging, setPasswordChanging] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordChanged, setPasswordChanged] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -98,6 +106,33 @@ export const Navbar: React.FC<NavbarProps> = ({
       navigate(notification.kind === "review_assignment"
         ? `/approval/${notification.submission_id}`
         : `/review/${notification.submission_id}`);
+    }
+  };
+
+  const closePasswordModal = () => {
+    setPasswordModalOpen(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError(null);
+    setPasswordChanged(false);
+  };
+
+  const submitPasswordChange = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordError(null);
+    if (newPassword !== confirmPassword) {
+      setPasswordError("The new passwords do not match.");
+      return;
+    }
+    setPasswordChanging(true);
+    try {
+      await api.changePassword(currentPassword, newPassword);
+      setPasswordChanged(true);
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : "Password change failed.");
+    } finally {
+      setPasswordChanging(false);
     }
   };
 
@@ -295,6 +330,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
 
                   <button
+                    type="button"
+                    onClick={() => { setPasswordModalOpen(true); setPasswordError(null); setPasswordChanged(false); }}
+                    title="Change Password"
+                    aria-label="Change password"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  >
+                    <LockKeyhole className="h-4 w-4" />
+                    <span className="hidden xl:inline">Password</span>
+                  </button>
+
+                  <button
                     onClick={onLogout}
                     title="Sign Out"
                     className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
@@ -348,6 +394,51 @@ export const Navbar: React.FC<NavbarProps> = ({
         onClose={() => setModalOpen(false)}
         llmMode={llmMode}
       />
+
+      {passwordModalOpen && user && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !passwordChanging) closePasswordModal();
+        }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="password-change-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            {!passwordChanged ? (
+              <>
+                <div className="mb-5 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 id="password-change-title" className="text-lg font-bold text-stone-900">Change password</h2>
+                    <p className="mt-1 text-xs text-stone-500">Verify your current password, then choose a new one.</p>
+                  </div>
+                  <button type="button" aria-label="Close password dialog" onClick={closePasswordModal} disabled={passwordChanging} className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100 disabled:opacity-50">
+                    <CloseIcon className="h-4 w-4" />
+                  </button>
+                </div>
+                {passwordError && <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{passwordError}</p>}
+                <form onSubmit={submitPasswordChange} className="space-y-3">
+                  <label className="block text-xs font-semibold text-stone-700">Current password
+                    <input type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="block text-xs font-semibold text-stone-700">New password
+                    <input type="password" autoComplete="new-password" minLength={12} maxLength={72} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="block text-xs font-semibold text-stone-700">Confirm new password
+                    <input type="password" autoComplete="new-password" minLength={12} maxLength={72} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm" />
+                  </label>
+                  <p className="text-[11px] text-stone-500">At least 12 characters and no more than 72 UTF-8 bytes.</p>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={closePasswordModal} disabled={passwordChanging} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50">Cancel</button>
+                    <button type="submit" disabled={passwordChanging} className="rounded-lg bg-stone-900 px-3 py-2 text-xs font-semibold text-white hover:bg-stone-800 disabled:opacity-50">{passwordChanging ? "Updating…" : "Change password"}</button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <div className="py-3 text-center">
+                <h2 id="password-change-title" className="text-lg font-bold text-emerald-800">Password changed</h2>
+                <p className="mt-2 text-sm text-stone-600">Your new password is ready to use the next time you sign in.</p>
+                <button type="button" onClick={closePasswordModal} className="mt-5 rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white">Done</button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </>
   );
 };

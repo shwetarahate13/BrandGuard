@@ -28,6 +28,7 @@ This page describes the current implementation in the repository. Hosting provid
 ## Security and privacy boundaries
 
 - Passwords are hashed with bcrypt. New passwords must be at least 12 characters and no more than 72 UTF-8 bytes. JWTs use HS256 and default to an eight-hour lifetime; production requires a configured secret of at least 32 bytes.
+- Users can change their own password after verifying their current password. Seeded shared demo accounts keep their throwaway passwords while `DEMO_MODE=true` so the published demo credentials remain valid.
 - Login lockout and endpoint rate limiting are process-local, as described above. The application does not provide a shared distributed rate-limit store.
 - CORS uses an explicit origin allowlist. Local Vite development proxies API requests and does not need a CORS entry.
 - If an external LLM provider is enabled, it processes the review or rewrite inputs described above. Mock/offline mode makes no external LLM request.

@@ -37,7 +37,7 @@ from backend.app.models.models import (
     User,
     UserRole,
 )
-from backend.app.services.auth import get_current_user
+from backend.app.services.auth import get_current_user, hash_password
 from backend.app.pipeline.confidence import should_suppress_finding, suppressed_span_combinations
 from backend.app.services.rate_limit import endpoint_rate_limiter
 from backend.app.workers.dfi_worker import dfi_scores_are_stale
@@ -704,6 +704,54 @@ def test_approval_report_exports_are_role_protected_and_filterable(api_client, m
     monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: admin)
     assert client.get("/api/reports/approvals.csv").status_code == 200
     assert client.get("/api/reports/approvals.pdf").status_code == 200
+
+
+def test_self_service_password_change_verifies_current_password_and_preserves_demo_credentials(api_client, monkeypatch):
+    client, session_factory, _manager = api_client
+    current_password = "OldAccountPass2026!"
+    new_password = "NewAccountPass2026!"
+    user = User(
+        id="password-change-user", name="Password Change User", email="password-change@example.test",
+        password_hash=hash_password(current_password), role=UserRole.creator, is_active=True,
+    )
+    demo_user = User(
+        id="password-change-demo", name="Demo Creator", email="creator@nexora.dev",
+        password_hash=hash_password(current_password), role=UserRole.creator, is_active=True,
+    )
+    with session_factory.begin() as db:
+        db.add_all([user, demo_user])
+    monkeypatch.setattr(auth_api, "get_settings", lambda: SimpleNamespace(DEMO_MODE=False))
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: user)
+
+    assert client.post("/api/auth/change-password", json={
+        "current_password": "WrongCurrentPass2026!", "new_password": new_password,
+    }).status_code == 400
+    assert client.post("/api/auth/change-password", json={
+        "current_password": current_password, "new_password": current_password,
+    }).status_code == 400
+    assert client.post("/api/auth/change-password", json={
+        "current_password": current_password, "new_password": "Badpass123!",
+    }).status_code == 422
+    assert client.post("/api/auth/change-password", json={
+        "current_password": current_password, "new_password": "😀" * 25,
+    }).status_code == 422
+
+    changed = client.post("/api/auth/change-password", json={
+        "current_password": current_password, "new_password": new_password,
+    })
+    assert changed.status_code == 200, changed.text
+    assert client.post("/api/auth/login", json={
+        "email": user.email, "password": current_password,
+    }).status_code == 401
+    assert client.post("/api/auth/login", json={
+        "email": user.email, "password": new_password,
+    }).status_code == 200
+
+    monkeypatch.setattr(auth_api, "get_settings", lambda: SimpleNamespace(DEMO_MODE=True))
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: demo_user)
+    assert client.post("/api/auth/change-password", json={
+        "current_password": current_password, "new_password": new_password,
+    }).status_code == 403
 
 
 def test_reviewer_dismissal_trains_feedback_and_invalidates_guideline_health(api_client, monkeypatch):

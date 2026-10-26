@@ -139,6 +139,11 @@ export const api = {
       body: JSON.stringify({ role }),
     }),
   getMe: async () => request<User>("/auth/me"),
+  changePassword: async (current_password: string, new_password: string) =>
+    request<{ status: string; message: string }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password, new_password }),
+    }),
 
   // Submissions
   getSubmissions: async () => request<Submission[]>("/submissions"),

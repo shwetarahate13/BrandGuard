@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 from backend.app.models.models import User
-from backend.app.schemas.schemas import DemoLoginRequest, LoginRequest, TokenResponse, UserResponse
+from backend.app.schemas.schemas import DemoLoginRequest, LoginRequest, PasswordChangeRequest, TokenResponse, UserResponse
 from backend.app.services.auth import (
     authenticate_user,
     clear_login_failures,
@@ -12,6 +12,8 @@ from backend.app.services.auth import (
     get_current_user,
     login_lockout_remaining,
     record_login_failure,
+    verify_password,
+    hash_password,
 )
 from backend.app.config import get_settings
 from backend.app.utils.audit import log_action
@@ -73,3 +75,28 @@ def demo_login(payload: DemoLoginRequest, db: Session = Depends(get_db)):
 def get_me(current_user: User = Depends(get_current_user)):
     """Return currently authenticated user profile."""
     return current_user
+
+
+@router.post("/change-password")
+def change_password(
+    payload: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change the authenticated user's password after verifying the current one."""
+    user = db.query(User).filter(User.id == current_user.id, User.is_active.is_(True)).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User account is unavailable")
+    if get_settings().DEMO_MODE and user.email in {
+        "creator@nexora.dev", "manager@nexora.dev", "reviewer@nexora.dev", "admin@nexora.dev",
+    }:
+        raise HTTPException(status_code=403, detail="Shared demo account passwords cannot be changed")
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="Choose a new password different from the current password")
+
+    user.password_hash = hash_password(payload.new_password)
+    log_action(db, user_id=user.id, action="change_password", entity="user", entity_id=user.id)
+    db.commit()
+    return {"status": "ok", "message": "Password changed successfully"}

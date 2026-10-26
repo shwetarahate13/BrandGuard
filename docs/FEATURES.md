@@ -19,6 +19,8 @@ This inventory reflects behavior present in the current application. It does not
 
 Managers and admins can export the full workflow approval/changes/rejection history as CSV or PDF. Both formats include decision, submission, creator, reviewer, timestamp, status, deadline, and review note; optional ISO date filters are available on the authenticated API.
 
+Signed-in users can change their own password after verifying the current password. Shared seed demo-account passwords stay fixed while demo mode is enabled so the published one-click credentials keep working.
+
 The notification bell is available to signed-in roles. Reviewer assignment events go to the assigned reviewer; approval, changes-requested, and rejection decisions go to the creator. Notifications have read/unread state and open the related submission.
 
 ## Guideline health (Improvement A)
@@ -49,6 +51,5 @@ The notification bell is available to signed-in roles. Reviewer assignment event
 
 - The Creator dashboard's activity summary remains derived from decisions and comments. Persistent in-app notifications cover reviewer assignments and workflow decisions, but not finding-level decisions, comments, or email delivery.
 - Saved views store the current search and status filter in browser local storage, isolated by user and role; they do not sync across browsers or devices.
-- Admins can reset another user's password; self-service password change is not implemented.
-- Dark mode and first-login onboarding tips are not implemented.
+- Admins can reset another user's password. Dark mode and first-login onboarding tips are not implemented.
 - See [LIMITATIONS.md](LIMITATIONS.md) for image-processing, data-scope, rate-limit, and hosting constraints.
