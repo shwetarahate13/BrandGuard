@@ -6,15 +6,17 @@ import {
   Clock,
 } from "lucide-react";
 import { api } from "../api";
-import { Submission, Finding } from "../types";
+import { Submission, Finding, User } from "../types";
 
 interface ApprovalViewProps {
   submissionId: string;
+  user: User;
   navigate: (path: string) => void;
 }
 
 export const ApprovalView: React.FC<ApprovalViewProps> = ({
   submissionId,
+  user,
   navigate,
 }) => {
   const [submission, setSubmission] = useState<Submission | null>(null);
@@ -88,6 +90,12 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
   }
 
   const openFindings = findings.filter((f) => f.status === "open");
+  const highRisk = findings.some((finding) =>
+    finding.needs_human || finding.severity === "critical" || finding.severity === "major" || finding.category === "unsupported_claim"
+  );
+  const isInReview = submission.status === "in_review";
+  const canManagerAct = user.role === "manager" && isInReview && !highRisk;
+  const canReviewerSignOff = user.role === "reviewer" && user.id === submission.assigned_to_id && isInReview && highRisk;
   const latestVersion = submission.versions?.length
     ? submission.versions[submission.versions.length - 1]
     : null;
@@ -120,13 +128,14 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
 
         {/* Manager/Reviewer Action Buttons */}
         <div className="flex items-center gap-2">
-          <button
+          {(canManagerAct || canReviewerSignOff) && <button
             onClick={() => setDecisionModal("approved")}
             className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold shadow-sm inline-flex items-center gap-1.5"
           >
             <ShieldCheck className="w-4 h-4" />
             Approve Copy
-          </button>
+          </button>}
+          {canManagerAct && <>
           <button
             onClick={() => setDecisionModal("changes_requested")}
             className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-sm inline-flex items-center gap-1.5"
@@ -140,6 +149,7 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
           >
             Reject
           </button>
+          </>}
         </div>
       </div>
 

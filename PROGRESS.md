@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Phase**: Phase 2 (Roles That Are Really Different & An Exciting UI)
+- **Current Phase**: Phase 3 (Improvement A, Guideline-Gap Insights)
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -9,16 +9,16 @@
     - [x] Audit all API endpoints, routes, status codes, and error handlers
     - [x] Fix offline Flesch readability calculation in `preference_model.py` (avoid NLTK cmudict download failures)
     - [x] Smoke test & E2E verification of all current flows (`smoke_test.py` passes 100%)
-  - [ ] **Phase 2: Roles That Are Really Different & An Exciting UI**
-    - [ ] Create permission matrix in `backend/app/services/permissions.py`
-    - [ ] Enforce 403 on every endpoint and disallow self-approval
-    - [ ] Add unit test for every permission matrix cell
-    - [ ] Role-specific frontend navigation, landing pages, and views:
+  - [x] **Phase 2: Roles That Are Really Different & An Exciting UI**
+    - [x] Create permission matrix in `backend/app/services/permissions.py`
+    - [x] Enforce permissions and row-level access on submission, workflow, finding, insights, source, guideline, feedback, system and admin APIs; disallow self-approval
+    - [x] Add independent unit assertions for every permission matrix cell and approval/visibility rules
+    - [x] Role-specific frontend navigation, landing pages, and views:
       - Creator: "My Work", own submissions only, fix findings, personal stats & notifications
       - Manager: Team command center, approval queue with SLA/age, reviewer assignment, sign-off, org insights, guideline health
       - Reviewer: Compliance desk, assigned items & escalated findings, side-by-side claim checking, justification, compliance notes
       - Admin: User management, approved-sources registry, system settings, full audit log with filters and CSV export, feedback model stats/reset
-    - [ ] Redesign dashboards: KPI cards, trend charts, category/severity breakdowns, status pipeline board, activity feed, skeleton loaders, empty states, toasts, WCAG AA contrast
+    - [x] Add role-specific KPIs; manager 7-day trend, category/severity charts, status pipeline and recent activity; skeletons, empty states, toasts and responsive mobile navigation
   - [ ] **Phase 3: Improvement A, Guideline-Gap Insights**
     - [ ] Nightly APScheduler job grouping disputed findings by cited guideline clause
     - [ ] TF-IDF cosine similarity dispute clustering
@@ -61,6 +61,10 @@
 1. **Migrations & Database**: SQLite default locally, PostgreSQL (Neon) in production. Database migrations must always be executed via `alembic upgrade head`. Added dispute friction, media layout, and preference state migrations.
 2. **Pip-only OCR**: Render free has no apt package manager and 512MB RAM cap. We will replace `pytesseract` with `rapidocr-onnxruntime` and `opencv-python-headless` with lazy loading to ensure memory consumption stays under 450 MB.
 3. **Offline Flesch Calculation**: Avoid reliance on external NLTK network downloads for cmudict by implementing a deterministic syllable-counter fallback for Flesch reading ease in `preference_model.py`.
+4. **Role policy**: Only creators create submissions and decide findings; managers handle standard-risk workflow and assign active reviewers; reviewers resolve escalations and sign off high-risk assigned items; admins manage the system but cannot approve. High-risk submissions are not manager-approved.
+5. **Manager observability**: Trends and activity come from persisted submissions, findings, and audit records. Creator notifications are derived from actual approvals and review comments; empty accounts show an empty state instead of demo copy.
+6. **Public system metadata**: `/system/mode` exposes only the active LLM mode for the navigation badge; detailed `/system/status` requires the Admin permission.
+7. **Phase 2 verification**: 111 targeted permission/API tests passed, Vite production build passed, full SQLite migration chain applied with the reviewer FK verified, and the isolated end-to-end workflow smoke passed. Browser checks confirmed Creator, Manager, Reviewer, and Admin dashboards/nav; browser console had no errors or warnings. A local Vite proxy target was supplied through `BRANDGUARD_API_PROXY_TARGET` during UI verification; native local defaults are scheduled for Phase 6.
 
 ## Exact Next Step
-Execute Phase 2: Create `backend/app/services/permissions.py`, enforce the permission matrix across all endpoints with 403 Forbidden checks, disallow self-approval, add comprehensive cell tests in `tests/unit/test_permissions.py`, and implement distinct role-based UI flows (Creator "My Work", Manager Command Center, Reviewer Compliance Desk, Admin Management) with modernized accessible UI.
+Execute Phase 3: first fix the discovered DFI worker/session mismatch (`run_dfi_worker(db)` currently expects a session factory and logs a caught `TypeError`); then make stale detection real, verify dispute-to-clause aggregation and nightly execution, finish the recompute-now/revision/index flow, and add targeted tests before committing.

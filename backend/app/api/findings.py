@@ -6,11 +6,20 @@ from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 from backend.app.models.models import (
-    User, Submission, SubmissionVersion, Finding, Decision,
-    FindingStatus, DecisionAction
+    User, UserRole, Submission, SubmissionVersion, Finding, Decision, Comment,
+    FindingStatus, DecisionAction, SubmissionStatus
 )
-from backend.app.schemas.schemas import FindingResponse, DecisionCreate, DecisionRequest, DecisionResponse
+from backend.app.schemas.schemas import (
+    FindingResponse, DecisionCreate, DecisionRequest, DecisionResponse,
+    EscalatedReviewRequest
+)
 from backend.app.services.auth import get_current_user
+from backend.app.services.permissions import (
+    Action,
+    check_can_view_submission,
+    check_permission,
+    finding_requires_reviewer_review,
+)
 from backend.app.utils.audit import log_action
 from backend.app.pipeline.preference_model import partial_fit
 
@@ -29,6 +38,8 @@ def get_submission_findings(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+
+    check_can_view_submission(current_user, submission)
 
     latest_version = (
         db.query(SubmissionVersion)
@@ -52,6 +63,7 @@ def get_submission_findings(
 
 
 def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, current_user: User) -> Decision:
+    check_permission(current_user, Action.FINDINGS_DECIDE)
     finding = db.query(Finding).filter(Finding.id == finding_id).first()
     if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
@@ -60,11 +72,21 @@ def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, curr
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
+    check_can_view_submission(current_user, submission)
+
     action_lower = payload.action.strip().lower()
     if action_lower not in ("accept", "edit", "dispute"):
         raise HTTPException(status_code=400, detail="Action must be 'accept', 'edit', or 'dispute'")
 
     source_version = db.query(SubmissionVersion).filter(SubmissionVersion.id == finding.version_id).first()
+    latest_version = (
+        db.query(SubmissionVersion)
+        .filter(SubmissionVersion.submission_id == submission.id)
+        .order_by(SubmissionVersion.version_no.desc())
+        .first()
+    )
+    if not source_version or not latest_version or source_version.id != latest_version.id:
+        raise HTTPException(status_code=409, detail="This finding belongs to an older version; review the latest version instead")
     original_span = ""
     if source_version and finding.span_start is not None and finding.span_end is not None:
         start = max(0, finding.span_start)
@@ -136,6 +158,7 @@ def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, curr
             )
             db.add(new_version)
             db.flush()
+            submission.status = SubmissionStatus.draft
 
     log_action(db, current_user.id, f"finding_{action_lower}", "finding", finding.id, {
         "submission_id": submission.id,
@@ -165,3 +188,48 @@ def create_decision(
 ):
     """Record a reviewer decision and update the online rewrite preference model."""
     return _submit_decision(payload.finding_id, payload, db, current_user)
+
+
+@router.post("/findings/{finding_id}/escalate-review")
+def review_escalated_finding(
+    payload: EscalatedReviewRequest,
+    finding_id: str = APIPath(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Assigned reviewer confirms or dismisses an escalated finding with required justification."""
+    check_permission(current_user, Action.FINDINGS_ESCALATE_REVIEW)
+    finding = db.query(Finding).filter(Finding.id == finding_id).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    submission = db.query(Submission).filter(Submission.id == finding.submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    check_can_view_submission(current_user, submission)
+    if current_user.role != UserRole.reviewer or (submission.assigned_to_id and submission.assigned_to_id != current_user.id):
+        raise HTTPException(status_code=403, detail="Only a reviewer assigned to this submission can resolve escalated findings")
+    if not finding_requires_reviewer_review(finding):
+        raise HTTPException(status_code=400, detail="This finding is not escalated for compliance review")
+
+    if payload.action == "confirm":
+        finding.needs_human = False
+        note_body = f"[Compliance Confirmed]: {payload.justification.strip()}"
+    else:
+        finding.needs_human = False
+        finding.status = FindingStatus.disputed
+        note_body = f"[Compliance Dismissed]: {payload.justification.strip()}"
+
+    comment = Comment(
+        submission_id=submission.id,
+        finding_id=finding.id,
+        user_id=current_user.id,
+        body=note_body,
+    )
+    db.add(comment)
+    log_action(db, current_user.id, f"escalate_{payload.action}", "finding", finding.id, {
+        "justification": payload.justification,
+    })
+    db.commit()
+    return {"status": "ok", "action": payload.action, "finding_id": finding.id}

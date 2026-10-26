@@ -113,7 +113,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)
 
-    submissions = relationship("Submission", back_populates="creator")
+    submissions = relationship("Submission", foreign_keys="Submission.creator_id", back_populates="creator")
+    assigned_submissions = relationship("Submission", foreign_keys="Submission.assigned_to_id", back_populates="assigned_to")
     decisions = relationship("Decision", back_populates="user")
     comments = relationship("Comment", back_populates="user")
     approvals = relationship("Approval", back_populates="user")
@@ -184,6 +185,7 @@ class Submission(Base):
 
     id = Column(String, primary_key=True, default=gen_id)
     creator_id = Column(String, ForeignKey("users.id"), nullable=False)
+    assigned_to_id = Column(String, ForeignKey("users.id"), nullable=True)
     title = Column(String(500), nullable=False)
     intent = Column(Text, nullable=True)
     status = Column(SAEnum(SubmissionStatus), default=SubmissionStatus.draft, nullable=False)
@@ -191,7 +193,8 @@ class Submission(Base):
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    creator = relationship("User", back_populates="submissions")
+    creator = relationship("User", foreign_keys=[creator_id], back_populates="submissions")
+    assigned_to = relationship("User", foreign_keys=[assigned_to_id], back_populates="assigned_submissions")
     versions = relationship("SubmissionVersion", back_populates="submission", order_by="SubmissionVersion.version_no")
     findings = relationship("Finding", back_populates="submission")
     comments = relationship("Comment", back_populates="submission", order_by="Comment.created_at")
@@ -273,6 +276,16 @@ class PreferenceModelState(Base):
     id = Column(String(50), primary_key=True)
     model_blob = Column(LargeBinary, nullable=False)
     sample_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    id = Column(String(50), primary_key=True, default="default")
+    llm_enabled = Column(Boolean, nullable=False, default=True)
+    min_confidence = Column(String(20), nullable=False, default="medium")
+    similarity_threshold = Column(Float, nullable=False, default=0.75)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 

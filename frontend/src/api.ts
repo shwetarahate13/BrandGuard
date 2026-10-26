@@ -11,9 +11,13 @@ import {
   Asset,
   SystemStatus,
   InsightsSummary,
+  ActivityEvent,
   RepeatedIssue,
   GuidelineHealthClause,
   FeedbackCategoryStats,
+  CreatorPersonalStats,
+  SystemSettings,
+  AuditLog,
 } from "./types";
 
 const API_BASE = "/api";
@@ -228,12 +232,6 @@ export const api = {
     request<any>(`/admin/terms/${id}`, { method: "DELETE" }),
 
   getAssets: async () => request<Asset[]>("/admin/assets"),
-  getGuidelineHealth: async () => request<GuidelineHealthClause[]>("/guidelines/health"),
-  applyGuidelineRevision: async (clauseId: string, text: string) =>
-    request<any>(`/guidelines/clauses/${encodeURIComponent(clauseId)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ text }),
-    }),
   createAsset: async (data: { kind: string; name: string; file_path?: string; metadata?: Record<string, unknown> }) =>
     request<Asset>("/admin/assets", {
       method: "POST",
@@ -241,20 +239,81 @@ export const api = {
     }),
   deleteAsset: async (id: string) =>
     request<any>(`/admin/assets/${id}`, { method: "DELETE" }),
-
   reindexSources: async () =>
     request<{ status: string; indexed_count: number }>("/admin/reindex", {
       method: "POST",
     }),
+  assignSubmission: async (submissionId: string, reviewerId: string) =>
+    request<Submission>(`/submissions/${submissionId}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ reviewer_id: reviewerId }),
+    }),
+  getReviewers: async () => request<User[]>("/submissions/reviewers"),
+  reviewEscalatedFinding: async (findingId: string, action: "confirm" | "dismiss", justification: string) =>
+    request<{ status: string; action: string; finding_id: string }>(`/findings/${findingId}/escalate-review`, {
+      method: "POST",
+      body: JSON.stringify({ action, justification }),
+    }),
 
   // Insights
   getInsightsSummary: async () => request<InsightsSummary>("/insights/summary"),
+  getRecentActivity: async () => request<ActivityEvent[]>("/insights/activity"),
   getRepeatedIssues: async () =>
     request<{ repeated_issues: RepeatedIssue[] }>("/insights/repeated-issues"),
+  getPersonalStats: async () => request<CreatorPersonalStats>("/insights/personal"),
   getFeedbackStats: async () =>
     request<{ categories: FeedbackCategoryStats[] }>("/feedback/stats"),
+  resetFeedbackModel: async () =>
+    request<{ status: string; message: string }>("/feedback/reset", { method: "POST" }),
+
+  // Guideline Health
+  getGuidelineHealth: async () => request<GuidelineHealthClause[]>("/guidelines/health"),
+  recomputeGuidelineHealth: async () =>
+    request<{ status: string; updated_clauses: number; message: string }>("/guidelines/recompute", {
+      method: "POST",
+    }),
+  applyGuidelineRevision: async (clauseId: string, text: string) =>
+    request<any>(`/guidelines/clauses/${encodeURIComponent(clauseId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ text }),
+    }),
+
+  // Admin User & System Management
+  getUsers: async () => request<User[]>("/admin/users"),
+  createUser: async (data: { name: string; email: string; password: string; role: string }) =>
+    request<User>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateUser: async (userId: string, data: { name?: string; role?: string; is_active?: boolean }) =>
+    request<User>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  resetUserPassword: async (userId: string, password: string) =>
+    request<any>(`/admin/users/${userId}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+  getSystemSettings: async () => request<SystemSettings>("/admin/settings"),
+  updateSystemSettings: async (data: Partial<SystemSettings>) =>
+    request<SystemSettings>("/admin/settings", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  getAuditLogs: async (params?: { action?: string; entity?: string; user_id?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.action) q.set("action", params.action);
+    if (params?.entity) q.set("entity", params.entity);
+    if (params?.user_id) q.set("user_id", params.user_id);
+    if (params?.limit) q.set("limit", String(params.limit));
+    if (params?.offset) q.set("offset", String(params.offset));
+    const qs = q.toString() ? `?${q.toString()}` : "";
+    return request<AuditLog[]>(`/admin/audit-logs${qs}`);
+  },
 
   // System
   getSystemStatus: async () => request<SystemStatus>("/system/status"),
+  getSystemMode: async () => request<{ llm_mode: string }>("/system/mode"),
   getHealth: async () => request<{ status: string; version: string }>("/health"),
 };

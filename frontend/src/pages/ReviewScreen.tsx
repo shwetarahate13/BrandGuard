@@ -118,9 +118,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const handleAccept = async (finding: Finding) => {
     try {
       await api.submitDecision(finding.id, "accept");
+      await api.checkSubmission(submissionId);
       await loadData();
     } catch (err: any) {
-      alert(`Error accepting finding: ${err.message}`);
+      alert(`The decision was saved, but the latest version could not be rechecked: ${err.message}`);
     }
   };
 
@@ -130,9 +131,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       await api.submitDecision(editingFinding.id, "edit", editText);
       setEditingFinding(null);
       setEditText("");
+      await api.checkSubmission(submissionId);
       await loadData();
     } catch (err: any) {
-      alert(`Error submitting edit: ${err.message}`);
+      alert(`The edit was saved, but the latest version could not be rechecked: ${err.message}`);
     }
   };
 
@@ -328,7 +330,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
 
         {/* Workflow Action */}
         <div className="flex items-center gap-3">
-          {["draft", "checked", "changes_requested"].includes(submission.status) && (
+          {user.role === "creator" && submission.creator_id === user.id && submission.status === "checked" && (
             <button
               onClick={handleRequestReview}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow transition-all"
@@ -338,7 +340,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             </button>
           )}
 
-          {["manager", "reviewer", "admin"].includes(user.role) && (
+          {["manager", "reviewer"].includes(user.role) && (
             <button
               onClick={() => navigate(`/approval/${submission.id}`)}
               className="px-3.5 py-2 border border-stone-300 hover:bg-stone-50 text-stone-700 rounded-lg text-xs font-semibold"
@@ -538,7 +540,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                     )}
 
                     {/* Action Buttons: Accept / Edit / Dispute */}
-                    {f.status === "open" && (
+                    {f.status === "open" && user.role === "creator" && submission.creator_id === user.id && (
                       <div className="flex items-center gap-2 pt-2 border-t border-stone-100">
                         {f.suggested_rewrite && (
                           <button

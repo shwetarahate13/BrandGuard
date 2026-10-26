@@ -156,6 +156,7 @@ class SubmissionResponse(BaseModel):
 class SubmissionListResponse(BaseModel):
     id: str
     creator_id: str
+    assigned_to_id: Optional[str] = None
     title: str
     intent: Optional[str] = None
     status: str
@@ -163,8 +164,65 @@ class SubmissionListResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     creator: Optional[UserResponse] = None
+    assigned_to: Optional[UserResponse] = None
     finding_count: Optional[int] = None
+    needs_human_count: Optional[int] = 0
+    age_hours: Optional[float] = None
     model_config = {"from_attributes": True}
+
+
+class SubmissionAssignRequest(BaseModel):
+    reviewer_id: str
+
+
+class EscalatedReviewRequest(BaseModel):
+    action: Literal["confirm", "dismiss"]
+    justification: str = Field(min_length=3, max_length=2000)
+
+
+# ── Admin User Management ──
+
+class UserCreateAdmin(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(min_length=3, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(min_length=6, max_length=100)
+    role: str = "creator"
+
+
+class UserUpdateAdmin(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class UserResetPasswordAdmin(BaseModel):
+    password: str = Field(min_length=6, max_length=100)
+
+
+# ── Admin System Settings ──
+
+class SystemSettingsResponse(BaseModel):
+    llm_enabled: bool
+    min_confidence: str
+    similarity_threshold: float
+    updated_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class SystemSettingsUpdate(BaseModel):
+    llm_enabled: Optional[bool] = None
+    min_confidence: Optional[str] = None
+    similarity_threshold: Optional[float] = None
+
+
+# ── Creator Personal Stats ──
+
+class CreatorPersonalStats(BaseModel):
+    total_submissions: int = 0
+    acceptance_rate: float = 0.0
+    recurring_mistakes: list["RepeatedIssue"] = []
+    notifications: list[str] = []
+    pending_action_count: int = 0
 
 class VersionResponse(BaseModel):
     id: str
@@ -301,6 +359,8 @@ class InsightsSummary(BaseModel):
     open_count: int = 0
     avg_turnaround_hours: Optional[float] = None
     dropped_findings_count: int = 0
+    submissions_by_day: dict[str, int] = {}
+    findings_by_day: dict[str, int] = {}
 
 class RepeatedIssue(BaseModel):
     issue_pattern: str

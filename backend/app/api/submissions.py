@@ -1,9 +1,10 @@
 """Submissions API routes: create, upload, view, check, and add versions."""
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Path as APIPath, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 
 from backend.app.config import get_settings
 from backend.app.database import get_db
@@ -13,9 +14,12 @@ from backend.app.models.models import (
 )
 from backend.app.schemas.schemas import (
     SubmissionCreate, SubmissionResponse, SubmissionListResponse,
-    VersionCreate, VersionResponse
+    SubmissionAssignRequest, VersionCreate, VersionResponse
 )
 from backend.app.services.auth import get_current_user
+from backend.app.services.permissions import (
+    Action, check_permission, check_can_view_submission
+)
 from backend.app.utils.audit import log_action
 from backend.app.utils.text_extract import (
     extract_text,
@@ -40,16 +44,8 @@ def validate_submission_text(text: str) -> None:
 
 
 def check_submission_access(submission: Submission, user: User):
-    """Enforce RBAC for viewing a submission."""
-    if user.role in (UserRole.admin, UserRole.manager):
-        return
-    if user.role == UserRole.creator:
-        if submission.creator_id != user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-    elif user.role == UserRole.reviewer:
-        # Reviewers see submissions under review, or with human review needed, or non-draft
-        if submission.status == SubmissionStatus.draft and submission.creator_id != user.id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to draft")
+    """Compatibility wrapper for the centralized row-level permission check."""
+    check_can_view_submission(user, submission)
 
 
 @router.post("", response_model=SubmissionResponse)
@@ -59,6 +55,7 @@ def create_submission(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new submission with text content."""
+    check_permission(current_user, Action.SUBMISSION_CREATE)
     try:
         ctype = ContentType(payload.content_type)
     except ValueError:
@@ -102,6 +99,7 @@ async def upload_submission(
     current_user: User = Depends(get_current_user),
 ):
     """Create a submission from supported text, PDF, DOCX, or image uploads."""
+    check_permission(current_user, Action.SUBMISSION_CREATE)
     contents = await read_upload_contents(file)
     filename = file.filename or "uploaded_content.txt"
     try:
@@ -176,7 +174,7 @@ def get_submission_source(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    check_submission_access(submission, current_user)
+    check_can_view_submission(current_user, submission)
     version = (
         db.query(SubmissionVersion)
         .filter(
@@ -207,36 +205,50 @@ def list_submissions(
     current_user: User = Depends(get_current_user),
 ):
     """List submissions based on user role permissions."""
+    list_action = {
+        UserRole.creator: Action.SUBMISSION_VIEW_OWN,
+        UserRole.manager: Action.SUBMISSION_VIEW_ALL,
+        UserRole.reviewer: Action.SUBMISSION_VIEW_ASSIGNED,
+        UserRole.admin: Action.SUBMISSION_VIEW_ALL,
+    }[current_user.role]
+    check_permission(current_user, list_action)
     query = db.query(Submission)
 
     if current_user.role == UserRole.creator:
         query = query.filter(Submission.creator_id == current_user.id)
     elif current_user.role == UserRole.reviewer:
-        # Reviewers see in_review, changes_requested, approved, rejected, or submissions flagged needs_human
-        subquery_needs_human = db.query(Finding.submission_id).filter(Finding.needs_human == True).subquery()
+        # Reviewers see only assigned work or submissions with compliance escalation.
+        subquery_escalated = select(Finding.submission_id).where(
+            or_(
+                Finding.needs_human.is_(True),
+                Finding.severity.in_(["critical", "major"]),
+                Finding.category == "unsupported_claim",
+            )
+        ).distinct()
         query = query.filter(
             or_(
-                Submission.status.in_([
-                    SubmissionStatus.in_review,
-                    SubmissionStatus.changes_requested,
-                    SubmissionStatus.approved,
-                    SubmissionStatus.rejected,
-                ]),
-                Submission.id.in_(subquery_needs_human),
-                Submission.creator_id == current_user.id,
+                Submission.assigned_to_id == current_user.id,
+                Submission.id.in_(subquery_escalated),
             )
         )
     # Manager and Admin see all
 
     submissions = query.order_by(Submission.created_at.desc()).all()
 
-    # Attach finding counts
+    # Attach finding counts, needs_human counts, and age in hours
     result = []
+    now = datetime.now(timezone.utc)
     for s in submissions:
         count = db.query(Finding).filter(Finding.submission_id == s.id).count()
+        needs_human_cnt = db.query(Finding).filter(Finding.submission_id == s.id, Finding.needs_human == True).count()
+        created_dt = s.created_at.replace(tzinfo=timezone.utc) if s.created_at.tzinfo is None else s.created_at
+        age_hours = round(max(0.0, (now - created_dt).total_seconds() / 3600.0), 1)
+
         item = SubmissionListResponse(
             id=s.id,
             creator_id=s.creator_id,
+            assigned_to_id=s.assigned_to_id,
+            assigned_to=s.assigned_to,
             title=s.title,
             intent=s.intent,
             status=s.status.value,
@@ -245,10 +257,29 @@ def list_submissions(
             updated_at=s.updated_at,
             creator=s.creator,
             finding_count=count,
+            needs_human_count=needs_human_cnt,
+            age_hours=age_hours,
         )
         result.append(item)
 
     return result
+
+
+@router.get("/reviewers")
+def list_reviewers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the active reviewers available for manager assignment."""
+    check_permission(current_user, Action.SUBMISSION_ASSIGN)
+    reviewers = (
+        db.query(User)
+        .filter(User.role == UserRole.reviewer, User.is_active.is_(True))
+        .order_by(User.name.asc())
+        .all()
+    )
+    return [{"id": item.id, "name": item.name, "email": item.email, "role": item.role.value,
+             "is_active": item.is_active} for item in reviewers]
 
 
 @router.get("/{submission_id}", response_model=SubmissionResponse)
@@ -261,7 +292,38 @@ def get_submission(
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    check_submission_access(submission, current_user)
+    check_can_view_submission(current_user, submission)
+    return submission
+
+
+@router.post("/{submission_id}/assign", response_model=SubmissionResponse)
+def assign_submission(
+    submission_id: str,
+    payload: SubmissionAssignRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manager assigns submission to a reviewer (Compliance desk)."""
+    check_permission(current_user, Action.SUBMISSION_ASSIGN)
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    reviewer = db.query(User).filter(
+        User.id == payload.reviewer_id,
+        User.role == UserRole.reviewer,
+        User.is_active.is_(True),
+    ).first()
+    if not reviewer:
+        raise HTTPException(status_code=400, detail="Assigned user must be an active reviewer")
+
+    submission.assigned_to_id = reviewer.id
+    log_action(db, current_user.id, "assign_reviewer", "submission", submission.id, {
+        "reviewer_id": reviewer.id,
+        "reviewer_name": reviewer.name,
+    })
+    db.commit()
+    db.refresh(submission)
     return submission
 
 
@@ -272,11 +334,12 @@ def check_submission(
     current_user: User = Depends(get_current_user),
 ):
     """Run the brand governance review pipeline on the latest version of the submission."""
+    check_permission(current_user, Action.SUBMISSION_CREATE)
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    check_submission_access(submission, current_user)
+    check_can_view_submission(current_user, submission)
 
     # Get latest version
     latest_version = (
@@ -321,11 +384,14 @@ def add_version(
     current_user: User = Depends(get_current_user),
 ):
     """Manually add an updated content version."""
+    check_permission(current_user, Action.SUBMISSION_CREATE)
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    check_submission_access(submission, current_user)
+    if submission.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the submission creator can add updated content versions")
+
     validate_submission_text(payload.text)
 
     # Get current max version

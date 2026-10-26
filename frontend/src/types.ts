@@ -104,6 +104,7 @@ export interface SubmissionVersion {
 export interface Submission {
   id: string;
   creator_id: string;
+  assigned_to_id?: string;
   title: string;
   intent?: string;
   status: SubmissionStatus;
@@ -111,8 +112,37 @@ export interface Submission {
   created_at: string;
   updated_at: string;
   creator?: User;
+  assigned_to?: User;
   versions: SubmissionVersion[];
   finding_count?: number;
+  needs_human_count?: number;
+  age_hours?: number;
+}
+
+export interface CreatorPersonalStats {
+  total_submissions: number;
+  acceptance_rate: number;
+  recurring_mistakes: RepeatedIssue[];
+  notifications: string[];
+  pending_action_count: number;
+}
+
+export interface SystemSettings {
+  llm_enabled: boolean;
+  min_confidence: string;
+  similarity_threshold: number;
+  updated_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  user_id?: string;
+  action: string;
+  entity?: string;
+  entity_id?: string;
+  meta: Record<string, unknown>;
+  created_at: string;
+  user?: User;
 }
 
 export interface GuidelineClause {
@@ -196,6 +226,16 @@ export interface InsightsSummary {
   open_count: number;
   avg_turnaround_hours?: number;
   dropped_findings_count: number;
+  submissions_by_day: Record<string, number>;
+  findings_by_day: Record<string, number>;
+}
+
+export interface ActivityEvent {
+  id: string;
+  action: string;
+  entity?: string | null;
+  created_at: string;
+  actor_name: string;
 }
 
 export interface RepeatedIssue {

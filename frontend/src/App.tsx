@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { api, clearToken, getToken, setColdStartListener } from "./api";
-import { User, SystemStatus } from "./types";
+import { User } from "./types";
 import { Navbar } from "./components/Navbar";
 import { ColdStartBanner } from "./components/ColdStartBanner";
+import { ToastProvider } from "./components/Toast";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { NewSubmission } from "./pages/NewSubmission";
@@ -15,12 +16,16 @@ import { Limitations } from "./pages/Limitations";
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [llmMode, setLlmMode] = useState("mock/offline");
   const [loading, setLoading] = useState(true);
   const [isWaking, setIsWaking] = useState(false);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
   // Setup cold start listener
+  useEffect(() => {
+    api.getSystemMode().then((mode) => setLlmMode(mode.llm_mode)).catch(() => setLlmMode("unavailable"));
+  }, []);
+
   useEffect(() => {
     setColdStartListener((waking) => setIsWaking(waking));
   }, []);
@@ -43,13 +48,6 @@ export const App: React.FC = () => {
   // Check auth and system status
   useEffect(() => {
     const init = async () => {
-      try {
-        const sys = await api.getSystemStatus();
-        setSystemStatus(sys);
-      } catch (err) {
-        console.warn("Could not fetch system status:", err);
-      }
-
       const token = getToken();
       if (token) {
         try {
@@ -84,28 +82,48 @@ export const App: React.FC = () => {
     );
   }
 
-  // Routing logic
+  // Routing logic with strict Role-based UI mirroring
   let content = null;
-  const llmMode = systemStatus?.llm_mode || "mock/offline";
-
   if (!user && currentPath !== "/limitations") {
     content = <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/login") {
     content = <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/new") {
-    content = user ? <NewSubmission navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    // Only creators can create submissions.
+    if (user && user.role !== "creator") {
+      content = <Dashboard user={user} navigate={navigate} />;
+    } else {
+      content = user ? <NewSubmission navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    }
   } else if (currentPath.startsWith("/review/")) {
     const id = currentPath.replace("/review/", "");
     content = user ? <ReviewScreen submissionId={id} user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath.startsWith("/approval/")) {
     const id = currentPath.replace("/approval/", "");
-    content = user ? <ApprovalView submissionId={id} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    content = user && (user.role === "manager" || user.role === "reviewer")
+      ? <ApprovalView submissionId={id} user={user} navigate={navigate} />
+      : user ? <Dashboard user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
   } else if (currentPath === "/sources") {
-    content = user ? <AdminSources /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    // Creators cannot manage or view sources registry
+    if (user && user.role === "creator") {
+      content = <Dashboard user={user} navigate={navigate} />;
+    } else {
+      content = user ? <AdminSources canManage={user.role === "admin"} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    }
   } else if (currentPath === "/insights") {
-    content = user ? <Insights /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    // Only managers and admins can view organization-wide insights.
+    if (user && user.role !== "manager" && user.role !== "admin") {
+      content = <Dashboard user={user} navigate={navigate} />;
+    } else {
+      content = user ? <Insights /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    }
   } else if (currentPath === "/dashboard/guideline-health") {
-    content = user ? <GuidelineHealth /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    // Only Managers and Admins can view Guideline Health
+    if (user && (user.role === "manager" || user.role === "admin")) {
+      content = <GuidelineHealth />;
+    } else {
+      content = user ? <Dashboard user={user} navigate={navigate} /> : <Login onLoginSuccess={handleLoginSuccess} />;
+    }
   } else if (currentPath === "/limitations") {
     content = <Limitations navigate={navigate} />;
   } else {
@@ -113,39 +131,41 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-stone-50 text-stone-900 font-sans">
-      <ColdStartBanner isWaking={isWaking} />
+    <ToastProvider>
+      <div className="min-h-screen flex flex-col bg-stone-50 text-stone-900 font-sans">
+        <ColdStartBanner isWaking={isWaking} />
 
-      <Navbar
-        user={user}
-        llmMode={llmMode}
-        onLogout={handleLogout}
-        currentPath={currentPath}
-        navigate={navigate}
-      />
+        <Navbar
+          user={user}
+          llmMode={llmMode}
+          onLogout={handleLogout}
+          currentPath={currentPath}
+          navigate={navigate}
+        />
 
-      <main className="flex-1">{content}</main>
+        <main className="flex-1">{content}</main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-stone-200 py-6 mt-12 text-xs text-stone-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-stone-900">BrandGuard</span>
-            <span>•</span>
-            <span>Team Nexora (Shweta Rahate, Janvi Thakre)</span>
+        {/* Footer */}
+        <footer className="bg-white border-t border-stone-200 py-6 mt-12 text-xs text-stone-500">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-stone-900">BrandGuard</span>
+              <span>•</span>
+              <span>Team Nexora (Shweta Rahate, Janvi Thakre)</span>
+            </div>
+
+            <div className="flex items-center gap-6">
+              <button
+                onClick={() => navigate("/limitations")}
+                className="hover:text-stone-900 underline underline-offset-4"
+              >
+                Known Limitations & Disclosures
+              </button>
+              <span>Pre-publication governance • AI suggests, humans decide</span>
+            </div>
           </div>
-
-          <div className="flex items-center gap-6">
-            <button
-              onClick={() => navigate("/limitations")}
-              className="hover:text-stone-900 underline underline-offset-4"
-            >
-              Known Limitations & Disclosures
-            </button>
-            <span>Pre-publication governance • AI suggests, humans decide</span>
-          </div>
-        </div>
-      </footer>
-    </div>
+        </footer>
+      </div>
+    </ToastProvider>
   );
 };

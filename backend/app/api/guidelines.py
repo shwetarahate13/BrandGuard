@@ -12,9 +12,10 @@ from backend.app.schemas.schemas import (
     GuidelineClauseResponse,
     GuidelineHealthClause,
 )
-from backend.app.services.auth import require_role
+from backend.app.services.auth import get_current_user
+from backend.app.services.permissions import Action, check_permission
 from backend.app.utils.audit import log_action
-from backend.app.workers.dfi_worker import collect_clause_dispute_metrics
+from backend.app.workers.dfi_worker import collect_clause_dispute_metrics, run_dfi_worker
 from backend.app.llm.client import draft_guideline_revision
 
 logger = logging.getLogger(__name__)
@@ -24,9 +25,19 @@ router = APIRouter(prefix="/guidelines", tags=["guidelines"])
 @router.get("/health", response_model=list[GuidelineHealthClause])
 def get_guideline_health(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.manager, UserRole.admin)),
+    current_user: User = Depends(get_current_user),
 ):
     """Return persisted clause risk scores and AI revisions for high-friction clauses."""
+    check_permission(current_user, Action.GUIDELINE_HEALTH_VIEW)
+
+    # Recompute on read if stale or uncomputed
+    clauses_dfi_sum = db.query(GuidelineClause).filter(GuidelineClause.dispute_friction_index > 0).count()
+    if clauses_dfi_sum == 0:
+        try:
+            run_dfi_worker(db)
+        except Exception:
+            logger.warning("Could not auto-recompute DFI on read")
+
     metrics = collect_clause_dispute_metrics(db)
     clauses = (
         db.query(GuidelineClause)
@@ -60,14 +71,28 @@ def get_guideline_health(
     return results
 
 
+@router.post("/recompute")
+def recompute_guideline_health(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Explicitly trigger guideline friction recomputation (Recompute now button)."""
+    check_permission(current_user, Action.GUIDELINE_HEALTH_VIEW)
+    count = run_dfi_worker(db)
+    log_action(db, current_user.id, "recompute_guideline_dfi", meta={"updated_clauses": count})
+    db.commit()
+    return {"status": "ok", "updated_clauses": count, "message": "Guideline friction recomputed"}
+
+
 @router.patch("/clauses/{clause_id}", response_model=GuidelineClauseResponse)
 def apply_clause_revision(
     payload: GuidelineClauseRevision,
     clause_id: str = APIPath(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9-]+$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.manager, UserRole.admin)),
+    current_user: User = Depends(get_current_user),
 ):
     """Apply revised wording to a guideline clause and refresh its vector index."""
+    check_permission(current_user, Action.GUIDELINE_REVISE)
     clause = db.query(GuidelineClause).filter(GuidelineClause.id == clause_id).first()
     if not clause:
         raise HTTPException(status_code=404, detail="Guideline clause not found")

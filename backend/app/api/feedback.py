@@ -1,13 +1,15 @@
-"""Workspace-level reviewer feedback analytics."""
+"""Workspace-level reviewer feedback analytics and admin model reset."""
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
-from backend.app.models.models import Decision, Finding, FindingCategory, User
+from backend.app.models.models import Decision, Finding, FindingCategory, User, PreferenceModelState
 from backend.app.pipeline.confidence import suppressed_counts_by_category
 from backend.app.schemas.schemas import FeedbackCategoryStats, FeedbackStatsResponse
 from backend.app.services.auth import get_current_user
+from backend.app.services.permissions import Action, check_permission
+from backend.app.utils.audit import log_action
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
@@ -18,6 +20,7 @@ def get_feedback_stats(
     current_user: User = Depends(get_current_user),
 ):
     """Report acceptance, edit, and repeated-dismissal rates by finding category."""
+    check_permission(current_user, Action.FEEDBACK_STATS_VIEW)
     rows = (
         db.query(Finding.category, Decision.action, func.count(Decision.id))
         .join(Decision, Decision.finding_id == Finding.id)
@@ -46,3 +49,16 @@ def get_feedback_stats(
             suppression_count=int(suppressed.get(category_name, 0)),
         ))
     return FeedbackStatsResponse(categories=categories)
+
+
+@router.post("/reset")
+def reset_feedback_model(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reset the online preference feedback model state (Admin only)."""
+    check_permission(current_user, Action.FEEDBACK_RESET)
+    db.query(PreferenceModelState).delete()
+    log_action(db, current_user.id, "reset_feedback_model", "preference_model_state", "workspace-default")
+    db.commit()
+    return {"status": "ok", "message": "Feedback model state reset successfully"}

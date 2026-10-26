@@ -6,7 +6,7 @@ Usage:
 
 Tests:
 1. Health check & cold-start readiness (/api/health)
-2. System status & source verification (/api/system/status)
+2. Public runtime mode and admin-only system status
 3. SPA frontend root serving (/)
 4. Authentication for all 4 demo accounts (Creator, Manager, Reviewer, Admin)
 5. Full governance pipeline:
@@ -16,7 +16,7 @@ Tests:
    - Accept intent-preserving diff rewrite (v1 -> v2)
    - Creator requests review
    - RBAC check (Creator blocked from approving)
-   - Manager adds comment and gives final approval
+   - Manager assigns escalated work; reviewer records a justified sign-off
    - Verify history & insights metrics
 """
 import os
@@ -38,6 +38,7 @@ def run_smoke_test(base_url: str):
         from fastapi.testclient import TestClient
         from backend.app.main import app
         client = TestClient(app)
+        client.__enter__()
         healthy = True
         r = client.get("/api/health")
         assert r.status_code == 200, f"/api/health returned {r.status_code}: {r.text}"
@@ -65,16 +66,11 @@ def run_smoke_test(base_url: str):
             print("  ✗ Health check failed after 60s timeout.")
             sys.exit(1)
 
-    # 2. System Status
-    print("\n[Step 2] Checking /api/system/status...")
-    r = client.get("/api/system/status")
-    assert r.status_code == 200, f"System status failed: {r.text}"
-    status_data = r.json()
-    print(f"  ✓ App: {status_data['app_name']} v{status_data['version']}")
-    print(f"  ✓ Active Review Engine: {status_data['llm_mode']}")
-    print(f"  ✓ Database Connected: {status_data['database_connected']}")
-    print(f"  ✓ Chroma Vector Indexed: {status_data['chroma_indexed']}")
-    print(f"  ✓ Approved Sources: {status_data['source_counts']}")
+    # 2. Public runtime mode (detailed system status requires Admin)
+    print("\n[Step 2] Checking public runtime mode...")
+    r = client.get("/api/system/mode")
+    assert r.status_code == 200 and "llm_mode" in r.json(), f"System mode failed: {r.text}"
+    print(f"  ✓ Active review mode: {r.json()['llm_mode']}")
 
     # 3. Static SPA Serving
     print("\n[Step 3] Verifying Single-Service Frontend Serving (GET /)...")
@@ -92,6 +88,7 @@ def run_smoke_test(base_url: str):
         ("Admin", "admin@nexora.dev", "Admin123!"),
     ]
     tokens = {}
+    user_ids = {}
 
     for role_name, email, pwd in demo_creds:
         r = client.post("/api/auth/login", json={"email": email, "password": pwd})
@@ -103,7 +100,17 @@ def run_smoke_test(base_url: str):
         r_me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {tok}"})
         assert r_me.status_code == 200
         me = r_me.json()
+        user_ids[role_name] = me["id"]
         print(f"  ✓ {role_name} Authenticated: {me['name']} ({me['email']}) -> role={me['role']}")
+
+    print("\n[Step 4b] Verifying Admin-only system status...")
+    admin_auth = {"Authorization": f"Bearer {tokens['Admin']}"}
+    r = client.get("/api/system/status", headers=admin_auth)
+    assert r.status_code == 200, f"Admin system status failed: {r.text}"
+    status_data = r.json()
+    assert status_data["database_connected"]
+    assert client.get("/api/system/status", headers={"Authorization": f"Bearer {tokens['Creator']}"}).status_code == 403
+    print(f"  ✓ Admin-only health status verified: DB={status_data['database_connected']}, index={status_data['chroma_indexed']}")
 
     creator_auth = {"Authorization": f"Bearer {tokens['Creator']}"}
     manager_auth = {"Authorization": f"Bearer {tokens['Manager']}"}
@@ -160,11 +167,28 @@ def run_smoke_test(base_url: str):
     assert term_finding["suggested_rewrite"] in versions[1]["text"]
     print(f"  ✓ Verified Version 2 generated with diff fix applied to content text")
 
+    # Re-run review on the changed content; review status is version-scoped.
+    r = client.post(f"/api/submissions/{sub_id}/check", headers=creator_auth)
+    assert r.status_code == 200, f"Recheck after rewrite failed: {r.text}"
+    r = client.get(f"/api/submissions/{sub_id}/findings", headers=creator_auth)
+    findings = r.json()
+    claim_finding = next((f for f in findings if "guaranteed" in f["issue"].lower()), None)
+    assert claim_finding is not None, "Expected the current version to retain the unsupported claim finding"
+    assert claim_finding["needs_human"] or claim_finding["severity"] in ("critical", "major") or claim_finding["category"] == "unsupported_claim"
+
     # E. Request Review
     r = client.post(f"/api/submissions/{sub_id}/request-review", headers=creator_auth)
     assert r.status_code == 200
     assert r.json()["submission_status"] == "in_review"
     print("  ✓ Creator successfully requested review -> status: in_review")
+
+    # Manager assigns escalated content to the reviewer.
+    r = client.post(
+        f"/api/submissions/{sub_id}/assign",
+        json={"reviewer_id": user_ids["Reviewer"]},
+        headers=manager_auth,
+    )
+    assert r.status_code == 200, f"Reviewer assignment failed: {r.text}"
 
     # F. Verify RBAC Guard
     r = client.post(
@@ -175,7 +199,7 @@ def run_smoke_test(base_url: str):
     assert r.status_code == 403, "Creator must NOT be allowed to approve"
     print("  ✓ Verified Server-Side RBAC Guard: Creator blocked with 403 Forbidden on approval endpoint")
 
-    # G. Manager adds comment and signs off
+    # G. Manager adds a note; a manager cannot approve high-risk copy.
     r = client.post(
         f"/api/submissions/{sub_id}/comments",
         json={"body": "Verified wording against approved terms. Approved for launch."},
@@ -188,13 +212,27 @@ def run_smoke_test(base_url: str):
         json={"decision": "approved", "note": "Certified by Brand Manager"},
         headers=manager_auth,
     )
-    assert r.status_code == 200
+    assert r.status_code == 403, "Managers must not approve high-risk content"
+
+    reviewer_auth = {"Authorization": f"Bearer {tokens['Reviewer']}"}
+    r = client.post(
+        f"/api/findings/{claim_finding['id']}/escalate-review",
+        json={"action": "confirm", "justification": "The cited approved source does not substantiate this health claim."},
+        headers=reviewer_auth,
+    )
+    assert r.status_code == 200, f"Reviewer escalation decision failed: {r.text}"
+    r = client.post(
+        f"/api/submissions/{sub_id}/approve",
+        json={"decision": "approved", "note": "Compliance sign-off recorded"},
+        headers=reviewer_auth,
+    )
+    assert r.status_code == 200, f"Reviewer high-risk sign-off failed: {r.text}"
     assert r.json()["decision"] == "approved"
 
     # Verify final approved status
     r = client.get(f"/api/submissions/{sub_id}", headers=manager_auth)
     assert r.json()["status"] == "approved"
-    print("  ✓ Manager successfully approved submission -> status: approved")
+    print("  ✓ Assigned reviewer signed off high-risk submission -> status: approved")
 
     # 6. Audit History & Insights
     print("\n[Step 6] Verifying Audit History & Insights...")
@@ -212,8 +250,10 @@ def run_smoke_test(base_url: str):
 
     print("\n" + "=" * 65)
     print("ALL SMOKE TESTS PASSED CLEANLY (100% SUCCESS)!")
-    print("BrandGuard is production ready for Render deployment.")
+    print("BrandGuard role and workflow smoke checks passed.")
     print("=" * 65)
+    if base_url in ("inprocess", "--inprocess", "local", "testclient"):
+        client.__exit__(None, None, None)
 
 
 if __name__ == "__main__":

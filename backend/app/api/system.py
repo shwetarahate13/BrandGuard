@@ -9,8 +9,17 @@ from backend.app.schemas.schemas import HealthResponse, SystemStatus
 from backend.app.llm.client import get_llm_mode
 from backend.app.pipeline.retriever import get_collection
 from backend.app.models.models import GuidelineClause, ApprovedFact, Term, Asset
+from backend.app.models.models import User
+from backend.app.services.auth import get_current_user
+from backend.app.services.permissions import Action, check_permission
 
 router = APIRouter(tags=["system"])
+
+
+@router.get("/system/mode")
+def system_mode():
+    """Expose only the non-sensitive active generation mode used by the UI."""
+    return {"llm_mode": get_llm_mode()}
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -21,8 +30,12 @@ def health_check():
 
 
 @router.get("/system/status", response_model=SystemStatus)
-def system_status(db: Session = Depends(get_db)):
+def system_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """System information including active LLM mode and source index counts."""
+    check_permission(current_user, Action.SYSTEM_STATUS_VIEW)
     settings = get_settings()
 
     # Check database

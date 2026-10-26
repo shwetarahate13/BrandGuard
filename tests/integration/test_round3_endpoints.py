@@ -89,6 +89,40 @@ def _add_clause(db, clause_id="clause-test", text="Use clear approved language."
     return clause
 
 
+def test_submission_visibility_and_role_routes_return_forbidden(api_client, monkeypatch):
+    client, session_factory, manager = api_client
+    creator = User(id="route-creator", name="Creator", email="c-route@example.test", password_hash="x", role=UserRole.creator, is_active=True)
+    reviewer = User(id="route-reviewer", name="Reviewer", email="r-route@example.test", password_hash="x", role=UserRole.reviewer, is_active=True)
+    submission = Submission(id="private-route-sub", creator_id=creator.id, title="Private draft", status=SubmissionStatus.in_review)
+    with session_factory.begin() as db:
+        db.add_all([creator, reviewer, submission])
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: reviewer)
+    assert client.get(f"/api/submissions/{submission.id}").status_code == 403
+    assert client.get("/api/submissions").json() == []
+    assert client.get("/api/submissions/reviewers").status_code == 403
+    assert client.get("/api/system/status").status_code == 403
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+    own_response = client.get(f"/api/submissions/{submission.id}")
+    assert own_response.status_code == 200
+    assert client.get("/api/submissions/reviewers").status_code == 403
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: manager)
+    assert client.get("/api/submissions/reviewers").status_code == 200
+
+
+def test_admin_is_the_only_role_with_detailed_system_status(api_client, monkeypatch):
+    client, session_factory, _manager = api_client
+    admin = User(id="route-admin", name="Admin", email="a-route@example.test", password_hash="x", role=UserRole.admin, is_active=True)
+    with session_factory.begin() as db:
+        db.add(admin)
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: admin)
+    response = client.get("/api/system/status")
+    assert response.status_code == 200
+    assert "database_connected" in response.json()
+
+
 def test_get_guideline_health_returns_real_clause_rows(api_client):
     client, session_factory, _ = api_client
     with session_factory.begin() as db:
@@ -152,15 +186,24 @@ def test_get_submission_source_returns_authorized_uploaded_bytes(api_client):
     assert response.headers["cache-control"] == "private, no-store"
 
 
-def test_post_decisions_snapshots_pair_and_updates_model(api_client):
+def test_post_decisions_snapshots_pair_and_updates_model(api_client, monkeypatch):
     client, session_factory, manager = api_client
+    creator = User(
+        id="creator-test",
+        name="Test Creator",
+        email="creator@example.test",
+        password_hash="unused",
+        role=UserRole.creator,
+        is_active=True,
+    )
     submission_id = str(uuid.uuid4())
     version_id = str(uuid.uuid4())
     finding_id = str(uuid.uuid4())
     with session_factory.begin() as db:
+        db.add(creator)
         db.add(Submission(
             id=submission_id,
-            creator_id=manager.id,
+            creator_id=creator.id,
             title="Copy under review",
             status=SubmissionStatus.draft,
         ))
@@ -169,8 +212,9 @@ def test_post_decisions_snapshots_pair_and_updates_model(api_client):
             submission_id=submission_id,
             version_no=1,
             text="Cheap oat drink",
-            created_by=manager.id,
+            created_by=creator.id,
         ))
+
         db.add(Finding(
             id=finding_id,
             submission_id=submission_id,
@@ -184,6 +228,8 @@ def test_post_decisions_snapshots_pair_and_updates_model(api_client):
             suggested_rewrite="Fairly priced oat drink",
             status=FindingStatus.open,
         ))
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
 
     response = client.post(
         "/api/decisions",

@@ -10,7 +10,9 @@ import {
 import { api } from "../api";
 import { GuidelineDoc, ApprovedFact, Term, Asset } from "../types";
 
-export const AdminSources: React.FC = () => {
+interface AdminSourcesProps { canManage?: boolean; }
+
+export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false }) => {
   const [activeTab, setActiveTab] = useState<"guidelines" | "facts" | "terms" | "assets">("guidelines");
   const [guidelines, setGuidelines] = useState<GuidelineDoc[]>([]);
   const [facts, setFacts] = useState<ApprovedFact[]>([]);
@@ -147,14 +149,14 @@ export const AdminSources: React.FC = () => {
           </p>
         </div>
 
-        <button
+        {canManage && <button
           onClick={handleReindex}
           disabled={reindexing}
           className="inline-flex items-center gap-2 px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${reindexing ? "animate-spin" : ""}`} />
           {reindexing ? "Indexing ChromaDB..." : "Re-index Chroma Vector Store"}
-        </button>
+        </button>}
       </div>
 
       {reindexMsg && (
@@ -207,16 +209,16 @@ export const AdminSources: React.FC = () => {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-bold text-stone-800">Brand Voice & Claims Policy Docs</h2>
-            <button
+            {canManage && <button
               onClick={() => setShowAddGuideline(!showAddGuideline)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-medium"
             >
               <Plus className="w-3.5 h-3.5 text-amber-400" />
               Add Guideline Document
-            </button>
+            </button>}
           </div>
 
-          {showAddGuideline && (
+          {canManage && showAddGuideline && (
             <form onSubmit={handleCreateGuideline} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="font-bold text-xs uppercase tracking-wider text-stone-700">Import Guideline Document</h3>
               <p className="text-xs text-stone-500">
@@ -304,16 +306,16 @@ export const AdminSources: React.FC = () => {
               <h2 className="text-sm font-bold text-stone-800">Approved Truth Ledger ({facts.length} Facts)</h2>
               <p className="text-[11px] text-stone-500">Includes active facts and expired entries for testing outdated info detection.</p>
             </div>
-            <button
+            {canManage && <button
               onClick={() => setShowAddFact(!showAddFact)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-medium"
             >
               <Plus className="w-3.5 h-3.5 text-amber-400" />
               Add Fact
-            </button>
+            </button>}
           </div>
 
-          {showAddFact && (
+          {canManage && showAddFact && (
             <form onSubmit={handleCreateFact} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="font-bold text-xs uppercase tracking-wider text-stone-700">Add Approved Fact</h3>
               <div>
@@ -405,16 +407,16 @@ export const AdminSources: React.FC = () => {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-bold text-stone-800">Approved Terminology Registry</h2>
-            <button
+            {canManage && <button
               onClick={() => setShowAddTerm(!showAddTerm)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-medium"
             >
               <Plus className="w-3.5 h-3.5 text-amber-400" />
               Add Term
-            </button>
+            </button>}
           </div>
 
-          {showAddTerm && (
+          {canManage && showAddTerm && (
             <form onSubmit={handleCreateTerm} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="font-bold text-xs uppercase tracking-wider text-stone-700">Add Terminology Rule</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

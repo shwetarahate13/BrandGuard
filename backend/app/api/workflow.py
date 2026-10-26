@@ -11,7 +11,14 @@ from backend.app.schemas.schemas import (
     CommentCreate, CommentResponse, ApprovalCreate, ApprovalResponse,
     AuditLogResponse
 )
-from backend.app.services.auth import get_current_user, require_role
+from backend.app.services.auth import get_current_user
+from backend.app.services.permissions import (
+    Action,
+    check_permission,
+    check_approval_allowed,
+    check_can_view_submission,
+    has_escalated_risk,
+)
 from backend.app.utils.audit import log_action
 
 router = APIRouter(prefix="/submissions", tags=["workflow"])
@@ -24,9 +31,12 @@ def add_comment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    check_permission(current_user, Action.SUBMISSION_COMMENT)
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+
+    check_can_view_submission(current_user, submission)
 
     comment = Comment(
         submission_id=submission.id,
@@ -48,14 +58,18 @@ def request_review(
     current_user: User = Depends(get_current_user),
 ):
     """Creator submits content for manager/reviewer approval."""
+    check_permission(current_user, Action.SUBMISSION_REQUEST_REVIEW)
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    if submission.status not in (SubmissionStatus.draft, SubmissionStatus.checked, SubmissionStatus.changes_requested):
+    if submission.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Creators can only request review for their own submissions")
+
+    if submission.status != SubmissionStatus.checked:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot request review from status: {submission.status.value}",
+            detail="Run a review on the latest content version before requesting manager review",
         )
 
     submission.status = SubmissionStatus.in_review
@@ -69,12 +83,19 @@ def approve_submission(
     submission_id: str,
     payload: ApprovalCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.manager, UserRole.reviewer, UserRole.admin)),
+    current_user: User = Depends(get_current_user),
 ):
-    """Manager or Reviewer gives sign-off on a submission."""
+    """Manager or Reviewer gives sign-off on a submission. Enforces self-approval guard."""
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+
+    check_can_view_submission(current_user, submission)
+    if submission.status != SubmissionStatus.in_review:
+        raise HTTPException(status_code=409, detail="Only submissions in review can be signed off")
+
+    # Invariant: check role, assignment, risk level, and ensure no self-approval.
+    check_approval_allowed(current_user, submission)
 
     latest_version = (
         db.query(SubmissionVersion)
@@ -104,16 +125,30 @@ def reject_or_request_changes(
     submission_id: str,
     payload: ApprovalCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.manager, UserRole.reviewer, UserRole.admin)),
+    current_user: User = Depends(get_current_user),
 ):
     """Manager or Reviewer requests changes or rejects content."""
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
+    check_can_view_submission(current_user, submission)
+    if submission.status != SubmissionStatus.in_review:
+        raise HTTPException(status_code=409, detail="Only submissions in review can be rejected or returned")
+    if has_escalated_risk(submission):
+        raise HTTPException(status_code=403, detail="High-risk submissions require reviewer compliance sign-off")
+
+    if submission.creator_id == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot reject or request changes on your own submission")
+
     decision_val = payload.decision.strip().lower()
     if decision_val not in ("changes_requested", "rejected"):
         decision_val = "changes_requested"
+
+    if decision_val == "rejected":
+        check_permission(current_user, Action.SUBMISSION_REJECT)
+    else:
+        check_permission(current_user, Action.SUBMISSION_REQUEST_CHANGES)
 
     target_status = (
         SubmissionStatus.rejected if decision_val == "rejected" else SubmissionStatus.changes_requested
@@ -152,6 +187,8 @@ def get_submission_history(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+
+    check_can_view_submission(current_user, submission)
 
     versions = (
         db.query(SubmissionVersion)
