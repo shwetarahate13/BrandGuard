@@ -72,4 +72,10 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Start Phase 6 by auditing startup/configuration, authentication and upload paths, current Render files, and local SQLite/PostgreSQL compatibility; then implement and verify non-Docker local and Render deployment before moving to Phase 7.
+Finish the Phase 6 startup/configuration, authentication, upload, deployment, and database-compatibility audit; repair the sole failing workflow integration check, then complete deployment and security verification before Phase 7.
+
+## Phase 6 Resume Check (2026-10-26)
+- Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
+- The remaining failure is `test_full_governance_workflow_and_rbac`: accepting a rewrite creates a new draft revision, but the test requests review without checking that revision again. Confirm the intended UI flow and repair the integration coverage/workflow before declaring the full sweep green.
+- Local settings use SQLite and `DEMO_MODE=false`. Role sign-in checks are still pending.
+- Phase 6 changes were already present but uncommitted when this resume began; audit and complete those changes before committing them with the finished phase.
