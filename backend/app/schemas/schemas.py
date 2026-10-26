@@ -1,5 +1,5 @@
 """Pydantic v2 schemas for BrandGuard API."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator
 
@@ -147,6 +147,7 @@ class SubmissionResponse(BaseModel):
     id: str
     creator_id: str
     assigned_to_id: Optional[str] = None
+    assignment_due_at: Optional[datetime] = None
     title: str
     intent: Optional[str] = None
     status: str
@@ -158,10 +159,18 @@ class SubmissionResponse(BaseModel):
     versions: list["VersionResponse"] = []
     model_config = {"from_attributes": True}
 
+    @field_validator("assignment_due_at", mode="before")
+    @classmethod
+    def due_date_is_utc(cls, value):
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
 class SubmissionListResponse(BaseModel):
     id: str
     creator_id: str
     assigned_to_id: Optional[str] = None
+    assignment_due_at: Optional[datetime] = None
     title: str
     intent: Optional[str] = None
     status: str
@@ -173,11 +182,23 @@ class SubmissionListResponse(BaseModel):
     finding_count: Optional[int] = None
     needs_human_count: Optional[int] = 0
     age_hours: Optional[float] = None
+    is_overdue: bool = False
     model_config = {"from_attributes": True}
+
+    @field_validator("assignment_due_at", mode="before")
+    @classmethod
+    def due_date_is_utc(cls, value):
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class SubmissionAssignRequest(BaseModel):
     reviewer_id: str
+
+
+class SubmissionDueDateUpdate(BaseModel):
+    assignment_due_at: Optional[datetime] = Field(...)
 
 
 class NotificationResponse(BaseModel):

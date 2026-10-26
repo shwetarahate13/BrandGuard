@@ -266,6 +266,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ reviewer_id: reviewerId }),
     }),
+  updateAssignmentDueDate: async (submissionId: string, dueAt: string | null) =>
+    request<Submission>(`/submissions/${submissionId}/due-date`, {
+      method: "PATCH",
+      body: JSON.stringify({ assignment_due_at: dueAt }),
+    }),
   getReviewers: async () => request<User[]>("/submissions/reviewers"),
   reviewEscalatedFinding: async (findingId: string, action: "confirm" | "dismiss", justification: string) =>
     request<{ status: string; action: string; finding_id: string }>(`/findings/${findingId}/escalate-review`, {

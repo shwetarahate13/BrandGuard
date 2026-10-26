@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Steps 1–5 through persistent notifications complete; remaining Step 5 features are deferred at 79% quota usage
+- **Current Step**: Assignment due dates and SLA/overdue indicators complete; remaining Step 5 features are deferred at 85% quota usage
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -62,7 +62,7 @@
     - [x] Notify assigned reviewers and creators on approval, changes requested, and rejection
     - [x] Add authenticated inbox endpoints, UI bell, unread count, mark-read actions, and end-to-end coverage
   - [ ] **Remaining Step 5 features (resume when quota allows)**
-    - [ ] Assignment due dates and SLA/overdue indicators
+    - [x] Assignment due dates and SLA/overdue indicators
     - [ ] Saved views (basic creator/manager search and filters already exist)
     - [ ] Approval-report CSV/PDF export (audit-log CSV already exists)
     - [ ] Self-service password change (admin-triggered password reset already exists)
@@ -83,7 +83,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-The highest-priority Step 5 feature, persistent assignment and workflow-decision notifications, is complete and committed. The latest usage check reports 79% used (21% remaining), so stop here. When quota allows, implement assignment due dates end to end: add an Alembic-managed due-date field and manager-only update API, show due dates and overdue/SLA state to managers and assigned reviewers, test permission and overdue behavior, update `FEATURES.md`, and commit. Then continue with saved views, approval-report CSV/PDF export, self-service password change, dark mode, and onboarding tips in the user's listed order; admin password reset, basic search/filter controls, and audit CSV export already exist.
+Assignment due dates, manager-only updates, and manager/reviewer overdue indicators are implemented and verified. Usage is 85% used (15% remaining), so stop at this clean checkpoint. Next, add saved views for the existing Creator/Manager search and filter controls with role-isolated persistence and tests; then continue in order with approval-report CSV/PDF export, self-service password change, dark mode, and first-login onboarding tips. Admin password reset, basic search/filter controls, and audit CSV export already exist.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -129,3 +129,9 @@ The highest-priority Step 5 feature, persistent assignment and workflow-decision
 ## GitHub Sync (2026-10-26)
 - Reconciled the in-progress `origin/main` merge while preserving the Phase 6 deployment example and limitations documentation; retained the remote PostgreSQL driver dependency update and clarified the JWT environment-variable description.
 - Committed the remaining eligible workspace files in merge commit `23b4bf1` and pushed `main` to `origin`. `.env`, databases, Chroma data, and uploads remain excluded by `.gitignore` and were not committed.
+
+## Assignment Due Dates (2026-10-26)
+- Added an Alembic migration for indexed UTC assignment deadlines. Assigning an in-review submission sets a default deadline 24 hours ahead; managers can update or clear a deadline through a manager-only API.
+- Manager queues show editable deadlines and overdue state; assigned reviewers see their deadline and overdue state in the Compliance Desk. Closed or unassigned submissions are not marked overdue.
+- Added integration coverage for default deadline creation, manager-only updates, role denials, clearing, overdue calculation, and unassigned submissions. A fresh SQLite migration to head passed; the full backend suite passed (**156 tests**); and the frontend production build passed.
+- Usage check: **85% used (15% remaining)**. Stop optional feature work at this clean, verified step. Next in order: implement saved views for the existing creator/manager search and filter controls, with persistence, role isolation, and tests; then approval-report CSV/PDF export, self-service password change, dark mode, and first-login onboarding tips.

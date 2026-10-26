@@ -286,6 +286,11 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                 <p className="text-xs text-stone-500 mt-0.5">
                   Author: {sub.creator?.name} • Status: <span className="uppercase font-bold">{sub.status}</span>
                 </p>
+                {sub.status === "in_review" && sub.assigned_to_id === user.id && (
+                  <p className={`text-xs font-semibold mt-1 ${sub.is_overdue ? "text-red-700" : "text-stone-500"}`}>
+                    {sub.is_overdue ? "Overdue • " : sub.assignment_due_at ? `Due ${new Date(sub.assignment_due_at).toLocaleString()}` : "No due date set"}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => navigate(canSignOff ? `/approval/${sub.id}` : `/review/${sub.id}`)}

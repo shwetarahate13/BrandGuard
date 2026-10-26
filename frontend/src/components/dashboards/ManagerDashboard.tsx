@@ -21,6 +21,11 @@ interface ManagerDashboardProps {
   navigate: (path: string) => void;
 }
 
+const toLocalDateTimeInput = (value: string) => {
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, navigate }) => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [reviewers, setReviewers] = useState<User[]>([]);
@@ -28,6 +33,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
   const [highRiskClauses, setHighRiskClauses] = useState<GuidelineHealthClause[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [feedbackStats, setFeedbackStats] = useState<FeedbackCategoryStats[]>([]);
+  const [dueDateDrafts, setDueDateDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("in_review");
@@ -68,6 +74,21 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
       loadData();
     } catch (err: any) {
       showToast(err.message || "Assignment failed", "error");
+    }
+  };
+
+  const handleDueDateSave = async (submissionId: string, value: string) => {
+    try {
+      await api.updateAssignmentDueDate(submissionId, value ? new Date(value).toISOString() : null);
+      setDueDateDrafts((current) => {
+        const next = { ...current };
+        delete next[submissionId];
+        return next;
+      });
+      showToast(value ? "Assignment due date updated" : "Assignment due date cleared", "success");
+      await loadData();
+    } catch (err: any) {
+      showToast(err.message || "Due date update failed", "error");
     }
   };
 
@@ -322,6 +343,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
                 <th className="py-3 px-4">Author</th>
                 <th className="py-3 px-4">Status & SLA</th>
                 <th className="py-3 px-4">Assigned Reviewer</th>
+                <th className="py-3 px-4">Due Date / SLA</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -362,6 +384,36 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="py-3.5 px-4 min-w-56">
+                      {sub.assigned_to_id && sub.status === "in_review" ? (
+                        <div className="flex flex-col items-start gap-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              aria-label={`Due date for ${sub.title}`}
+                              type="datetime-local"
+                              value={dueDateDrafts[sub.id] ?? (sub.assignment_due_at ? toLocalDateTimeInput(sub.assignment_due_at) : "")}
+                              onChange={(event) => setDueDateDrafts((current) => ({ ...current, [sub.id]: event.target.value }))}
+                              className="text-[11px] border border-stone-300 rounded-md px-1.5 py-1 bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDueDateSave(sub.id, dueDateDrafts[sub.id] ?? (sub.assignment_due_at ? toLocalDateTimeInput(sub.assignment_due_at) : ""))}
+                              className="text-[10px] font-bold rounded-md px-2 py-1 bg-purple-700 hover:bg-purple-800 text-white"
+                            >Save</button>
+                          </div>
+                          <span className={`text-[10px] font-semibold ${sub.is_overdue ? "text-red-700" : "text-stone-500"}`}>
+                            {sub.is_overdue ? "Overdue" : sub.assignment_due_at ? `Due ${new Date(sub.assignment_due_at).toLocaleString()}` : "No due date"}
+                          </span>
+                          {sub.assignment_due_at && (
+                            <button
+                              type="button"
+                              onClick={() => handleDueDateSave(sub.id, "")}
+                              className="text-[10px] text-stone-500 underline hover:text-stone-800"
+                            >Clear due date</button>
+                          )}
+                        </div>
+                      ) : <span className="text-stone-400">—</span>}
                     </td>
                     <td className="py-3.5 px-4 text-right space-x-2">
                       <button

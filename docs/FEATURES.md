@@ -13,8 +13,8 @@ This inventory reflects behavior present in the current application. It does not
 ## Role-specific workspaces
 
 - **Creator:** My Work dashboard, own submissions, title/intent search, review findings, revision workflow, feedback metrics, and persistent notifications for workflow decisions.
-- **Manager:** Team Command Center, organization trends and feedback statistics, status/search filters, submission age against the four-hour SLA target, reviewer assignment, standard-risk approval, changes requested/rejected, and guideline health.
-- **Reviewer:** Compliance Desk, assigned submissions and escalated findings, source lookup, compliance notes, and high-risk sign-off for assigned submissions.
+- **Manager:** Team Command Center, organization trends and feedback statistics, status/search filters, submission age against the four-hour SLA target, reviewer assignment with a default 24-hour due date, manager-editable deadlines and overdue state, standard-risk approval, changes requested/rejected, and guideline health.
+- **Reviewer:** Compliance Desk, assigned submissions and escalated findings, assignment deadlines and overdue state, source lookup, compliance notes, and high-risk sign-off for assigned submissions.
 - **Admin:** User and role management, account activation and password reset, approved-source management, runtime settings, system status, audit log and CSV export, feedback statistics/reset, and organization insights.
 
 The notification bell is available to signed-in roles. Reviewer assignment events go to the assigned reviewer; approval, changes-requested, and rejection decisions go to the creator. Notifications have read/unread state and open the related submission.

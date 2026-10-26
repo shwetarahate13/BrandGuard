@@ -116,6 +116,8 @@ export interface Submission {
   id: string;
   creator_id: string;
   assigned_to_id?: string;
+  assignment_due_at?: string | null;
+  is_overdue?: boolean;
   title: string;
   intent?: string;
   status: SubmissionStatus;

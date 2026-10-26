@@ -1,5 +1,5 @@
 """Submissions API routes: create, upload, view, check, and add versions."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Path as APIPath, Query, status
 from fastapi.responses import Response
@@ -14,7 +14,7 @@ from backend.app.models.models import (
 )
 from backend.app.schemas.schemas import (
     SubmissionCreate, SubmissionResponse, SubmissionListResponse,
-    SubmissionAssignRequest, VersionCreate, VersionResponse
+    SubmissionAssignRequest, SubmissionDueDateUpdate, VersionCreate, VersionResponse
 )
 from backend.app.services.auth import get_current_user
 from backend.app.services.permissions import (
@@ -262,6 +262,7 @@ def list_submissions(
             id=s.id,
             creator_id=s.creator_id,
             assigned_to_id=s.assigned_to_id,
+            assignment_due_at=s.assignment_due_at,
             assigned_to=s.assigned_to,
             title=s.title,
             intent=s.intent,
@@ -273,6 +274,12 @@ def list_submissions(
             finding_count=count,
             needs_human_count=needs_human_cnt,
             age_hours=age_hours,
+            is_overdue=(
+                s.status == SubmissionStatus.in_review
+                and s.assigned_to_id is not None
+                and s.assignment_due_at is not None
+                and (s.assignment_due_at.replace(tzinfo=timezone.utc) if s.assignment_due_at.tzinfo is None else s.assignment_due_at) < now
+            ),
         )
         result.append(item)
 
@@ -333,6 +340,8 @@ def assign_submission(
 
     previous_reviewer_id = submission.assigned_to_id
     submission.assigned_to_id = reviewer.id
+    if submission.status == SubmissionStatus.in_review and submission.assignment_due_at is None:
+        submission.assignment_due_at = datetime.now(timezone.utc) + timedelta(hours=24)
     if previous_reviewer_id != reviewer.id:
         add_notification(
             db,
@@ -345,6 +354,34 @@ def assign_submission(
     log_action(db, current_user.id, "assign_reviewer", "submission", submission.id, {
         "reviewer_id": reviewer.id,
         "reviewer_name": reviewer.name,
+        "assignment_due_at": submission.assignment_due_at.isoformat() if submission.assignment_due_at else None,
+    })
+    db.commit()
+    db.refresh(submission)
+    return submission
+
+
+@router.patch("/{submission_id}/due-date", response_model=SubmissionResponse)
+def update_assignment_due_date(
+    submission_id: str,
+    payload: SubmissionDueDateUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Set or clear the due date for an active reviewer assignment."""
+    check_permission(current_user, Action.SUBMISSION_ASSIGN)
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.assigned_to_id is None or submission.status != SubmissionStatus.in_review:
+        raise HTTPException(status_code=409, detail="A due date requires an assigned submission in review")
+
+    due_at = payload.assignment_due_at
+    if due_at is not None and due_at.tzinfo is None:
+        due_at = due_at.replace(tzinfo=timezone.utc)
+    submission.assignment_due_at = due_at
+    log_action(db, current_user.id, "update_assignment_due_date", "submission", submission.id, {
+        "assignment_due_at": due_at.isoformat() if due_at else None,
     })
     db.commit()
     db.refresh(submission)

@@ -186,11 +186,13 @@ class Submission(Base):
     __table_args__ = (
         Index("ix_submissions_status_created", "status", "created_at"),
         Index("ix_submissions_assigned_to", "assigned_to_id"),
+        Index("ix_submissions_assigned_due", "assigned_to_id", "assignment_due_at"),
     )
 
     id = Column(String, primary_key=True, default=gen_id)
     creator_id = Column(String, ForeignKey("users.id"), nullable=False)
     assigned_to_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    assignment_due_at = Column(DateTime(timezone=True), nullable=True)
     title = Column(String(500), nullable=False)
     intent = Column(Text, nullable=True)
     status = Column(SAEnum(SubmissionStatus), default=SubmissionStatus.draft, nullable=False)

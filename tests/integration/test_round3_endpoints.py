@@ -562,6 +562,72 @@ def test_assignment_and_workflow_decisions_create_private_notifications(api_clie
         assert db.query(Notification).count() == 4
 
 
+def test_assignment_due_dates_are_manager_only_and_expose_overdue_state(api_client, monkeypatch):
+    client, session_factory, manager = api_client
+    creator = User(
+        id="due-creator", name="Due Creator", email="due-creator@example.test",
+        password_hash="unused", role=UserRole.creator, is_active=True,
+    )
+    reviewer = User(
+        id="due-reviewer", name="Due Reviewer", email="due-reviewer@example.test",
+        password_hash="unused", role=UserRole.reviewer, is_active=True,
+    )
+    active = Submission(
+        id="due-active", creator_id=creator.id, title="Due date review",
+        status=SubmissionStatus.in_review,
+    )
+    unassigned = Submission(
+        id="due-unassigned", creator_id=creator.id, title="Unassigned review",
+        status=SubmissionStatus.in_review,
+    )
+    with session_factory.begin() as db:
+        db.add_all([creator, reviewer, active, unassigned])
+
+    assigned = client.post(f"/api/submissions/{active.id}/assign", json={"reviewer_id": reviewer.id})
+    assert assigned.status_code == 200, assigned.text
+    assert assigned.json()["assignment_due_at"] is not None
+    assert assigned.json()["assignment_due_at"].endswith(("Z", "+00:00"))
+
+    overdue = client.patch(
+        f"/api/submissions/{active.id}/due-date",
+        json={"assignment_due_at": "2020-01-01T00:00:00Z"},
+    )
+    assert overdue.status_code == 200, overdue.text
+    assert overdue.json()["assignment_due_at"].startswith("2020-01-01T00:00:00")
+    rows = client.get("/api/submissions").json()
+    assert next(row for row in rows if row["id"] == active.id)["is_overdue"] is True
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: reviewer)
+    reviewer_rows = client.get("/api/submissions").json()
+    reviewer_item = next(row for row in reviewer_rows if row["id"] == active.id)
+    assert reviewer_item["assignment_due_at"].startswith("2020-01-01T00:00:00")
+    assert reviewer_item["is_overdue"] is True
+    assert client.patch(
+        f"/api/submissions/{active.id}/due-date",
+        json={"assignment_due_at": None},
+    ).status_code == 403
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+    assert client.patch(
+        f"/api/submissions/{active.id}/due-date",
+        json={"assignment_due_at": None},
+    ).status_code == 403
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: manager)
+    cleared = client.patch(
+        f"/api/submissions/{active.id}/due-date",
+        json={"assignment_due_at": None},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["assignment_due_at"] is None
+    rows = client.get("/api/submissions").json()
+    assert next(row for row in rows if row["id"] == active.id)["is_overdue"] is False
+    assert client.patch(
+        f"/api/submissions/{unassigned.id}/due-date",
+        json={"assignment_due_at": "2030-01-01T00:00:00Z"},
+    ).status_code == 409
+
+
 def test_reviewer_dismissal_trains_feedback_and_invalidates_guideline_health(api_client, monkeypatch):
     client, session_factory, _manager = api_client
     reviewer = User(
