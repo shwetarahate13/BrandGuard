@@ -128,4 +128,4 @@ The highest-priority Step 5 feature, persistent assignment and workflow-decision
 
 ## GitHub Sync (2026-10-26)
 - Reconciled the in-progress `origin/main` merge while preserving the Phase 6 deployment example and limitations documentation; retained the remote PostgreSQL driver dependency update and clarified the JWT environment-variable description.
-- Prepared the remaining eligible workspace files for the requested GitHub commit. `.env`, databases, Chroma data, and uploads remain excluded by `.gitignore` and are not to be committed.
+- Committed the remaining eligible workspace files in merge commit `23b4bf1` and pushed `main` to `origin`. `.env`, databases, Chroma data, and uploads remain excluded by `.gitignore` and were not committed.
