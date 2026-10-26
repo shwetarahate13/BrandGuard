@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Steps 1–2 complete; Step 3 (Full Bug Sweep) is next
+- **Current Step**: Steps 1–3 complete; Step 4 (Tests and Docs) is next
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -72,7 +72,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Complete the full role and screen sweep in Step 3, repair the known workflow integration failure, and exercise the main workflow plus Improvements A, B, and C end to end.
+Complete Step 4: reconcile README, FEATURES.md, ROUND3_IMPROVEMENTS.md, and LIMITATIONS.md with the implemented behavior; retain focused permission/workflow/Improvement A, B, and C tests; then commit the docs and test changes.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -90,3 +90,12 @@ Complete the full role and screen sweep in Step 3, repair the known workflow int
 - In the browser with `DEMO_MODE=true`, verified the four cards and successfully signed in through each button. The resulting pages showed the matching Admin Console, Manager Command Center, Reviewer Compliance Desk, and Creator My Work dashboard.
 - Restarted with `DEMO_MODE=false` and a newly migrated empty SQLite database. The login panel was absent, the database contained zero users, and `/api/auth/demo-login` returned 404.
 - `npm run build --prefix frontend` passed. No real user password is shown or logged; the displayed values are throwaway credentials from the demo seed.
+
+## Step 3: Full Bug Sweep (2026-10-26)
+- Fixed the confirmed terminology rewrite regression: approved deterministic term replacements such as `cheap` → `accessible pricing` are no longer dropped by the generic intent-overlap heuristic. Added a focused unit regression test.
+- Fixed the workflow that left a submission in draft after accepting a rewrite: the integration test now asserts that a new version must be checked before review can be requested. Added a creator revision form for `changes_requested` and `rejected` submissions; saving creates a version, reruns the check, and enables resubmission. Added assignment fields to submission responses so the manager/reviewer queue can render its allocation state.
+- Updated the Chroma embedding function to its current typed config interface, eliminating the existing embedding deprecation warnings.
+- Expanded workflow integration coverage for create, check, accept, edit, dispute, submit, assign, changes requested, reject, resubmit, and approve. It verifies that creators cannot approve their own submission, managers cannot approve a high-risk submission, and an assigned reviewer can. Also verifies assignment is returned in the submission response.
+- Browser sweep with the four demo roles confirmed distinct Creator My Work, Manager Team Command Center, Reviewer Compliance Desk, and Admin Console dashboards/nav. Checked manager search/filter queue and reviewer assignment, reviewer high-risk sign-off, Admin user/settings/audit/feedback/source screens, Org Insights, Approved Sources, Limitations, and Guideline Health. `Recompute now` returned “Guideline friction recomputed.” Browser console reported no errors or warnings.
+- End-to-end review checks included an image OCR submission (26 findings), PDF inspection with 8 page-highlighted findings, and reviewer approval recorded in the audit trail. Manager feedback stats displayed persisted decision outcomes; the targeted feedback tests cover suppression after three disputes. The completed PDF sample remained in the isolated local demo database.
+- Verification on a fresh isolated SQLite database: full backend suite **154 passed**; `npm run build --prefix frontend` passed; `git diff --check` passed. Earlier Phase 6 memory measurement for a real image plus PDF was 299 MB conservative combined peak RSS, below the ~450 MB target.

@@ -146,6 +146,7 @@ class SubmissionCreate(BaseModel):
 class SubmissionResponse(BaseModel):
     id: str
     creator_id: str
+    assigned_to_id: Optional[str] = None
     title: str
     intent: Optional[str] = None
     status: str
@@ -153,6 +154,7 @@ class SubmissionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     creator: Optional[UserResponse] = None
+    assigned_to: Optional[UserResponse] = None
     versions: list["VersionResponse"] = []
     model_config = {"from_attributes": True}
 

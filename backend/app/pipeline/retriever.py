@@ -5,6 +5,7 @@ import json
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from sklearn.feature_extraction.text import HashingVectorizer
+from chromadb.api.types import Documents, EmbeddingFunction
 
 from backend.app.config import get_settings
 from backend.app.models.models import GuidelineClause, ApprovedFact, Term, Asset
@@ -15,11 +16,12 @@ logger = logging.getLogger(__name__)
 COLLECTION_NAME = "approved_sources"
 
 
-class LightweightEmbeddingFunction:
+class LightweightEmbeddingFunction(EmbeddingFunction[Documents]):
     """Stateless hashing vectorizer for 512MB RAM budget.
     Implements Chroma's EmbeddingFunction interface without heavy neural models.
     """
     def __init__(self, n_features: int = 256):
+        self.n_features = n_features
         self.vectorizer = HashingVectorizer(
             n_features=n_features,
             stop_words="english",
@@ -27,8 +29,13 @@ class LightweightEmbeddingFunction:
             alternate_sign=False,
         )
 
-    def name(self) -> str:
+    @staticmethod
+    def name() -> str:
         return "lightweight_tfidf"
+
+    @staticmethod
+    def build_from_config(config: dict) -> "LightweightEmbeddingFunction":
+        return LightweightEmbeddingFunction(n_features=int(config.get("n_features", 256)))
 
     def is_legacy(self) -> bool:
         return False
@@ -37,7 +44,7 @@ class LightweightEmbeddingFunction:
         return ["cosine"]
 
     def get_config(self) -> dict:
-        return {}
+        return {"n_features": self.n_features}
 
     def embed_query(self, input: str) -> List[float]:
         res = self([input])

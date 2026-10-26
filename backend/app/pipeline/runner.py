@@ -291,6 +291,7 @@ def run_pipeline(
             original_span=orig_span_text,
             suggested_rewrite=f_routed.get("suggested_rewrite"),
             intent=intent,
+            source_type=f_routed.get("source_type"),
         )
 
         # Map string enums safely

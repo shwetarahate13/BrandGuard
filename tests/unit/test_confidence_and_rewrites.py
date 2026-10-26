@@ -39,3 +39,13 @@ def test_intent_preserved_rejects_divergent_suggestion():
     res = verify_intent_preserved(orig, divergent_rewrite, intent)
     # Divergent rewrite lacking common anchors with intent should be withheld
     assert res is None
+
+
+def test_approved_terminology_rewrite_survives_intent_heuristic():
+    res = verify_intent_preserved(
+        original_span="cheap",
+        suggested_rewrite="accessible pricing",
+        intent="Share brand-compliant sourdough copy with the community",
+        source_type="term",
+    )
+    assert res == "accessible pricing"

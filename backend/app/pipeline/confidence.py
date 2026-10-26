@@ -141,6 +141,7 @@ def verify_intent_preserved(
     original_span: str,
     suggested_rewrite: Optional[str],
     intent: Optional[str],
+    source_type: SourceType | str | None = None,
 ) -> Optional[str]:
     """Verify that a suggested rewrite preserves the creator's stated intent.
     
@@ -156,6 +157,13 @@ def verify_intent_preserved(
     # If identical, no need for rewrite
     if orig_clean == rewrite_clean:
         return None
+
+    # A terminology rule is an approved, organization-owned replacement for
+    # the exact term in the span. Its wording may not share lexical roots with
+    # the campaign intent (for example, "cheap" -> "accessible pricing"),
+    # so the generic intent heuristic must not hide that deterministic fix.
+    if source_type == SourceType.term or source_type == SourceType.term.value:
+        return suggested_rewrite.strip()
 
     # If creator provided no intent, accept sensible rewrite
     if not intent or not intent.strip():

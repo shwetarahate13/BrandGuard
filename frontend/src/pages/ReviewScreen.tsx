@@ -48,6 +48,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const [newComment, setNewComment] = useState("");
   const [comments, setComments] = useState<any[]>([]);
 
+  // A creator must be able to revise a submission after a manager requests
+  // changes, including when the check found no individual finding to edit.
+  const [revisionText, setRevisionText] = useState("");
+  const [revisionError, setRevisionError] = useState<string | null>(null);
+  const [savingRevision, setSavingRevision] = useState(false);
+
   // Expanded sources state
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -60,6 +66,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       setLoadError(null);
       const sub = await api.getSubmission(submissionId);
       setSubmission(sub);
+      setRevisionText(sub.versions?.[sub.versions.length - 1]?.text || "");
       const fList = await api.getFindings(submissionId);
       setFindings(fList);
 
@@ -170,6 +177,26 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       alert("Submission successfully routed to Manager / Reviewer for sign-off.");
     } catch (err: any) {
       alert(`Error requesting review: ${err.message}`);
+    }
+  };
+
+  const handleResubmitRevision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = revisionText.trim();
+    if (!submission || !text) {
+      setRevisionError("Add the revised content before saving this version.");
+      return;
+    }
+    setSavingRevision(true);
+    setRevisionError(null);
+    try {
+      await api.addVersion(submission.id, text);
+      await api.checkSubmission(submission.id);
+      await loadData();
+    } catch (err) {
+      setRevisionError(err instanceof Error ? err.message : "Unable to save and check the revised version.");
+    } finally {
+      setSavingRevision(false);
     }
   };
 
@@ -350,6 +377,40 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           )}
         </div>
       </div>
+
+      {user.role === "creator" && submission.creator_id === user.id &&
+        (submission.status === "changes_requested" || submission.status === "rejected") && (
+          <form
+            onSubmit={handleResubmitRevision}
+            className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3"
+          >
+            <div>
+              <h2 className="text-sm font-semibold text-stone-900">Create a revised version</h2>
+              <p className="mt-1 text-xs text-stone-600">
+                Update the content using the manager’s feedback. Saving creates a new version and runs the brand check again.
+              </p>
+            </div>
+            {revisionError && <p role="alert" className="text-xs text-rose-700">{revisionError}</p>}
+            <textarea
+              aria-label="Revised submission content"
+              value={revisionText}
+              onChange={(event) => setRevisionText(event.target.value)}
+              rows={6}
+              required
+              maxLength={50000}
+              className="w-full rounded-lg border border-stone-300 bg-white p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={savingRevision || !revisionText.trim()}
+                className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 disabled:opacity-50"
+              >
+                {savingRevision ? "Saving and checking…" : "Save revision & run check"}
+              </button>
+            </div>
+          </form>
+        )}
 
       {/* Main Two-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

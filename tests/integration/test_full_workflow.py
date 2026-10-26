@@ -16,12 +16,12 @@ def test_full_governance_workflow_and_rbac():
     db.close()
 
     # 1. Login with demo accounts
-    res_creator = client.post("/api/auth/login", json={"email": "creator@nexora.dev", "password": "Creator123!"})
+    res_creator = client.post("/api/auth/login", json={"email": "creator@nexora.dev", "password": "CreatorDemo2026!"})
     assert res_creator.status_code == 200, res_creator.text
     tok_creator = res_creator.json()["access_token"]
     h_creator = {"Authorization": f"Bearer {tok_creator}"}
 
-    res_manager = client.post("/api/auth/login", json={"email": "manager@nexora.dev", "password": "Manager123!"})
+    res_manager = client.post("/api/auth/login", json={"email": "manager@nexora.dev", "password": "ManagerDemo2026!"})
     assert res_manager.status_code == 200
     tok_manager = res_manager.json()["access_token"]
     h_manager = {"Authorization": f"Bearer {tok_manager}"}
@@ -31,7 +31,7 @@ def test_full_governance_workflow_and_rbac():
         "title": "E2E Campaign Draft",
         "intent": "Introduce our fairly priced artisan sourdough bread to regional community",
         "content_type": "text",
-        "text": "Our cheap sourdough loaves are guaranteed to please everyone. Visit our website [click here] for more."
+        "text": "Our cheap sourdough loaves bring warmth to your table. Visit our website [click here] for more."
     }
     res_sub = client.post("/api/submissions", json=submit_payload, headers=h_creator)
     assert res_sub.status_code == 200
@@ -71,6 +71,13 @@ def test_full_governance_workflow_and_rbac():
     versions = res_sub_updated.json()["versions"]
     assert len(versions) >= 2
     assert term_finding["suggested_rewrite"] in versions[-1]["text"]
+
+    # A rewrite creates a new draft version; it must be checked before resubmission.
+    res_req_early = client.post(f"/api/submissions/{sub_id}/request-review", headers=h_creator)
+    assert res_req_early.status_code == 400
+    res_recheck = client.post(f"/api/submissions/{sub_id}/check", headers=h_creator)
+    assert res_recheck.status_code == 200
+    assert res_recheck.json()["submission_status"] == "checked"
 
     # 6. Creator requests review
     res_req = client.post(f"/api/submissions/{sub_id}/request-review", headers=h_creator)
@@ -122,3 +129,119 @@ def test_full_governance_workflow_and_rbac():
     assert insights["total_submissions"] >= 1
     assert insights["accepted_count"] >= 1
     assert "terminology" in insights["findings_by_category"]
+
+
+def test_edit_dispute_changes_rejection_resubmission_and_review_assignment():
+    db = get_session_factory()()
+    run_seed(db)
+    db.close()
+
+    def login(email, password):
+        response = client.post("/api/auth/login", json={"email": email, "password": password})
+        assert response.status_code == 200, response.text
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    creator = login("creator@nexora.dev", "CreatorDemo2026!")
+    manager = login("manager@nexora.dev", "ManagerDemo2026!")
+    reviewer = login("reviewer@nexora.dev", "ReviewerDemo2026!")
+
+    # Edit and dispute findings, get changes requested, then resubmit a new revision.
+    created = client.post("/api/submissions", headers=creator, json={
+        "title": "Revision lifecycle coverage",
+        "intent": "Describe our sourdough clearly to the community.",
+        "content_type": "text",
+        "text": "Our cheap sourdough is baked with care. Visit [click here] for details.",
+    })
+    assert created.status_code == 200, created.text
+    submission_id = created.json()["id"]
+    assert client.post(f"/api/submissions/{submission_id}/check", headers=creator).status_code == 200
+    findings = client.get(f"/api/submissions/{submission_id}/findings", headers=creator).json()
+    term_finding = next(item for item in findings if "cheap" in item["issue"].lower())
+    edited = client.post("/api/decisions", headers=creator, json={
+        "finding_id": term_finding["id"],
+        "action": "edit",
+        "edited_text": "fairly priced",
+    })
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["action"] == "edit"
+    version = client.get(f"/api/submissions/{submission_id}", headers=creator).json()["versions"][-1]
+    assert "fairly priced" in version["text"]
+    assert client.post(f"/api/submissions/{submission_id}/check", headers=creator).status_code == 200
+
+    latest_findings = client.get(f"/api/submissions/{submission_id}/findings", headers=creator).json()
+    link_finding = next(item for item in latest_findings if "link" in item["issue"].lower())
+    disputed = client.post("/api/decisions", headers=creator, json={
+        "finding_id": link_finding["id"],
+        "action": "dispute",
+        "reason": "The link label is descriptive in the live campaign context.",
+    })
+    assert disputed.status_code == 200, disputed.text
+    assert disputed.json()["action"] == "dispute"
+    assert client.post(f"/api/submissions/{submission_id}/request-review", headers=creator).status_code == 200
+
+    changes = client.post(f"/api/submissions/{submission_id}/reject", headers=manager, json={
+        "decision": "changes_requested",
+        "note": "Please update the final copy before approval.",
+    })
+    assert changes.status_code == 200, changes.text
+    assert changes.json()["decision"] == "changes_requested"
+    submitted_version = client.post(f"/api/submissions/{submission_id}/versions", headers=creator, json={
+        "text": "Aurelia Artisan Pantry sourdough is baked with care. Read our sourdough details page.",
+    })
+    assert submitted_version.status_code == 200, submitted_version.text
+    assert client.post(f"/api/submissions/{submission_id}/check", headers=creator).status_code == 200
+    assert client.post(f"/api/submissions/{submission_id}/request-review", headers=creator).status_code == 200
+
+    rejection = client.post(f"/api/submissions/{submission_id}/reject", headers=manager, json={
+        "decision": "rejected",
+        "note": "The revised draft does not match the approved campaign brief.",
+    })
+    assert rejection.status_code == 200, rejection.text
+    assert rejection.json()["decision"] == "rejected"
+    final_version = client.post(f"/api/submissions/{submission_id}/versions", headers=creator, json={
+        "text": "Our sourdough is made for sharing at the table.",
+    })
+    assert final_version.status_code == 200, final_version.text
+    assert client.post(f"/api/submissions/{submission_id}/check", headers=creator).status_code == 200
+    assert client.post(f"/api/submissions/{submission_id}/request-review", headers=creator).status_code == 200
+    approved = client.post(f"/api/submissions/{submission_id}/approve", headers=manager, json={
+        "decision": "approved",
+        "note": "Updated submission approved.",
+    })
+    assert approved.status_code == 200, approved.text
+    assert client.get(f"/api/submissions/{submission_id}", headers=manager).json()["status"] == "approved"
+
+    # A high-risk item must be assigned and signed off by the compliance reviewer.
+    high_risk = client.post("/api/submissions", headers=creator, json={
+        "title": "Compliance escalation coverage",
+        "intent": "Describe the botanical blend.",
+        "content_type": "text",
+        "text": "Our botanical blend cures digestive illness.",
+    })
+    assert high_risk.status_code == 200, high_risk.text
+    high_risk_id = high_risk.json()["id"]
+    assert client.post(f"/api/submissions/{high_risk_id}/check", headers=creator).status_code == 200
+    assert client.post(f"/api/submissions/{high_risk_id}/request-review", headers=creator).status_code == 200
+    reviewer_id = next(
+        item["id"] for item in client.get("/api/submissions/reviewers", headers=manager).json()
+        if item["email"] == "reviewer@nexora.dev"
+    )
+    assigned = client.post(f"/api/submissions/{high_risk_id}/assign", headers=manager, json={"reviewer_id": reviewer_id})
+    assert assigned.status_code == 200, assigned.text
+    assert assigned.json()["assigned_to_id"] == reviewer_id
+    assert client.get(f"/api/submissions/{high_risk_id}", headers=reviewer).status_code == 200
+    creator_self_approval = client.post(f"/api/submissions/{high_risk_id}/approve", headers=creator, json={
+        "decision": "approved",
+        "note": "Self approval must fail.",
+    })
+    assert creator_self_approval.status_code == 403
+    manager_approval = client.post(f"/api/submissions/{high_risk_id}/approve", headers=manager, json={
+        "decision": "approved",
+        "note": "High-risk approval must come from the reviewer.",
+    })
+    assert manager_approval.status_code == 403
+    reviewer_approval = client.post(f"/api/submissions/{high_risk_id}/approve", headers=reviewer, json={
+        "decision": "approved",
+        "note": "Compliance review completed.",
+    })
+    assert reviewer_approval.status_code == 200, reviewer_approval.text
