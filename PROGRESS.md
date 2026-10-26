@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Step 5 feature list is complete; local website smoke and Render deployment attempt remain
+- **Current Step**: Implementation and local verification complete; Render/Neon account access is needed to deploy
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -83,7 +83,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Assignment due dates, manager-only updates, manager/reviewer overdue indicators, saved views, approval-report exports, self-service password change, dark mode, and first-login onboarding tips are implemented. Final next step: run a clean full verification sweep, inspect the public Render deployment if reachable, and attempt deployment only if the authorized Render and Neon accounts are available. Admin password reset, basic search/filter controls, and audit CSV export already exist.
+Assignment due dates, manager-only updates, manager/reviewer overdue indicators, saved views, approval-report exports, self-service password change, dark mode, and first-login onboarding tips are implemented. Implementation and local verification are complete. The public Render service is suspended; an account holder must restore it and provide/configure the Neon database URL before a deployment can be served. Admin password reset, basic search/filter controls, and audit CSV export already exist.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -163,4 +163,9 @@ Assignment due dates, manager-only updates, manager/reviewer overdue indicators,
 ## First-Login Onboarding Tips (2026-10-27)
 - Added first-sign-in quick-start dialog content specific to Creator, Manager, Reviewer, and Admin workflows and permissions. A navbar Tips button reopens it.
 - Dismissal is persisted per account and role in this browser. Tests cover account/role isolation and role-specific workflow guidance.
-- Final feature verification: fresh SQLite Alembic migration to head, full backend suite (**162 passed**), frontend tests (**7 passed**), frontend production build, and `git diff --check` all passed. Local website smoke and Render deployment access are next.
+- Final feature verification: fresh SQLite Alembic migration to head, full backend suite (**162 passed**), frontend tests (**7 passed**), frontend production build, and `git diff --check` all passed.
+
+## Final Website and Deployment Check (2026-10-27)
+- Started the frontend and API on isolated local ports with a fresh throwaway SQLite demo database. The Vite app document and `/api/health` both returned HTTP 200. Demo mode reported enabled, and Admin, Manager, Reviewer, and Creator each authenticated and received the matching `/api/auth/me` role.
+- The public `https://brandguard.onrender.com/api/health` endpoint returned HTTP 503 with Render's “This service has been suspended” page. The pushed branch is at `6165598` and the repository blueprint is configured for auto-deploy, but the suspended service does not serve the updated app.
+- No Neon `DATABASE_URL` exists in the local environment files, and this environment has no Render/Neon CLI or account connector. The Render service cannot be restored or supplied with a Neon URL from this workspace. Next: restore the existing service in Render, retrieve the Neon connection string from the authorized Neon project, set Render's `DATABASE_URL`, and redeploy. Keep the existing Docker runtime because it provides Tesseract for image review.
