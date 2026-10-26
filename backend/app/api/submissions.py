@@ -1,7 +1,7 @@
 """Submissions API routes: create, upload, view, check, and add versions."""
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Path as APIPath, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Path as APIPath, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, select
@@ -26,6 +26,8 @@ from backend.app.utils.text_extract import (
     extract_pdf_text_with_layout,
     get_upload_mime_type,
     read_upload_contents,
+    sanitize_upload_filename,
+    sniff_upload_mime_type,
 )
 from backend.app.pipeline.content_handlers import get_content_handler
 from urllib.parse import quote
@@ -101,16 +103,20 @@ async def upload_submission(
     """Create a submission from supported text, PDF, DOCX, or image uploads."""
     check_permission(current_user, Action.SUBMISSION_CREATE)
     contents = await read_upload_contents(file)
-    filename = file.filename or "uploaded_content.txt"
+    filename = sanitize_upload_filename(file.filename)
     try:
-        mime_type = get_upload_mime_type(filename)
+        declared_mime_type = get_upload_mime_type(filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if mime_type.startswith("image/") and not get_settings().IMAGE_REVIEW_ENABLED:
+    if declared_mime_type.startswith("image/") and not get_settings().IMAGE_REVIEW_ENABLED:
         raise HTTPException(
             status_code=503,
             detail="Image review is disabled on this instance. Enable IMAGE_REVIEW_ENABLED on a larger-memory instance.",
         )
+    try:
+        mime_type = sniff_upload_mime_type(contents, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     source_layout = None
     try:
         if mime_type == "application/pdf":
@@ -206,6 +212,8 @@ def get_submission_source(
 
 @router.get("", response_model=List[SubmissionListResponse])
 def list_submissions(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -238,7 +246,7 @@ def list_submissions(
         )
     # Manager and Admin see all
 
-    submissions = query.order_by(Submission.created_at.desc()).all()
+    submissions = query.order_by(Submission.created_at.desc()).offset(offset).limit(limit).all()
 
     # Attach finding counts, needs_human counts, and age in hours
     result = []

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api, clearToken, getToken, setColdStartListener } from "./api";
+import { api, clearToken, getToken, setColdStartListener, setToken } from "./api";
 import { User } from "./types";
 import { Navbar } from "./components/Navbar";
 import { ColdStartBanner } from "./components/ColdStartBanner";
@@ -17,13 +17,18 @@ import { Limitations } from "./pages/Limitations";
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [llmMode, setLlmMode] = useState("mock/offline");
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoSwitchError, setDemoSwitchError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isWaking, setIsWaking] = useState(false);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
   // Setup cold start listener
   useEffect(() => {
-    api.getSystemMode().then((mode) => setLlmMode(mode.llm_mode)).catch(() => setLlmMode("unavailable"));
+    api.getSystemMode().then((mode) => {
+      setLlmMode(mode.llm_mode);
+      setDemoMode(mode.demo_mode);
+    }).catch(() => setLlmMode("unavailable"));
   }, []);
 
   useEffect(() => {
@@ -72,6 +77,19 @@ export const App: React.FC = () => {
   const handleLoginSuccess = (loggedInUser: User) => {
     setUser(loggedInUser);
     navigate("/");
+  };
+
+  const handleDemoRoleSwitch = async (role: User["role"]) => {
+    setDemoSwitchError(null);
+    try {
+      const session = await api.demoLogin(role);
+      setToken(session.access_token);
+      const switchedUser = await api.getMe();
+      setUser(switchedUser);
+      navigate("/");
+    } catch (err) {
+      setDemoSwitchError(err instanceof Error ? err.message : "Unable to switch demo role.");
+    }
   };
 
   if (loading) {
@@ -138,11 +156,14 @@ export const App: React.FC = () => {
         <Navbar
           user={user}
           llmMode={llmMode}
+          demoMode={demoMode}
+          onDemoRoleSwitch={handleDemoRoleSwitch}
           onLogout={handleLogout}
           currentPath={currentPath}
           navigate={navigate}
         />
 
+        {demoSwitchError && <div role="alert" className="mx-auto mt-3 w-[min(96%,48rem)] rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-900">{demoSwitchError}</div>}
         <main className="flex-1">{content}</main>
 
         {/* Footer */}

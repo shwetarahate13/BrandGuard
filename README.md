@@ -19,7 +19,7 @@ flowchart TD
         COLD["Cold-Start Resilience Banner"]
     end
 
-    subgraph Service["Single Docker Web Service (Render Free Tier: 512MB RAM)"]
+    subgraph Service["Render Python Web Service (Free Tier: 512MB RAM)"]
         FASTAPI["FastAPI App (uvicorn on $PORT)"]
         NORM["Normalizer & Segmenter (Regex)"]
         RULES["Deterministic Rules Engine"]
@@ -69,55 +69,60 @@ flowchart TD
 
 ## Demo Accounts for Judges
 
-The login screen features one-click quick-fill buttons for all four roles:
+The demo seed creates these throwaway accounts only when `DEMO_MODE=true`; keep demo mode off for private workspaces.
 
 | Role | Email | Password | Responsibilities |
 | :--- | :--- | :--- | :--- |
-| **Creator** | `creator@nexora.dev` | `Creator123!` | Submits copy, declares intent, accepts/edits/disputes diff fixes |
-| **Brand Manager** | `manager@nexora.dev` | `Manager123!` | Company-wide visibility, reviews recurring mistakes, final sign-off |
-| **Reviewer** | `reviewer@nexora.dev` | `Reviewer123!` | Compliance authority for health/regulatory claims and sensitive copy |
-| **Admin** | `admin@nexora.dev` | `Admin123!` | Manages guidelines (auto-split), 26 facts, terms, assets, and vector re-indexing |
+| **Creator** | `creator@nexora.dev` | `CreatorDemo2026!` | Submits copy, declares intent, accepts/edits/disputes diff fixes |
+| **Brand Manager** | `manager@nexora.dev` | `ManagerDemo2026!` | Company-wide visibility, reviews recurring mistakes, final sign-off |
+| **Reviewer** | `reviewer@nexora.dev` | `ReviewerDemo2026!` | Compliance authority for health/regulatory claims and sensitive copy |
+| **Admin** | `admin@nexora.dev` | `AdminDemo2026!` | Manages guidelines, users, settings, audit logs, and feedback model |
 
 ---
 
-## Local Setup in Under 5 Commands
+## Local Setup (No Docker)
 
-### Option A: Local Python Virtual Environment
+Requires Python 3.12, Node.js 18+, npm, and Tesseract OCR (`brew install tesseract` on macOS; `sudo apt-get install tesseract-ocr` on Debian or Ubuntu). The backend defaults to a local SQLite database; Vite proxies `/api` requests to FastAPI, so local development needs no CORS configuration.
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/shwetarahate13/BrandGuard.git 
-
-# 2. Set up Python virtual environment and install dependencies
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements.txt
-
-# 3. Build React frontend
-cd frontend && npm install && npm run build && cd ..
-
-# 4. Run database migrations and seed demo data
+git clone https://github.com/shwetarahate13/BrandGuard.git
+cd BrandGuard
+cp .env.example .env
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
+npm ci --prefix frontend
 alembic upgrade head
-python scripts/generate_fixtures.py
-
-# 5. Start BrandGuard server
-export PORT="${PORT:-8000}"
-uvicorn backend.app.main:app --host 127.0.0.1 --port "$PORT"
 ```
-Open `http://localhost:$PORT` in your browser.
 
-For Vite development, set `BRANDGUARD_API_PROXY_TARGET` to the backend origin and
-`CORS_ORIGINS` to the Vite origin; the Vite server uses its standard default port unless configured separately.
-Image OCR and SVG rasterization also require Tesseract OCR and Cairo on the host. The Docker image installs these system packages.
-
----
-
-### Option B: Docker Compose
+With the default `DEMO_MODE=false`, create the first real administrator once. The password is entered through a hidden prompt and the command refuses to run if any user already exists:
 
 ```bash
-# Set a URL-safe database password in .env as POSTGRES_PASSWORD first.
-docker compose up --build
+python scripts/create_admin.py
 ```
-Open `http://localhost:$HOST_PORT` in your browser (`HOST_PORT` defaults to the configured Compose mapping).
+
+Start the backend in one terminal from the repository root:
+
+```bash
+source .venv/bin/activate
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+Start the frontend in another terminal from the repository root:
+
+```bash
+npm run dev --prefix frontend -- --host 127.0.0.1 --port 5173
+```
+
+Open `http://127.0.0.1:5173`. To use demo data instead of creating a real admin, set `DEMO_MODE=true` in `.env` before running the backend. Run `npm run build --prefix frontend` to create a production SPA bundle.
+
+### Render Free Runtime
+
+`render.yaml` keeps the existing Docker deployment for Render because image review uses the Tesseract system package, which is not included in Render's native runtime. The Dockerfile builds the SPA, installs backend dependencies and Tesseract, then FastAPI serves the SPA on `$PORT`; `entrypoint.sh` runs `alembic upgrade head` before starting the server. `build.sh` remains available for a local/native production build. Set `DATABASE_URL` to PostgreSQL and keep the generated `JWT_SECRET`; the hackathon deployment sets `DEMO_MODE=true`, `IMAGE_REVIEW_ENABLED=true`, and `OCR_BACKEND=tesseract`.
+
+The memory-intensive RapidOCR backend remains available with `OCR_BACKEND=rapidocr` for larger machines. The Render free configuration uses Tesseract to stay within the memory budget.
+
+Docker files remain available for container-based deployment and are not needed for local setup.
 
 ---
 
@@ -126,15 +131,19 @@ Open `http://localhost:$HOST_PORT` in your browser (`HOST_PORT` defaults to the 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
 | `DATABASE_URL` | `sqlite:///./brandguard.db` | PostgreSQL connection string (Neon in production) |
-| `JWT_SECRET` | Generated per process when unset | Secret key for JWT session signature; set a stable value for deployments |
+| `JWT_SECRET` | Generated per process in development | JWT signing secret; required in production |
+| `JWT_EXPIRE_MINUTES` | `480` | JWT expiration interval |
 | `LLM_PROVIDER` | `mock` | `mock` (offline deterministic) or `anthropic` |
 | `LLM_MODEL` | `claude-sonnet-4-20250514` | Target LLM model name |
 | `LLM_API_KEY` | `None` | Anthropic Claude API Key (optional) |
 | `CHROMA_PERSIST_DIR` | `./data/chroma` | Persistent vector directory (`/tmp/chroma` on Render) |
 | `ASSET_STORAGE_DIR` | `./data/assets` | Allowed local root for approved logo files referenced by asset records |
-| `AUTO_SEED` | `false` | Idempotently seed Aurelia Foods brand kit and demo users |
-| `PORT` | `8000` | Container port for web server; configurable in deployment |
-| `CORS_ORIGINS` | Empty | Comma-separated frontend origins when running the UI on a separate host |
+| `DEMO_MODE` | `false` | Seed throwaway accounts and expose demo sign-in controls |
+| `IMAGE_REVIEW_ENABLED` | `false` | Enable image OCR and visual checks |
+| `OCR_BACKEND` | `tesseract` | `tesseract` (lower-memory system package) or `rapidocr` (pip-only ONNX runtime) |
+| `MAX_UPLOAD_SIZE_MB` | `5` | Maximum uploaded file size |
+| `PORT` | `8000` locally | Web server port; Render supplies `$PORT` |
+| `CORS_ORIGINS` | Empty | Comma-separated exact origin allowlist when hosting the UI separately |
 
 ---
 

@@ -30,7 +30,7 @@ services:
       DATABASE_URL: postgresql://brandguard:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/brandguard
       LLM_PROVIDER: mock
       LLM_MODEL: claude-sonnet-4-20250514
-      AUTO_SEED: "true"
+      DEMO_MODE: "true"
       CHROMA_PERSIST_DIR: /tmp/chroma
       PORT: ${PORT:-8000}
     ports:

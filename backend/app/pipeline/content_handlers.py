@@ -114,6 +114,9 @@ def _sequence(value: Any) -> list[Any]:
 
 
 def _ocr(image: Any) -> tuple[str, list[dict[str, Any]]]:
+    if get_settings().OCR_BACKEND == "tesseract":
+        return _tesseract_ocr(image)
+
     try:
         result = _get_ocr_engine()(image, return_word_box=True)
     except Exception as exc:
@@ -155,6 +158,55 @@ def _ocr(image: Any) -> tuple[str, list[dict[str, Any]]]:
             "end": offset,
             "bbox": [round(value, 2) for value in bbox],
             "confidence": confidence,
+        })
+    return "".join(pieces), regions
+
+
+def _tesseract_ocr(image: Any) -> tuple[str, list[dict[str, Any]]]:
+    """Extract word text and boxes without loading ONNX Runtime or OpenCV."""
+    try:
+        import pytesseract
+        from pytesseract import Output
+
+        data = pytesseract.image_to_data(
+            image,
+            output_type=Output.DICT,
+            config="--psm 11",
+            timeout=30,
+        )
+    except Exception as exc:
+        logger.exception("Tesseract image OCR failed")
+        if type(exc).__name__ == "TesseractNotFoundError":
+            raise ValueError("Tesseract OCR is not installed on this instance") from exc
+        raise ValueError("Unable to read text from image; Tesseract OCR could not process it") from exc
+
+    pieces: list[str] = []
+    regions: list[dict[str, Any]] = []
+    offset = 0
+    for index, raw_text in enumerate(data.get("text", [])):
+        word = str(raw_text).strip()
+        try:
+            confidence = float(data.get("conf", [])[index])
+            x = int(data.get("left", [])[index])
+            y = int(data.get("top", [])[index])
+            width = int(data.get("width", [])[index])
+            height = int(data.get("height", [])[index])
+        except (IndexError, TypeError, ValueError):
+            continue
+        if not word or confidence < 35 or width <= 0 or height <= 0:
+            continue
+
+        if pieces:
+            pieces.append(" ")
+            offset += 1
+        start = offset
+        pieces.append(word)
+        offset += len(word)
+        regions.append({
+            "start": start,
+            "end": offset,
+            "bbox": [x, y, x + width, y + height],
+            "confidence": confidence / 100.0,
         })
     return "".join(pieces), regions
 
@@ -307,17 +359,19 @@ class ImageContentHandler:
 
         # Compare the approved logo template with the submitted image using normalized correlation.
         logo_assets = db.query(Asset).filter(Asset.kind == AssetKind.logo).all()
-        if logo_assets:
+        readable_logo_assets = [
+            (asset, asset_path)
+            for asset in logo_assets
+            if (asset_path := _asset_path(asset)) is not None
+        ]
+        if readable_logo_assets:
             import cv2
 
             search_scale = min(1.0, 1600 / max(width, height))
             search_pixels = cv2.resize(pixels, None, fx=search_scale, fy=search_scale, interpolation=cv2.INTER_AREA) if search_scale < 1 else pixels
             haystack = cv2.cvtColor(search_pixels, cv2.COLOR_RGB2GRAY)
             best_match = None
-            for asset in logo_assets:
-                asset_path = _asset_path(asset)
-                if asset_path is None:
-                    continue
+            for asset, asset_path in readable_logo_assets:
                 try:
                     template_image = _open_image(asset_path.read_bytes(), "image/svg+xml" if asset_path.suffix.lower() == ".svg" else "image/jpeg" if asset_path.suffix.lower() in {".jpg", ".jpeg"} else "image/png")
                     template = cv2.cvtColor(np.asarray(template_image), cv2.COLOR_RGB2GRAY)

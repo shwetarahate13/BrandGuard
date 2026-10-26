@@ -14,8 +14,7 @@ FROM python:3.12-slim AS production
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=. \
-    CHROMA_PERSIST_DIR=/tmp/chroma \
-    AUTO_SEED=true
+    CHROMA_PERSIST_DIR=/tmp/chroma
 
 WORKDIR /app
 
@@ -39,8 +38,8 @@ COPY alembic.ini ./alembic.ini
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# Copy built frontend assets from Stage 1 into backend/app/static
-COPY --from=frontend-builder /app/backend/app/static ./backend/app/static
+# Copy the committed/built SPA bundle used by the FastAPI fallback.
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -f "http://localhost:${PORT}/api/health" || exit 1

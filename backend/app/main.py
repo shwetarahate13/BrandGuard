@@ -1,19 +1,22 @@
 """BrandGuard main FastAPI application."""
 import os
 import logging
+import json
+import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import timezone
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
 from backend.app.config import get_settings
-from backend.app.database import get_engine, Base, get_session_factory
+from backend.app.database import get_engine, get_session_factory
 from backend.app.api.auth import router as auth_router
 from backend.app.api.admin import router as admin_router
 from backend.app.api.submissions import router as submissions_router
@@ -33,22 +36,20 @@ logger = logging.getLogger("brandguard")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: initialize tables, seed demo data if needed, re-index Chroma."""
+    """Application lifespan: connect services, optionally seed demo data, and run DFI refreshes."""
     settings = get_settings()
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION} (LLM mode: {settings.LLM_PROVIDER})")
 
-    # 1. Initialize DB tables
-    engine = get_engine()
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database schema initialized")
+    # Production and local schema changes are applied only through Alembic.
+    get_engine()
 
-    # 2. Seed data if empty or AUTO_SEED=True
+    # Demo records are created only on an empty DB with explicit opt-in.
     session_factory = get_session_factory()
     with session_factory() as db:
         from backend.app.models.models import User
         user_count = db.query(User).count()
-        if user_count == 0 or settings.AUTO_SEED:
-            logger.info("Database has no users or AUTO_SEED=true. Running seed...")
+        if user_count == 0 and settings.DEMO_MODE:
+            logger.info("Demo mode enabled on an empty database; seeding judge accounts and sample content")
             from backend.app.seed import run_seed
             run_seed(db)
 
@@ -86,6 +87,64 @@ app = FastAPI(
 )
 app.middleware("http")(endpoint_rate_limiter)
 
+
+def security_headers(request_id: str) -> dict[str, str]:
+    headers = {
+        "X-Request-ID": request_id,
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Content-Security-Policy": (
+            "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; "
+            "img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; connect-src 'self'; worker-src 'self' blob:"
+        ),
+    }
+    if settings.ENVIRONMENT.casefold() == "production" or os.getenv("RENDER", "").casefold() == "true":
+        headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return headers
+
+
+@app.middleware("http")
+async def request_context_and_security_headers(request: Request, call_next):
+    supplied_id = request.headers.get("X-Request-ID", "")
+    valid_id = supplied_id[:64] if supplied_id and all(ch.isalnum() or ch in "-_." for ch in supplied_id) else ""
+    request_id = valid_id or str(uuid.uuid4())
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    response = await call_next(request)
+    for name, value in security_headers(request_id).items():
+        response.headers[name] = value
+    logger.info(json.dumps({
+        "event": "http_request",
+        "request_id": request_id,
+        "method": request.method,
+        "path": request.url.path,
+        "status_code": response.status_code,
+        "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+    }))
+    return response
+
+
+@app.exception_handler(Exception)
+async def unexpected_error_handler(request: Request, exc: Exception):
+    request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
+    logger.exception(json.dumps({
+        "event": "unhandled_exception",
+        "request_id": request_id,
+        "path": request.url.path,
+        "exception_type": type(exc).__name__,
+    }))
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": f"An unexpected error occurred. Please try again or contact your administrator. Reference ID: {request_id}",
+            "request_id": request_id,
+        },
+        headers=security_headers(request_id),
+    )
+
 # CORS (enabled for local Vite dev server)
 origins = [orig.strip() for orig in settings.CORS_ORIGINS.split(",") if orig.strip()]
 app.add_middleware(
@@ -108,9 +167,16 @@ app.include_router(system_router, prefix=api_prefix)
 app.include_router(guidelines_router, prefix=api_prefix)
 app.include_router(feedback_router, prefix=api_prefix)
 
+
+@app.get("/healthz")
+def root_healthz():
+    """Native host liveness probe at the platform-standard path."""
+    return {"status": "ok", "version": settings.APP_VERSION}
+
 # Static Files & SPA Fallback
-static_dir = Path(__file__).parent / "static"
-os.makedirs(static_dir, exist_ok=True)
+frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+committed_static = Path(__file__).parent / "static"
+static_dir = frontend_dist if (frontend_dist / "index.html").is_file() else committed_static
 
 # Mount /assets if built React assets folder exists
 assets_dir = static_dir / "assets"

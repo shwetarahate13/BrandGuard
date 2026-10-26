@@ -24,6 +24,11 @@ venv/
 ENV/
 env/
 
+# Local secrets
+.env
+.env.*
+!.env.example
+
 # Virtual Environments
 .pytest_cache/
 .coverage
@@ -33,7 +38,12 @@ htmlcov/
 data/
 brandguard.db
 *.db
+*.sqlite
 *.sqlite3
+chroma/
+**/chroma/
+uploads/
+**/uploads/
 
 # Node / Frontend
 node_modules/
@@ -41,8 +51,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-frontend/dist/
 frontend/node_modules/
+frontend/dist/
 
 # OS
 .DS_Store

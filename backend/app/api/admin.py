@@ -21,7 +21,7 @@ from backend.app.schemas.schemas import (
 from backend.app.services.auth import get_current_user, hash_password
 from backend.app.services.permissions import Action, check_permission
 from backend.app.utils.audit import log_action
-from backend.app.utils.text_extract import extract_text, read_upload_contents
+from backend.app.utils.text_extract import extract_text, read_upload_contents, sanitize_upload_filename, sniff_upload_mime_type
 from backend.app.pipeline.retriever import index_all_sources
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -94,11 +94,13 @@ def _split_text_into_clauses(text: str) -> List[dict]:
 
 @router.get("/guidelines", response_model=List[GuidelineDocResponse])
 def list_guidelines(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     check_permission(current_user, Action.SOURCES_READ)
-    return db.query(GuidelineDoc).all()
+    return db.query(GuidelineDoc).order_by(GuidelineDoc.created_at.desc()).offset(offset).limit(limit).all()
 
 
 @router.post("/guidelines", response_model=GuidelineDocResponse)
@@ -142,8 +144,9 @@ async def import_guideline_file(
 ):
     check_permission(current_user, Action.SOURCES_MANAGE)
     contents = await read_upload_contents(file)
-    filename = file.filename or "upload.txt"
+    filename = sanitize_upload_filename(file.filename)
     try:
+        sniff_upload_mime_type(contents, filename)
         extracted = extract_text(contents, filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -192,11 +195,13 @@ def delete_guideline_doc(
 
 @router.get("/facts", response_model=List[ApprovedFactResponse])
 def list_facts(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     check_permission(current_user, Action.SOURCES_READ)
-    return db.query(ApprovedFact).order_by(ApprovedFact.created_at.desc()).all()
+    return db.query(ApprovedFact).order_by(ApprovedFact.created_at.desc()).offset(offset).limit(limit).all()
 
 
 @router.post("/facts", response_model=ApprovedFactResponse)
@@ -242,11 +247,13 @@ def delete_fact(
 
 @router.get("/terms", response_model=List[TermResponse])
 def list_terms(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     check_permission(current_user, Action.SOURCES_READ)
-    return db.query(Term).all()
+    return db.query(Term).order_by(Term.created_at.desc()).offset(offset).limit(limit).all()
 
 
 @router.post("/terms", response_model=TermResponse)
@@ -291,11 +298,13 @@ def delete_term(
 
 @router.get("/assets", response_model=List[AssetResponse])
 def list_assets(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     check_permission(current_user, Action.SOURCES_READ)
-    return db.query(Asset).all()
+    return db.query(Asset).order_by(Asset.created_at.desc()).offset(offset).limit(limit).all()
 
 
 @router.post("/assets", response_model=AssetResponse)
@@ -361,11 +370,13 @@ def trigger_reindex(
 
 @router.get("/users", response_model=List[UserResponse])
 def list_users(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     check_permission(current_user, Action.USERS_MANAGE)
-    return db.query(User).order_by(User.name.asc()).all()
+    return db.query(User).order_by(User.name.asc()).offset(offset).limit(limit).all()
 
 
 @router.post("/users", response_model=UserResponse)

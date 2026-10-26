@@ -100,6 +100,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  demoLogin: async (role: User["role"]) =>
+    request<{ access_token: string }>("/auth/demo-login", {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    }),
   getMe: async () => request<User>("/auth/me"),
 
   // Submissions
@@ -314,6 +319,6 @@ export const api = {
 
   // System
   getSystemStatus: async () => request<SystemStatus>("/system/status"),
-  getSystemMode: async () => request<{ llm_mode: string }>("/system/mode"),
+  getSystemMode: async () => request<{ llm_mode: string; demo_mode: boolean }>("/system/mode"),
   getHealth: async () => request<{ status: string; version: string }>("/health"),
 };

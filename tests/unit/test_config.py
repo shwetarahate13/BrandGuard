@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from backend.app.config import Settings
 
 
@@ -11,3 +14,15 @@ def test_postgres_legacy_scheme_normalizes_to_postgresql():
     settings = Settings(DATABASE_URL="postgres://user:pass@db.example.test/brandguard")
 
     assert settings.database_url_sync == "postgresql://user:pass@db.example.test/brandguard"
+
+
+def test_cors_configuration_requires_exact_origins_and_positive_jwt_expiry():
+    settings = Settings(_env_file=None, CORS_ORIGINS="https://brandguard.example.test")
+    assert settings.CORS_ORIGINS == "https://brandguard.example.test"
+
+    with pytest.raises(ValidationError, match="explicit origin allowlist"):
+        Settings(_env_file=None, CORS_ORIGINS="*")
+    with pytest.raises(ValidationError, match="without paths"):
+        Settings(_env_file=None, CORS_ORIGINS="https://brandguard.example.test/app")
+    with pytest.raises(ValidationError, match="JWT_EXPIRE_MINUTES"):
+        Settings(_env_file=None, JWT_EXPIRE_MINUTES=0)

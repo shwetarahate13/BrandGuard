@@ -29,10 +29,10 @@ def run_seed(db: Session):
 
     # 1. Demo Users
     users_data = [
-        ("Janvi Thakre", "creator@nexora.dev", "Creator123!", UserRole.creator),
-        ("Shweta Rahate", "manager@nexora.dev", "Manager123!", UserRole.manager),
-        ("Elena Rostova", "reviewer@nexora.dev", "Reviewer123!", UserRole.reviewer),
-        ("Admin Nexora", "admin@nexora.dev", "Admin123!", UserRole.admin),
+        ("Janvi Thakre", "creator@nexora.dev", "CreatorDemo2026!", UserRole.creator),
+        ("Shweta Rahate", "manager@nexora.dev", "ManagerDemo2026!", UserRole.manager),
+        ("Elena Rostova", "reviewer@nexora.dev", "ReviewerDemo2026!", UserRole.reviewer),
+        ("Admin Nexora", "admin@nexora.dev", "AdminDemo2026!", UserRole.admin),
     ]
 
     user_map = {}

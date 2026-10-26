@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.app.api import guidelines as guidelines_api
+from backend.app.api import auth as auth_api
 from backend.app.api import submissions as submissions_api
 from backend.app.database import Base, get_db
 from backend.app.main import app
@@ -33,6 +34,7 @@ from backend.app.models.models import (
 )
 from backend.app.services.auth import get_current_user
 from backend.app.pipeline.confidence import should_suppress_finding, suppressed_span_combinations
+from backend.app.services.rate_limit import endpoint_rate_limiter
 from backend.app.workers.dfi_worker import dfi_scores_are_stale
 
 
@@ -127,6 +129,61 @@ def test_admin_is_the_only_role_with_detailed_system_status(api_client, monkeypa
     response = client.get("/api/system/status")
     assert response.status_code == 200
     assert "database_connected" in response.json()
+
+
+def test_health_headers_and_demo_login_gate(api_client, monkeypatch):
+    client, _session_factory, _manager = api_client
+    monkeypatch.setattr(auth_api, "get_settings", lambda: SimpleNamespace(DEMO_MODE=False))
+
+    health = client.get("/healthz", headers={"X-Request-ID": "phase6-test-123"})
+    assert health.status_code == 200
+    assert health.headers["x-request-id"] == "phase6-test-123"
+    assert health.headers["x-content-type-options"] == "nosniff"
+    assert health.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in health.headers["content-security-policy"]
+
+    demo = client.post("/api/auth/demo-login", json={"role": "creator"})
+    assert demo.status_code == 404
+
+
+def test_demo_login_switches_only_to_seeded_active_role_accounts(api_client, monkeypatch):
+    client, session_factory, _manager = api_client
+    creator = User(
+        id="demo-switch-creator",
+        name="Demo Creator",
+        email="creator@nexora.dev",
+        password_hash="unused",
+        role=UserRole.creator,
+        is_active=True,
+    )
+    with session_factory.begin() as db:
+        db.add(creator)
+    monkeypatch.setattr(auth_api, "get_settings", lambda: SimpleNamespace(DEMO_MODE=True))
+
+    response = client.post("/api/auth/demo-login", json={"role": "creator"})
+
+    assert response.status_code == 200
+    assert response.json()["token_type"] == "bearer"
+    assert response.json()["access_token"]
+    assert client.post("/api/auth/demo-login", json={"role": "manager"}).status_code == 503
+
+
+def test_login_route_locks_out_repeated_invalid_password_attempts(api_client):
+    client, _session_factory, _manager = api_client
+    email = "lockout-route@example.test"
+    from backend.app.services.auth import clear_login_failures
+    clear_login_failures(email, "testclient")
+    endpoint_rate_limiter._requests.pop(("testclient", "^/api/auth/login$"), None)
+
+    for _ in range(5):
+        response = client.post("/api/auth/login", json={"email": email, "password": "WrongPassword2026!"})
+        assert response.status_code == 401
+    locked = client.post("/api/auth/login", json={"email": email, "password": "WrongPassword2026!"})
+
+    assert locked.status_code == 429
+    assert int(locked.headers["retry-after"]) > 0
+    clear_login_failures(email, "testclient")
+    endpoint_rate_limiter._requests.pop(("testclient", "^/api/auth/login$"), None)
 
 
 def test_get_guideline_health_returns_real_clause_rows(api_client):

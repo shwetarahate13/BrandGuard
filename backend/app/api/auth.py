@@ -1,35 +1,72 @@
 """Authentication API routes."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 from backend.app.models.models import User
-from backend.app.schemas.schemas import LoginRequest, TokenResponse, UserResponse
-from backend.app.services.auth import authenticate_user, create_access_token, get_current_user
+from backend.app.schemas.schemas import DemoLoginRequest, LoginRequest, TokenResponse, UserResponse
+from backend.app.services.auth import (
+    authenticate_user,
+    clear_login_failures,
+    create_access_token,
+    get_current_user,
+    login_lockout_remaining,
+    record_login_failure,
+)
+from backend.app.config import get_settings
 from backend.app.utils.audit import log_action
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """Authenticate user and return JWT bearer token."""
-    user = authenticate_user(db, payload.email.strip().lower(), payload.password)
+    email = payload.email.strip().lower()
+    client_ip = request.client.host if request.client else "unknown"
+    lockout_remaining = login_lockout_remaining(email, client_ip)
+    if lockout_remaining:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many sign-in attempts. Try again later.",
+            headers={"Retry-After": str(lockout_remaining)},
+        )
+    user = authenticate_user(db, email, payload.password)
     if not user:
+        record_login_failure(email, client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
     if not user.is_active:
+        record_login_failure(email, client_ip)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive",
         )
 
+    clear_login_failures(email, client_ip)
     token = create_access_token(user_id=user.id, role=user.role.value)
     log_action(db, user_id=user.id, action="login", entity="user", entity_id=user.id)
     db.commit()
     return TokenResponse(access_token=token, token_type="bearer")
+
+
+@router.post("/demo-login", response_model=TokenResponse)
+def demo_login(payload: DemoLoginRequest, db: Session = Depends(get_db)):
+    """Issue a demo account token only when demo mode is explicitly enabled."""
+    if not get_settings().DEMO_MODE:
+        raise HTTPException(status_code=404, detail="Not found")
+    demo_emails = {
+        "creator": "creator@nexora.dev",
+        "manager": "manager@nexora.dev",
+        "reviewer": "reviewer@nexora.dev",
+        "admin": "admin@nexora.dev",
+    }
+    user = db.query(User).filter(User.email == demo_emails[payload.role], User.is_active.is_(True)).first()
+    if not user:
+        raise HTTPException(status_code=503, detail="Demo users have not been seeded on this instance")
+    return TokenResponse(access_token=create_access_token(user.id, user.role.value))
 
 
 @router.get("/me", response_model=UserResponse)

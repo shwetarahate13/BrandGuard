@@ -1,22 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const apiProxyTarget = process.env.BRANDGUARD_API_PROXY_TARGET;
+const apiProxyTarget = process.env.BRANDGUARD_API_PROXY_TARGET || "http://127.0.0.1:8000";
 
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: "../backend/app/static",
+    outDir: "dist",
     emptyOutDir: true,
   },
   server: {
-    proxy: apiProxyTarget
-      ? {
-          "/api": {
-            target: apiProxyTarget,
-            changeOrigin: true,
-          },
-        }
-      : undefined,
+    proxy: {
+      "/api": {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+    },
   },
 });

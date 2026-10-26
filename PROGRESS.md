@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Phase**: Phase 5 complete; Phase 6 (Real-World Readiness and Deployment) is next
+- **Current Step**: Step 1 complete; Step 2 (Demo Credentials on the Login Page) is next
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -48,11 +48,11 @@
     - [x] `GET /api/feedback/stats` reports acceptance rate, edit rate, and suppression counts by category
     - [x] Creator/admin feedback views retained; manager command center now displays the category stats bar; admin model reset remains available
     - [x] Targeted Phase 5 verification: 14 tests passed; frontend production build, Python compile, and `git diff --check` passed
-  - [ ] **Phase 6: Real-World Readiness and Deployment (No Docker)**
-    - [ ] Local non-Docker setup (uvicorn :8000, vite :5173 with proxy, SQLite/Postgres compatibility)
-    - [ ] Render free native runtime (`render.yaml`, `build.sh`, SPA serving on `$PORT`)
-    - [ ] Production hardening (secrets validation, bcrypt policy, login rate limiting & lockout, JWT expiry, CORS allowlist, security headers, upload validation 5MB type sniffing, pagination, request IDs, structured logs, `/healthz`, global error handlers)
-    - [ ] `DEMO_MODE=true` gate for demo seeds and quick-switch role switcher
+  - [x] **Phase 6: Real-World Readiness and Deployment**
+    - [x] Local non-Docker setup (uvicorn :8000, Vite :5173 with `/api` proxy, SQLite default, first-admin bootstrap)
+    - [x] Render free deployment stays on the existing Docker runtime because the image workflow needs Tesseract; Docker builds frontend, installs backend, runs Alembic, and serves the SPA on `$PORT`. `build.sh` supports a local/native build when system packages are installed.
+    - [x] Production configuration requires a strong JWT secret and PostgreSQL; bcrypt/password policy, login rate limiting and lockout, JWT expiry, exact CORS allowlist, security headers, 5 MB upload validation/type sniffing, pagination, request IDs, structured logs, `/healthz`, and friendly global error responses are implemented.
+    - [x] `DEMO_MODE` defaults false and gates demo seeding and role switching; demo login endpoint is unavailable when disabled. The login credentials panel remains Step 2.
   - [ ] **Phase 7: Tests and Docs**
     - [ ] Permission matrix tests
     - [ ] Improvement tests (A, B, C)
@@ -60,7 +60,7 @@
 
 ## Decisions Made
 1. **Migrations & Database**: SQLite default locally, PostgreSQL (Neon) in production. Database migrations must always be executed via `alembic upgrade head`. Added dispute friction, media layout, and preference state migrations.
-2. **Pip-only OCR**: Image OCR uses RapidOCR and ONNX Runtime without system Tesseract. OpenCV and OCR modules are lazy-loaded. Because measured peak memory exceeded Render free's 512 MB cap, image review is opt-in through `IMAGE_REVIEW_ENABLED` and remains off on the free tier.
+2. **OCR runtime**: Tesseract is the default lower-memory backend; RapidOCR/ONNX remains optional for larger machines. Render free uses the working Docker runtime to install Tesseract and enables image review. OpenCV and OCR modules are loaded only as needed.
 3. **Offline Flesch Calculation**: Avoid reliance on external NLTK network downloads for cmudict by implementing a deterministic syllable-counter fallback for Flesch reading ease in `preference_model.py`.
 4. **Role policy**: Only creators create submissions and decide findings; managers handle standard-risk workflow and assign active reviewers; reviewers resolve escalations and sign off high-risk assigned items; admins manage the system but cannot approve. High-risk submissions are not manager-approved.
 5. **Manager observability**: Trends and activity come from persisted submissions, findings, and audit records. Creator notifications are derived from actual approvals and review comments; empty accounts show an empty state instead of demo copy.
@@ -72,7 +72,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Finish the Phase 6 startup/configuration, authentication, upload, deployment, and database-compatibility audit; repair the sole failing workflow integration check, then complete deployment and security verification before Phase 7.
+Implement and verify the four-role demo-credentials panel on the login page. Then commit Step 2 before starting the full role/workflow bug sweep in Step 3.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -80,3 +80,7 @@ Finish the Phase 6 startup/configuration, authentication, upload, deployment, an
 - Local settings use SQLite and `DEMO_MODE=false`. In a separate migrated SQLite instance with `DEMO_MODE=true`, signed in as Creator and Manager, then switched to Reviewer and Admin. Each showed its role-specific dashboard and navigation; the mobile demo-role switcher worked. Vite on `:5173` reached the backend on `:8000` through its `/api` proxy.
 - The login page still lacks the requested demo-credentials panel; add it in the next implementation step. Keep the role switcher hidden when demo mode is off.
 - Phase 6 changes were already present but uncommitted when this resume began; audit and complete those changes before committing them with the finished phase.
+- Local setup and deployment hardening are now complete. `build.sh` passed end to end with the repository virtualenv, frontend production build, and Alembic migration. A local Docker image build passed; a temporary container applied migrations, served the SPA, returned 200 from `/healthz` and `/api/health`, and completed demo admin login. The temporary container was isolated from the repository database.
+- Image review with Tesseract processed a real 1020×1320 campaign image and the PDF fixture, producing 437 OCR characters/73 boxes and 8 PDF highlights. Peak app RSS was 240.4 MB and the Tesseract child peak was 58.6 MB (299.0 MB conservative combined), below the ~450 MB target. RapidOCR measured above the target, so it is not used by the free Render configuration.
+- `DEMO_MODE=false` is the local/default configuration; demo users are created only for an empty database when demo mode is enabled. `.gitignore` now covers `.env`, SQLite databases, Chroma directories, uploads, and the frontend build output; `.env.example` remains trackable.
+- Final backend suite for Step 1: 151 passed, 1 failed. The remaining existing workflow test still requests review immediately after accepting a revision; the new revision is a draft and needs a fresh check. This is intentionally carried to Step 3, where the full workflow sweep will fix its test and verify the UI behavior. Chroma emits five existing embedding-function deprecation warnings.

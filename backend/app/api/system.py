@@ -19,12 +19,19 @@ router = APIRouter(tags=["system"])
 @router.get("/system/mode")
 def system_mode():
     """Expose only the non-sensitive active generation mode used by the UI."""
-    return {"llm_mode": get_llm_mode()}
+    return {"llm_mode": get_llm_mode(), "demo_mode": get_settings().DEMO_MODE}
 
 
 @router.get("/health", response_model=HealthResponse)
 def health_check():
     """Liveness probe for Render and load balancers."""
+    settings = get_settings()
+    return HealthResponse(status="ok", version=settings.APP_VERSION)
+
+
+@router.get("/healthz", response_model=HealthResponse)
+def healthz():
+    """Liveness endpoint for native hosts and platform health checks."""
     settings = get_settings()
     return HealthResponse(status="ok", version=settings.APP_VERSION)
 

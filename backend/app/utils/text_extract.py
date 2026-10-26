@@ -2,6 +2,7 @@
 import io
 import logging
 import mimetypes
+import zipfile
 from pathlib import Path
 from fastapi import HTTPException
 
@@ -29,6 +30,58 @@ def get_upload_mime_type(filename: str) -> str:
     if mime_type not in SUPPORTED_UPLOAD_MIMES:
         raise ValueError(f"Unsupported file type: {Path(filename).suffix.lower()}")
     return mime_type
+
+
+def sanitize_upload_filename(filename: str | None) -> str:
+    """Keep a short basename with safe printable characters for stored metadata."""
+    basename = (filename or "uploaded_content").replace("\\", "/").rsplit("/", 1)[-1]
+    safe = "".join(char if char.isalnum() or char in ".-_" else "_" for char in basename)
+    safe = safe.strip("._")[:128]
+    return safe or "uploaded_content"
+
+
+def sniff_upload_mime_type(contents: bytes, filename: str) -> str:
+    """Verify content signatures against the supported filename type."""
+    expected = get_upload_mime_type(filename)
+    valid = False
+    if expected == "application/pdf":
+        valid = contents.startswith(b"%PDF-")
+    elif expected == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        try:
+            with zipfile.ZipFile(io.BytesIO(contents)) as document:
+                entries = document.infolist()
+                names = {entry.filename for entry in entries}
+                total_uncompressed_size = sum(entry.file_size for entry in entries)
+                valid = (
+                    "[Content_Types].xml" in names
+                    and "word/document.xml" in names
+                    and len(entries) <= 500
+                    and total_uncompressed_size <= 25 * 1024 * 1024
+                )
+        except (OSError, zipfile.BadZipFile):
+            valid = False
+    elif expected == "image/png":
+        valid = contents.startswith(b"\x89PNG\r\n\x1a\n")
+    elif expected == "image/jpeg":
+        valid = contents.startswith(b"\xff\xd8\xff")
+    elif expected == "image/svg+xml":
+        try:
+            from defusedxml import ElementTree
+
+            root = ElementTree.fromstring(contents)
+            valid = root.tag.rsplit("}", 1)[-1].lower() == "svg"
+        except Exception:
+            valid = False
+    elif expected in {"text/plain", "text/markdown", "text/html"}:
+        valid = b"\x00" not in contents
+        if valid:
+            try:
+                contents.decode("utf-8")
+            except UnicodeDecodeError:
+                valid = False
+    if not valid:
+        raise ValueError(f"File contents do not match the declared {expected} file type")
+    return expected
 
 
 async def read_upload_contents(upload) -> bytes:

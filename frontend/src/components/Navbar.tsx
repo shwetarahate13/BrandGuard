@@ -18,6 +18,8 @@ import { TransparencyModal } from "./TransparencyModal";
 interface NavbarProps {
   user: User | null;
   llmMode: string;
+  demoMode: boolean;
+  onDemoRoleSwitch: (role: UserRole) => void;
   onLogout: () => void;
   currentPath: string;
   navigate: (path: string) => void;
@@ -26,6 +28,8 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   user,
   llmMode,
+  demoMode,
+  onDemoRoleSwitch,
   onLogout,
   currentPath,
   navigate,
@@ -142,6 +146,20 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {user ? (
                 <div className="flex items-center gap-3 border-l border-stone-200 pl-3">
+                  {demoMode && <label className="hidden lg:flex items-center gap-2 text-[10px] font-semibold text-stone-600">
+                    <span>Demo role</span>
+                    <select
+                      aria-label="Switch demo role"
+                      value={user.role}
+                      onChange={(event) => onDemoRoleSwitch(event.target.value as UserRole)}
+                      className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold text-stone-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-700"
+                    >
+                      <option value="creator">Creator</option>
+                      <option value="manager">Manager</option>
+                      <option value="reviewer">Reviewer</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </label>}
                   <div className="text-right hidden sm:block">
                     <p className="text-xs font-bold text-stone-900 leading-tight">{user.name}</p>
                     <span className="text-[10px] uppercase font-extrabold tracking-wider px-1.5 py-0.2 rounded bg-stone-200 text-stone-800 border border-stone-300">
@@ -180,6 +198,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Icon className="w-4 h-4" />{link.label}
               </button>;
             })}
+            {demoMode && <label className="flex items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-stone-700">
+              <span>Switch demo role</span>
+              <select
+                aria-label="Switch demo role"
+                value={user.role}
+                onChange={(event) => onDemoRoleSwitch(event.target.value as UserRole)}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold text-stone-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-700"
+              >
+                <option value="creator">Creator</option>
+                <option value="manager">Manager</option>
+                <option value="reviewer">Reviewer</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>}
           </nav>}
         </div>
       </header>

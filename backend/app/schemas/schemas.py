@@ -7,8 +7,11 @@ from pydantic import BaseModel, Field, EmailStr, field_validator, model_validato
 # ── Auth ──
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=100)
+
+class DemoLoginRequest(BaseModel):
+    role: Literal["creator", "manager", "reviewer", "admin"]
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -185,8 +188,15 @@ class EscalatedReviewRequest(BaseModel):
 class UserCreateAdmin(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     email: str = Field(min_length=3, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-    password: str = Field(min_length=6, max_length=100)
+    password: str = Field(min_length=12, max_length=72)
     role: str = "creator"
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        return value
 
 
 class UserUpdateAdmin(BaseModel):
@@ -196,7 +206,14 @@ class UserUpdateAdmin(BaseModel):
 
 
 class UserResetPasswordAdmin(BaseModel):
-    password: str = Field(min_length=6, max_length=100)
+    password: str = Field(min_length=12, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        return value
 
 
 # ── Admin System Settings ──

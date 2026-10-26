@@ -19,6 +19,11 @@ def test_rapidocr_word_output_maps_offsets_and_boxes(monkeypatch):
         ),
     ))
     monkeypatch.setattr(content_handlers, "_get_ocr_engine", lambda: lambda *_args, **_kwargs: output)
+    monkeypatch.setattr(
+        content_handlers,
+        "get_settings",
+        lambda: SimpleNamespace(OCR_BACKEND="rapidocr"),
+    )
 
     text, regions = content_handlers._ocr(object())
 
@@ -26,6 +31,38 @@ def test_rapidocr_word_output_maps_offsets_and_boxes(monkeypatch):
     assert [region["start"] for region in regions] == [0, 6]
     assert [region["end"] for region in regions] == [5, 11]
     assert regions[0]["bbox"] == [1.0, 2.0, 21.0, 10.0]
+
+
+def test_tesseract_word_output_maps_offsets_confidence_and_boxes(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    output = {
+        "text": ["Brand", "", "Guard"],
+        "conf": ["96", "-1", "82"],
+        "left": [1, 0, 24],
+        "top": [2, 0, 2],
+        "width": [20, 0, 21],
+        "height": [8, 0, 8],
+    }
+    fake_tesseract = SimpleNamespace(
+        Output=SimpleNamespace(DICT="dict"),
+        image_to_data=lambda *_args, **_kwargs: output,
+    )
+    monkeypatch.setitem(sys.modules, "pytesseract", fake_tesseract)
+    monkeypatch.setattr(
+        content_handlers,
+        "get_settings",
+        lambda: SimpleNamespace(OCR_BACKEND="tesseract"),
+    )
+
+    text, regions = content_handlers._ocr(object())
+
+    assert text == "Brand Guard"
+    assert [region["start"] for region in regions] == [0, 6]
+    assert [region["end"] for region in regions] == [5, 11]
+    assert regions[0]["bbox"] == [1, 2, 21, 10]
+    assert regions[1]["confidence"] == 0.82
 
 
 def test_palette_check_uses_approved_asset_rgb_metadata(monkeypatch):
@@ -111,4 +148,41 @@ def test_logo_clear_space_requires_readable_logo_and_measurable_guideline(monkey
     clearspace = next(finding for finding in with_measurable_rule if "clear space" in finding["issue"].lower())
     assert "at least 20px" in clearspace["issue"]
     assert clearspace["location"]["bbox"] == [10, 15, 42, 39]
+    engine.dispose()
+
+
+def test_missing_approved_logo_skips_heavy_opencv_import(monkeypatch, tmp_path):
+    import builtins
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    image_bytes = BytesIO()
+    Image.new("RGB", (64, 48), "white").save(image_bytes, format="PNG")
+    monkeypatch.setattr(
+        content_handlers,
+        "get_settings",
+        lambda: SimpleNamespace(IMAGE_REVIEW_ENABLED=True, ASSET_STORAGE_DIR=str(tmp_path)),
+    )
+    original_import = builtins.__import__
+
+    def reject_opencv(name, *args, **kwargs):
+        if name == "cv2":
+            raise AssertionError("OpenCV should stay unloaded without a readable approved logo")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", reject_opencv)
+    with Session(engine) as db:
+        db.add(Asset(
+            id="missing-logo",
+            kind=AssetKind.logo,
+            name="Missing logo file",
+            file_path="missing-logo.png",
+        ))
+        db.commit()
+        findings, sources = content_handlers.ImageContentHandler("image/png").inspect(
+            image_bytes.getvalue(), {"regions": []}, db
+        )
+
+    assert findings == []
+    assert sources == []
     engine.dispose()

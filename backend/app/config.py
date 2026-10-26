@@ -1,9 +1,11 @@
 """BrandGuard application configuration."""
 import secrets
+import os
 from functools import lru_cache
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Literal, Optional
+from urllib.parse import urlsplit
 
 
 class Settings(BaseSettings):
@@ -12,12 +14,10 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "BrandGuard"
     APP_VERSION: str = "1.0.0"
-    # Use a fresh local-only key when no environment secret is configured.
-    # Production deployments should provide JWT_SECRET so tokens remain valid
-    # across restarts and multiple application instances.
-    JWT_SECRET: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
+    ENVIRONMENT: str = "development"
+    JWT_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = 480  # 8 hours
+    JWT_EXPIRE_MINUTES: int = Field(default=480, ge=1)  # 8 hours
 
     # Database
     DATABASE_URL: str = "sqlite:///./brandguard.db"
@@ -34,17 +34,51 @@ class Settings(BaseSettings):
     LLM_MAX_RETRIES: int = 2
 
     # Upload limits
-    MAX_UPLOAD_SIZE_MB: int = 5
+    MAX_UPLOAD_SIZE_MB: int = Field(default=5, ge=1, le=5)
     MAX_TEXT_WORDS: int = 5000
     # RapidOCR/ONNX can exceed small-instance memory budgets; opt in only on
     # instances sized for image processing. PDF text extraction stays enabled.
     IMAGE_REVIEW_ENABLED: bool = False
+    OCR_BACKEND: Literal["rapidocr", "tesseract"] = "tesseract"
 
-    # Seeding
-    AUTO_SEED: bool = False
+    # Demo users/data and demo-role switching are opt-in.
+    DEMO_MODE: bool = False
 
     # Set this only when the frontend is hosted on a separate origin.
     CORS_ORIGINS: str = ""
+
+    @model_validator(mode="after")
+    def validate_runtime_configuration(self):
+        production = self.ENVIRONMENT.casefold() == "production" or os.getenv("RENDER", "").casefold() == "true"
+        if production:
+            if len(self.JWT_SECRET.encode("utf-8")) < 32:
+                raise ValueError("JWT_SECRET must be set to at least 32 bytes in production")
+            if not self.is_postgres:
+                raise ValueError("DATABASE_URL must point to PostgreSQL in production")
+            if self.LLM_PROVIDER.casefold() not in {"mock", "anthropic"}:
+                raise ValueError("LLM_PROVIDER must be 'mock' or 'anthropic'")
+            if self.LLM_PROVIDER.casefold() == "anthropic" and not self.LLM_API_KEY:
+                raise ValueError("LLM_API_KEY is required when LLM_PROVIDER=anthropic")
+        elif not self.JWT_SECRET:
+            # A random per-process key is convenient for local development.
+            self.JWT_SECRET = secrets.token_urlsafe(48)
+
+        origins = [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        if any(origin == "*" for origin in origins):
+            raise ValueError("CORS_ORIGINS must be an explicit origin allowlist; '*' is not allowed")
+        for origin in origins:
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path != ""
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("CORS_ORIGINS must contain only HTTP(S) origins without paths or credentials")
+        return self
 
     @property
     def database_url_sync(self) -> str:

@@ -13,13 +13,17 @@ from fastapi.responses import JSONResponse
 class EndpointRateLimiter:
     def __init__(self) -> None:
         self._rules = [
+            ("POST", re.compile(r"^/api/auth/login$"), 10),
+            ("POST", re.compile(r"^/api/auth/demo-login$"), 20),
             ("GET", re.compile(r"^/api/guidelines/health$"), 60),
             ("POST", re.compile(r"^/api/guidelines/recompute$"), 10),
             ("PATCH", re.compile(r"^/api/guidelines/clauses/[A-Za-z0-9-]+$"), 20),
             ("GET", re.compile(r"^/api/submissions/[A-Za-z0-9-]+/versions/[A-Za-z0-9-]+/source$"), 60),
             ("POST", re.compile(r"^/api/decisions$"), 30),
             ("POST", re.compile(r"^/api/findings/[A-Za-z0-9-]+/decision$"), 30),
+            ("POST", re.compile(r"^/api/findings/[A-Za-z0-9-]+/escalate-review$"), 30),
             ("GET", re.compile(r"^/api/feedback/stats$"), 60),
+            ("POST", re.compile(r"^/api/feedback/reset$"), 10),
         ]
         self._requests: dict[tuple[str, str], deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()

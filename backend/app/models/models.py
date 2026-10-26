@@ -183,10 +183,14 @@ class Asset(Base):
 
 class Submission(Base):
     __tablename__ = "submissions"
+    __table_args__ = (
+        Index("ix_submissions_status_created", "status", "created_at"),
+        Index("ix_submissions_assigned_to", "assigned_to_id"),
+    )
 
     id = Column(String, primary_key=True, default=gen_id)
     creator_id = Column(String, ForeignKey("users.id"), nullable=False)
-    assigned_to_id = Column(String, ForeignKey("users.id"), nullable=True)
+    assigned_to_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     title = Column(String(500), nullable=False)
     intent = Column(Text, nullable=True)
     status = Column(SAEnum(SubmissionStatus), default=SubmissionStatus.draft, nullable=False)
@@ -227,6 +231,10 @@ class SubmissionVersion(Base):
 
 class Finding(Base):
     __tablename__ = "findings"
+    __table_args__ = (
+        Index("ix_findings_source", "source_type", "source_id"),
+        Index("ix_findings_submission", "submission_id"),
+    )
 
     id = Column(String, primary_key=True, default=gen_id)
     submission_id = Column(String, ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
@@ -255,6 +263,9 @@ class Finding(Base):
 
 class Decision(Base):
     __tablename__ = "decisions"
+    __table_args__ = (
+        Index("ix_decisions_action_finding", "action", "finding_id"),
+    )
 
     id = Column(String, primary_key=True, default=gen_id)
     finding_id = Column(String, ForeignKey("findings.id", ondelete="CASCADE"), nullable=False)
@@ -323,6 +334,7 @@ class Approval(Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
+    __table_args__ = (Index("ix_audit_created_at", "created_at"),)
 
     id = Column(String, primary_key=True, default=gen_id)
     user_id = Column(String, ForeignKey("users.id"), nullable=True)
