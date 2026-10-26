@@ -45,15 +45,22 @@ async def lifespan(app: FastAPI):
     # Production and local schema changes are applied only through Alembic.
     get_engine()
 
-    # Demo records are created only on an empty DB with explicit opt-in.
+    # Demo sample content is created only on an empty DB. With demo mode on,
+    # keep the four public throwaway login accounts aligned on existing DBs too.
     session_factory = get_session_factory()
     with session_factory() as db:
         from backend.app.models.models import User
         user_count = db.query(User).count()
-        if user_count == 0 and settings.DEMO_MODE:
-            logger.info("Demo mode enabled on an empty database; seeding judge accounts and sample content")
-            from backend.app.seed import run_seed
-            run_seed(db)
+        if settings.DEMO_MODE:
+            if user_count == 0:
+                logger.info("Demo mode enabled on an empty database; seeding judge accounts and sample content")
+                from backend.app.seed import run_seed
+                run_seed(db)
+            else:
+                logger.info("Demo mode enabled; synchronizing throwaway demo login accounts")
+                from backend.app.seed import ensure_demo_users
+                ensure_demo_users(db)
+                db.commit()
 
         # 3. Chroma index check
         try:

@@ -49,7 +49,7 @@ The notification bell is available to signed-in roles. Reviewer assignment event
 - bcrypt password hashing, 12-character minimum password policy, expiring JWT authentication, login lockout and endpoint rate limits, role and row-level access checks, and explicit CORS origin allowlisting.
 - Upload MIME/type validation and size limits, request IDs, structured HTTP request logs, security headers, and friendly unexpected-error responses with a reference ID.
 - Alembic-managed schema changes; SQLite local default and PostgreSQL required in production; liveness routes at `/healthz`, `/api/health`, and `/api/healthz`.
-- `DEMO_MODE=false` by default. Demo records and login credentials are enabled only by setting `DEMO_MODE=true` on an empty database.
+- `DEMO_MODE=false` by default. When enabled, the four throwaway demo accounts are created or synchronized on startup, including on an existing database. Sample demo content is added only when the database is empty.
 
 ## Current product boundaries
 

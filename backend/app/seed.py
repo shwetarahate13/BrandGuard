@@ -18,9 +18,42 @@ from backend.app.models.models import (
     Finding, FindingCategory, FindingSeverity, FindingConfidence, FindingStatus, SourceType,
     Decision, DecisionAction, Comment, Approval, ApprovalDecision
 )
-from backend.app.services.auth import hash_password
+from backend.app.services.auth import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
+
+DEMO_USERS = (
+    ("Janvi Thakre", "creator@nexora.dev", "CreatorDemo2026!", UserRole.creator),
+    ("Shweta Rahate", "manager@nexora.dev", "ManagerDemo2026!", UserRole.manager),
+    ("Elena Rostova", "reviewer@nexora.dev", "ReviewerDemo2026!", UserRole.reviewer),
+    ("Admin Nexora", "admin@nexora.dev", "AdminDemo2026!", UserRole.admin),
+)
+
+
+def ensure_demo_users(db: Session) -> dict[str, User]:
+    """Create or synchronize the four throwaway accounts shown on the demo login page."""
+    user_map: dict[str, User] = {}
+    for name, email, password, role in DEMO_USERS:
+        user = db.query(User).filter(User.email == email).first()
+        if user is None:
+            user = User(
+                name=name,
+                email=email,
+                password_hash=hash_password(password),
+                role=role,
+                is_active=True,
+            )
+            db.add(user)
+            db.flush()
+        else:
+            # Demo mode intentionally keeps these shared throwaway credentials aligned
+            # with the login page, even when the database predates the current seed.
+            if not verify_password(password, user.password_hash):
+                user.password_hash = hash_password(password)
+            user.role = role
+            user.is_active = True
+        user_map[role.value] = user
+    return user_map
 
 
 def run_seed(db: Session):
@@ -28,29 +61,7 @@ def run_seed(db: Session):
     logger.info("Executing BrandGuard database seed...")
 
     # 1. Demo Users
-    users_data = [
-        ("Janvi Thakre", "creator@nexora.dev", "CreatorDemo2026!", UserRole.creator),
-        ("Shweta Rahate", "manager@nexora.dev", "ManagerDemo2026!", UserRole.manager),
-        ("Elena Rostova", "reviewer@nexora.dev", "ReviewerDemo2026!", UserRole.reviewer),
-        ("Admin Nexora", "admin@nexora.dev", "AdminDemo2026!", UserRole.admin),
-    ]
-
-    user_map = {}
-    for name, email, pwd, role in users_data:
-        existing = db.query(User).filter(User.email == email).first()
-        if not existing:
-            u = User(
-                name=name,
-                email=email,
-                password_hash=hash_password(pwd),
-                role=role,
-                is_active=True,
-            )
-            db.add(u)
-            db.flush()
-            user_map[role.value] = u
-        else:
-            user_map[role.value] = existing
+    user_map = ensure_demo_users(db)
 
     creator_u = user_map.get("creator")
     manager_u = user_map.get("manager")

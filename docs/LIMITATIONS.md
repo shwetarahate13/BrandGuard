@@ -36,4 +36,4 @@ This page describes the current implementation in the repository. Hosting provid
 - CORS uses an explicit origin allowlist. Local Vite development proxies API requests and does not need a CORS entry.
 - If an external LLM provider is enabled, it processes the review or rewrite inputs described above. Mock/offline mode makes no external LLM request.
 - This repository configures application security headers. HTTPS termination, database encryption at rest, backups, and retention depend on the selected hosting and database providers and their settings; the application does not independently verify those controls.
-- Demo credentials are created only when `DEMO_MODE=true` and the database is empty. Keep demo mode off for private workspaces and never use the throwaway demo passwords for real accounts.
+- When `DEMO_MODE=true`, the four shared throwaway accounts are created or have their passwords synchronized on startup, even if the database already contains other users. Sample demo content is seeded only on an empty database. Keep demo mode off for private workspaces and never use the throwaway demo passwords for real accounts.

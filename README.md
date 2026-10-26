@@ -71,7 +71,7 @@ flowchart TD
 
 ## Demo Accounts for Judges
 
-When `DEMO_MODE=true`, an empty database receives four throwaway accounts and the login screen shows their credentials with a one-click **Fill / Sign in** button. With the default `DEMO_MODE=false`, the login page shows no demo credentials and the demo seed creates no accounts. Create a real first admin with `python scripts/create_admin.py` instead. Never reuse the throwaway passwords for real accounts.
+When `DEMO_MODE=true`, the four throwaway accounts are created or synchronized on startup, and the login screen shows their credentials with a one-click **Fill / Sign in** button. Sample demo content is seeded only when the database is empty. With the default `DEMO_MODE=false`, the login page shows no demo credentials and no demo accounts are created. Create a real first admin with `python scripts/create_admin.py` instead. Never reuse the throwaway passwords for real accounts.
 
 | Role | Email | Password | Responsibilities |
 | :--- | :--- | :--- | :--- |
