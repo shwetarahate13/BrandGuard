@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Assignment due dates and SLA/overdue indicators complete; remaining Step 5 features are deferred at 85% quota usage
+- **Current Step**: Assignment due dates and SLA/overdue indicators complete in `9015376`; remaining Step 5 features are deferred at 87% quota usage
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -83,7 +83,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Assignment due dates, manager-only updates, and manager/reviewer overdue indicators are implemented and verified. Usage is 85% used (15% remaining), so stop at this clean checkpoint. Next, add saved views for the existing Creator/Manager search and filter controls with role-isolated persistence and tests; then continue in order with approval-report CSV/PDF export, self-service password change, dark mode, and first-login onboarding tips. Admin password reset, basic search/filter controls, and audit CSV export already exist.
+Assignment due dates, manager-only updates, and manager/reviewer overdue indicators are implemented, tested, and committed in `9015376`. Usage is 87% used (13% remaining), so stop at this clean checkpoint. Next, add saved views for the existing Creator/Manager search and filter controls with role-isolated persistence and tests; then continue in order with approval-report CSV/PDF export, self-service password change, dark mode, and first-login onboarding tips. Admin password reset, basic search/filter controls, and audit CSV export already exist.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -134,4 +134,5 @@ Assignment due dates, manager-only updates, and manager/reviewer overdue indicat
 - Added an Alembic migration for indexed UTC assignment deadlines. Assigning an in-review submission sets a default deadline 24 hours ahead; managers can update or clear a deadline through a manager-only API.
 - Manager queues show editable deadlines and overdue state; assigned reviewers see their deadline and overdue state in the Compliance Desk. Closed or unassigned submissions are not marked overdue.
 - Added integration coverage for default deadline creation, manager-only updates, role denials, clearing, overdue calculation, and unassigned submissions. A fresh SQLite migration to head passed; the full backend suite passed (**156 tests**); and the frontend production build passed.
-- Usage check: **85% used (15% remaining)**. Stop optional feature work at this clean, verified step. Next in order: implement saved views for the existing creator/manager search and filter controls, with persistence, role isolation, and tests; then approval-report CSV/PDF export, self-service password change, dark mode, and first-login onboarding tips.
+- Verification: **156 backend tests passed**, fresh SQLite migration to head passed, frontend production build passed, and `git diff --check` passed. Committed as `9015376`.
+- Usage check: **87% used (13% remaining)**. Stop optional feature work at this clean, verified step. Next in order: implement saved views for the existing creator/manager search and filter controls, with persistence, role isolation, and tests; then approval-report CSV/PDF export, self-service password change, dark mode, and first-login onboarding tips.
