@@ -20,6 +20,8 @@ This page describes the current implementation in the repository. Hosting provid
 
 ## Deployment and data
 
+- Dark mode is a browser-local preference and does not sync across browsers or devices.
+
 - SQLite is the local default. Production configuration requires PostgreSQL. Apply schema changes with `alembic upgrade head`.
 - Render remains on the repository's Docker runtime because image review needs the Tesseract system package. `render.yaml` enables image review for the demo service and selects Tesseract. The repository's `build.sh` can build the frontend, install backend requirements, and apply migrations in a native environment that has Node.js 18+; it does not change the configured Render runtime.
 - Render's Chroma index is stored under `/tmp/chroma`, so it is disposable. PostgreSQL stores approved source records; the app rebuilds an empty vector index from those records at startup. Keep backups of PostgreSQL data using the database provider's controls.

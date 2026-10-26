@@ -15,6 +15,8 @@ import {
   CheckCheck,
   X as CloseIcon,
   LockKeyhole,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { User, UserRole } from "../types";
 import { Notification } from "../types";
@@ -27,6 +29,8 @@ interface NavbarProps {
   demoMode: boolean;
   onDemoRoleSwitch: (role: UserRole) => void;
   onLogout: () => void;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
   currentPath: string;
   navigate: (path: string) => void;
 }
@@ -37,6 +41,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   demoMode,
   onDemoRoleSwitch,
   onLogout,
+  darkMode,
+  onToggleDarkMode,
   currentPath,
   navigate,
 }) => {
@@ -304,6 +310,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="truncate max-w-[120px] sm:max-w-none font-semibold">
                   {llmMode}
                 </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onToggleDarkMode}
+                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+              >
+                {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                <span className="hidden lg:inline">{darkMode ? "Light" : "Dark"}</span>
               </button>
 
               {user ? (

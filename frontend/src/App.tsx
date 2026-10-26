@@ -13,6 +13,7 @@ import { AdminSources } from "./pages/AdminSources";
 import { Insights } from "./pages/Insights";
 import { GuidelineHealth } from "./pages/GuidelineHealth";
 import { Limitations } from "./pages/Limitations";
+import { applyDarkMode, readDarkMode, saveDarkMode } from "./theme";
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -21,6 +22,7 @@ export const App: React.FC = () => {
   const [demoSwitchError, setDemoSwitchError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isWaking, setIsWaking] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => readDarkMode());
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
   // Setup cold start listener
@@ -34,6 +36,11 @@ export const App: React.FC = () => {
   useEffect(() => {
     setColdStartListener((waking) => setIsWaking(waking));
   }, []);
+
+  useEffect(() => {
+    applyDarkMode(darkMode);
+    saveDarkMode(darkMode);
+  }, [darkMode]);
 
   // Sync browser back/forward buttons
   useEffect(() => {
@@ -160,6 +167,8 @@ export const App: React.FC = () => {
           demoMode={demoMode}
           onDemoRoleSwitch={handleDemoRoleSwitch}
           onLogout={handleLogout}
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode((enabled) => !enabled)}
           currentPath={currentPath}
           navigate={navigate}
         />
