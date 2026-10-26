@@ -125,7 +125,7 @@ Open `http://localhost:$HOST_PORT` in your browser (`HOST_PORT` defaults to the 
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `DATABASE_URL` | `sqlite:///./brandguard.db` | PostgreSQL connection string (Neon in production) |
+
 | `JWT_SECRET` | Generated per process when unset | Secret key for JWT session signature; set a stable value for deployments |
 | `LLM_PROVIDER` | `mock` | `mock` (offline deterministic) or `anthropic` |
 | `LLM_MODEL` | `claude-sonnet-4-20250514` | Target LLM model name |
