@@ -19,15 +19,15 @@
       - Reviewer: Compliance desk, assigned items & escalated findings, side-by-side claim checking, justification, compliance notes
       - Admin: User management, approved-sources registry, system settings, full audit log with filters and CSV export, feedback model stats/reset
     - [x] Add role-specific KPIs; manager 7-day trend, category/severity charts, status pipeline and recent activity; skeletons, empty states, toasts and responsive mobile navigation
-  - [ ] **Phase 3: Improvement A, Guideline-Gap Insights**
-    - [ ] Nightly APScheduler job grouping disputed findings by cited guideline clause
-    - [ ] TF-IDF cosine similarity dispute clustering
-    - [ ] Dispute Friction Index (DFI) calculation: distinct disputed findings / distinct findings (%)
-    - [ ] `GET /api/guidelines/health` (managers and admins)
-    - [ ] `/dashboard/guideline-health` page with sortable risk bands
-    - [ ] Proposed clearer wording for DFI > 30% (live LLM only)
-    - [ ] `PATCH /api/guidelines/clauses/{clause_id}` to apply revision and re-index vector store
-    - [ ] "Recompute now" button and stale-check auto-recompute on read
+  - [x] **Phase 3: Improvement A, Guideline-Gap Insights**
+    - [x] Nightly UTC APScheduler job groups disputed findings by cited guideline clause
+    - [x] TF-IDF cosine similarity dispute clustering
+    - [x] DFI uses distinct disputed findings / distinct findings (%); recomputes reset zero-finding clauses to 0%
+    - [x] `GET /api/guidelines/health` is available to managers and admins and sorts high DFI first
+    - [x] `/dashboard/guideline-health` sortable risk bands and current/proposed wording diff
+    - [x] Proposed clearer wording only when a live LLM provider is configured
+    - [x] `PATCH /api/guidelines/clauses/{clause_id}` applies edits and refreshes the source index
+    - [x] "Recompute now" action, DB-stored compute time, 24-hour stale check, and invalidation on new reviews/disputes/revisions
   - [ ] **Phase 4: Improvement B, Image Review and Spatial PDF Inspection**
     - [ ] Pip-only OCR (`rapidocr-onnxruntime`, no system Tesseract) and `opencv-python-headless`
     - [ ] Dominant color extraction vs approved asset RGB
@@ -65,6 +65,7 @@
 5. **Manager observability**: Trends and activity come from persisted submissions, findings, and audit records. Creator notifications are derived from actual approvals and review comments; empty accounts show an empty state instead of demo copy.
 6. **Public system metadata**: `/system/mode` exposes only the active LLM mode for the navigation badge; detailed `/system/status` requires the Admin permission.
 7. **Phase 2 verification**: 111 targeted permission/API tests passed, Vite production build passed, full SQLite migration chain applied with the reviewer FK verified, and the isolated end-to-end workflow smoke passed. Browser checks confirmed Creator, Manager, Reviewer, and Admin dashboards/nav; browser console had no errors or warnings. A local Vite proxy target was supplied through `BRANDGUARD_API_PROXY_TARGET` during UI verification; native local defaults are scheduled for Phase 6.
+8. **Phase 3 verification**: DFI session ownership now supports both request Sessions and APScheduler session factories. Newly computed timestamps and source-data invalidation prevent stale scores; a read recomputes stale data. SQLite Alembic upgrade to head and `npm run build` passed; the targeted permission/API suite passed 113 tests. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Execute Phase 3: first fix the discovered DFI worker/session mismatch (`run_dfi_worker(db)` currently expects a session factory and logs a caught `TypeError`); then make stale detection real, verify dispute-to-clause aggregation and nightly execution, finish the recompute-now/revision/index flow, and add targeted tests before committing.
+Commit the completed Phase 3 guideline-health implementation, then start Phase 4 by tracing the existing image and PDF handler paths and their stored source-layout/location schemas before changing them. Keep OCR and OpenCV imports lazy and measure memory with real sample files.

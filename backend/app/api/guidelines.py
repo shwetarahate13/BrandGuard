@@ -15,7 +15,11 @@ from backend.app.schemas.schemas import (
 from backend.app.services.auth import get_current_user
 from backend.app.services.permissions import Action, check_permission
 from backend.app.utils.audit import log_action
-from backend.app.workers.dfi_worker import collect_clause_dispute_metrics, run_dfi_worker
+from backend.app.workers.dfi_worker import (
+    collect_clause_dispute_metrics,
+    dfi_scores_are_stale,
+    run_dfi_worker,
+)
 from backend.app.llm.client import draft_guideline_revision
 
 logger = logging.getLogger(__name__)
@@ -30,13 +34,11 @@ def get_guideline_health(
     """Return persisted clause risk scores and AI revisions for high-friction clauses."""
     check_permission(current_user, Action.GUIDELINE_HEALTH_VIEW)
 
-    # Recompute on read if stale or uncomputed
-    clauses_dfi_sum = db.query(GuidelineClause).filter(GuidelineClause.dispute_friction_index > 0).count()
-    if clauses_dfi_sum == 0:
-        try:
-            run_dfi_worker(db)
-        except Exception:
-            logger.warning("Could not auto-recompute DFI on read")
+    # Render free sleeps between requests, so repair missing or old scores on
+    # the next read as well as through the nightly APScheduler job.
+    if dfi_scores_are_stale(db) and run_dfi_worker(db) is None:
+        logger.error("Could not refresh stale guideline DFI scores")
+        raise HTTPException(status_code=503, detail="Guideline health scores are temporarily unavailable")
 
     metrics = collect_clause_dispute_metrics(db)
     clauses = (
@@ -79,6 +81,8 @@ def recompute_guideline_health(
     """Explicitly trigger guideline friction recomputation (Recompute now button)."""
     check_permission(current_user, Action.GUIDELINE_HEALTH_VIEW)
     count = run_dfi_worker(db)
+    if count is None:
+        raise HTTPException(status_code=503, detail="Guideline health recomputation failed; please retry")
     log_action(db, current_user.id, "recompute_guideline_dfi", meta={"updated_clauses": count})
     db.commit()
     return {"status": "ok", "updated_clauses": count, "message": "Guideline friction recomputed"}
@@ -103,6 +107,7 @@ def apply_clause_revision(
 
     previous_text = clause.text
     clause.text = revision_text
+    clause.dfi_computed_at = None
     log_action(
         db,
         current_user.id,

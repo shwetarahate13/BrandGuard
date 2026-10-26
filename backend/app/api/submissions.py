@@ -10,7 +10,7 @@ from backend.app.config import get_settings
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, SubmissionStatus,
-    ContentType, Finding
+    ContentType, Finding, GuidelineClause
 )
 from backend.app.schemas.schemas import (
     SubmissionCreate, SubmissionResponse, SubmissionListResponse,
@@ -353,6 +353,9 @@ def check_submission(
 
     # Clear old findings for this version before re-checking
     db.query(Finding).filter(Finding.version_id == latest_version.id).delete()
+    # Rechecking may change the clause finding denominator. Recompute on the
+    # next guideline-health read instead of returning stale risk scores.
+    db.query(GuidelineClause).update({GuidelineClause.dfi_computed_at: None})
     db.commit()
 
     # Run review pipeline

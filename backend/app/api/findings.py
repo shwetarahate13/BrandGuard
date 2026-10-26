@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, Finding, Decision, Comment,
-    FindingStatus, DecisionAction, SubmissionStatus
+    FindingStatus, DecisionAction, SubmissionStatus, GuidelineClause, SourceType
 )
 from backend.app.schemas.schemas import (
     FindingResponse, DecisionCreate, DecisionRequest, DecisionResponse,
@@ -106,6 +106,11 @@ def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, curr
     )
     db.add(decision)
     db.flush()
+
+    if action_lower == "dispute" and finding.source_type == SourceType.guideline_clause and finding.source_id:
+        clause = db.query(GuidelineClause).filter(GuidelineClause.id == finding.source_id).first()
+        if clause:
+            clause.dfi_computed_at = None
 
     # Model training is auxiliary to recording the human decision. A failed fit
     # rolls back only its savepoint and does not discard the decision itself.

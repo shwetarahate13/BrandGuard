@@ -15,6 +15,7 @@ function riskBand(dfi: number) {
 export const GuidelineHealth: React.FC = () => {
   const [clauses, setClauses] = useState<GuidelineHealthClause[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recomputing, setRecomputing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("dfi");
@@ -53,6 +54,20 @@ export const GuidelineHealth: React.FC = () => {
   }), [clauses, sortKey, descending]);
 
   const selectedClause = clauses.find((clause) => clause.id === selectedId) || null;
+
+  const recomputeHealth = async () => {
+    try {
+      setRecomputing(true);
+      setError(null);
+      const result = await api.recomputeGuidelineHealth();
+      setNotice(result.message);
+      await loadHealth();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to recompute guideline health.");
+    } finally {
+      setRecomputing(false);
+    }
+  };
 
   const changeSort = (key: SortKey) => {
     if (key === sortKey) setDescending((value) => !value);
@@ -100,12 +115,12 @@ export const GuidelineHealth: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={loadHealth}
-          disabled={loading}
+          onClick={recomputeHealth}
+          disabled={loading || recomputing}
           className="inline-flex items-center gap-2 px-3 py-2 border border-stone-300 bg-white rounded-lg text-xs font-semibold text-stone-700 disabled:opacity-50"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          Refresh scores
+          <RefreshCw className={`w-3.5 h-3.5 ${recomputing ? "animate-spin" : ""}`} />
+          {recomputing ? "Recomputing…" : "Recompute now"}
         </button>
       </div>
 

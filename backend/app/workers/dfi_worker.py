@@ -1,6 +1,7 @@
 """Calculate guideline dispute friction from persisted findings and decisions."""
 import logging
 from collections import Counter, defaultdict
+from datetime import datetime, timedelta, timezone
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -119,6 +120,7 @@ def update_dispute_friction_index(db: Session) -> int:
     """Recalculate and persist DFI for every guideline clause."""
     metrics = collect_clause_dispute_metrics(db)
     clauses = db.query(GuidelineClause).all()
+    computed_at = datetime.now(timezone.utc)
     for clause in clauses:
         row = metrics.get(clause.id, {})
         total_findings = row.get("total_findings", 0)
@@ -127,16 +129,40 @@ def update_dispute_friction_index(db: Session) -> int:
             (disputed_findings / total_findings) * 100.0,
             2,
         ) if total_findings else 0.0
+        clause.dfi_computed_at = computed_at
     db.commit()
     logger.info("Updated dispute friction index for %d guideline clauses", len(clauses))
     return len(clauses)
 
 
-def run_dfi_worker(session_factory=None) -> int | None:
-    """Run the scheduled update and log database failures without taking down the app."""
+def dfi_scores_are_stale(db: Session, max_age: timedelta = timedelta(hours=24)) -> bool:
+    """Return whether any persisted clause score is missing or older than max_age."""
+    clauses = db.query(GuidelineClause)
+    if clauses.count() == 0:
+        return False
+    if clauses.filter(GuidelineClause.dfi_computed_at.is_(None)).first() is not None:
+        return True
+    oldest = db.query(func.min(GuidelineClause.dfi_computed_at)).scalar()
+    if oldest is None:
+        return True
+    if oldest.tzinfo is None:
+        oldest = oldest.replace(tzinfo=timezone.utc)
+    return oldest < datetime.now(timezone.utc) - max_age
+
+
+def run_dfi_worker(session_or_factory=None) -> int | None:
+    """Run with a supplied Session or an owned scheduled session.
+
+    Failures are logged and returned as ``None`` so they never stop the app.
+    """
     db = None
+    owns_session = not isinstance(session_or_factory, Session)
     try:
-        db = (session_factory or get_session_factory())()
+        if owns_session:
+            session_factory = session_or_factory or get_session_factory()
+            db = session_factory()
+        else:
+            db = session_or_factory
         return update_dispute_friction_index(db)
     except Exception:
         if db is not None:
@@ -144,5 +170,5 @@ def run_dfi_worker(session_factory=None) -> int | None:
         logger.exception("Guideline DFI worker failed")
         return None
     finally:
-        if db is not None:
+        if db is not None and owns_session:
             db.close()

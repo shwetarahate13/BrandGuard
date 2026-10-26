@@ -1,5 +1,6 @@
 """Integration coverage for the new guideline, media, and feedback APIs."""
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -29,6 +30,7 @@ from backend.app.models.models import (
     UserRole,
 )
 from backend.app.services.auth import get_current_user
+from backend.app.workers.dfi_worker import dfi_scores_are_stale
 
 
 @pytest.fixture
@@ -84,6 +86,7 @@ def _add_clause(db, clause_id="clause-test", text="Use clear approved language."
         text=text,
         order_index=1,
         dispute_friction_index=dfi,
+        dfi_computed_at=datetime.now(timezone.utc),
     )
     db.add(clause)
     return clause
@@ -136,6 +139,81 @@ def test_get_guideline_health_returns_real_clause_rows(api_client):
     assert [clause["id"] for clause in clauses] == ["clause-high", "clause-low"]
     assert clauses[0]["dispute_friction_index"] == 42.0
     assert clauses[0]["proposed_revision"] is None
+
+
+def test_guideline_health_recomputes_distinct_disputed_findings_and_clusters_reasons(api_client):
+    client, session_factory, manager = api_client
+    with session_factory.begin() as db:
+        clause = _add_clause(db, "clause-dfi-live")
+        clause.dfi_computed_at = None
+        for index in range(2):
+            submission_id = f"sub-dfi-{index}"
+            version_id = f"ver-dfi-{index}"
+            finding_id = f"finding-dfi-{index}"
+            db.add(Submission(
+                id=submission_id,
+                creator_id=manager.id,
+                title=f"DFI copy {index}",
+            ))
+            db.add(SubmissionVersion(
+                id=version_id,
+                submission_id=submission_id,
+                version_no=1,
+                text="Campaign wording",
+                created_by=manager.id,
+            ))
+            db.add(Finding(
+                id=finding_id,
+                submission_id=submission_id,
+                version_id=version_id,
+                span_start=0,
+                span_end=17,
+                category=FindingCategory.tone,
+                issue="Clarify the tone.",
+                source_type=SourceType.guideline_clause,
+                source_id=clause.id,
+                severity=FindingSeverity.minor,
+                confidence=FindingConfidence.high,
+                status=FindingStatus.disputed if index == 0 else FindingStatus.open,
+            ))
+            if index == 0:
+                db.add(Decision(
+                    id="decision-dfi-0",
+                    finding_id=finding_id,
+                    user_id=manager.id,
+                    action=DecisionAction.dispute,
+                    reason="The tone rule is unclear.",
+                ))
+
+    response = client.get("/api/guidelines/health")
+
+    assert response.status_code == 200
+    clause_result = next(item for item in response.json() if item["id"] == "clause-dfi-live")
+    assert clause_result["dispute_friction_index"] == 50.0
+    assert clause_result["dispute_clusters"] == [{
+        "count": 1,
+        "examples": ["The tone rule is unclear."],
+    }]
+    with session_factory() as db:
+        persisted = db.get(GuidelineClause, "clause-dfi-live")
+        assert persisted.dfi_computed_at is not None
+        assert not dfi_scores_are_stale(db)
+
+
+def test_recompute_endpoint_reuses_request_session_and_reports_failure(api_client, monkeypatch):
+    client, session_factory, _manager = api_client
+    with session_factory.begin() as db:
+        _add_clause(db, "clause-recompute")
+
+    response = client.post("/api/guidelines/recompute")
+    assert response.status_code == 200
+    assert response.json()["updated_clauses"] == 1
+    with session_factory() as db:
+        assert db.get(GuidelineClause, "clause-recompute").dfi_computed_at is not None
+
+    monkeypatch.setattr(guidelines_api, "run_dfi_worker", lambda _db: None)
+    failed = client.post("/api/guidelines/recompute")
+    assert failed.status_code == 503
 
 
 def test_patch_guideline_clause_applies_revision(api_client, monkeypatch):

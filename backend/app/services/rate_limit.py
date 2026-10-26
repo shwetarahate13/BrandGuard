@@ -14,6 +14,7 @@ class EndpointRateLimiter:
     def __init__(self) -> None:
         self._rules = [
             ("GET", re.compile(r"^/api/guidelines/health$"), 60),
+            ("POST", re.compile(r"^/api/guidelines/recompute$"), 10),
             ("PATCH", re.compile(r"^/api/guidelines/clauses/[A-Za-z0-9-]+$"), 20),
             ("GET", re.compile(r"^/api/submissions/[A-Za-z0-9-]+/versions/[A-Za-z0-9-]+/source$"), 60),
             ("POST", re.compile(r"^/api/decisions$"), 30),

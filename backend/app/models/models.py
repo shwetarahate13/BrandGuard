@@ -142,6 +142,7 @@ class GuidelineClause(Base):
     text = Column(Text, nullable=False)
     order_index = Column(Integer, default=0)
     dispute_friction_index = Column(Float, nullable=False, default=0.0, server_default="0")
+    dfi_computed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
     doc = relationship("GuidelineDoc", back_populates="clauses")
