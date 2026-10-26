@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, clearToken, getToken, setColdStartListener, setToken } from "./api";
 import { User } from "./types";
 import { Navbar } from "./components/Navbar";
+import { OnboardingTips } from "./components/OnboardingTips";
 import { ColdStartBanner } from "./components/ColdStartBanner";
 import { ToastProvider } from "./components/Toast";
 import { Login } from "./pages/Login";
@@ -14,6 +15,7 @@ import { Insights } from "./pages/Insights";
 import { GuidelineHealth } from "./pages/GuidelineHealth";
 import { Limitations } from "./pages/Limitations";
 import { applyDarkMode, readDarkMode, saveDarkMode } from "./theme";
+import { hasSeenOnboarding, markOnboardingSeen } from "./onboarding";
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -23,6 +25,7 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isWaking, setIsWaking] = useState(false);
   const [darkMode, setDarkMode] = useState(() => readDarkMode());
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
   // Setup cold start listener
@@ -41,6 +44,10 @@ export const App: React.FC = () => {
     applyDarkMode(darkMode);
     saveDarkMode(darkMode);
   }, [darkMode]);
+
+  useEffect(() => {
+    setOnboardingOpen(Boolean(user && !hasSeenOnboarding(user.id, user.role)));
+  }, [user]);
 
   // Sync browser back/forward buttons
   useEffect(() => {
@@ -78,12 +85,18 @@ export const App: React.FC = () => {
   const handleLogout = () => {
     clearToken();
     setUser(null);
+    setOnboardingOpen(false);
     navigate("/login");
   };
 
   const handleLoginSuccess = (loggedInUser: User) => {
     setUser(loggedInUser);
     navigate("/");
+  };
+
+  const closeOnboarding = () => {
+    if (user) markOnboardingSeen(user.id, user.role);
+    setOnboardingOpen(false);
   };
 
   const handleDemoRoleSwitch = async (role: User["role"]) => {
@@ -169,12 +182,15 @@ export const App: React.FC = () => {
           onLogout={handleLogout}
           darkMode={darkMode}
           onToggleDarkMode={() => setDarkMode((enabled) => !enabled)}
+          onShowOnboarding={() => setOnboardingOpen(true)}
           currentPath={currentPath}
           navigate={navigate}
         />
 
         {demoSwitchError && <div role="alert" className="mx-auto mt-3 w-[min(96%,48rem)] rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-900">{demoSwitchError}</div>}
         <main className="flex-1">{content}</main>
+
+        {user && onboardingOpen && <OnboardingTips role={user.role} onClose={closeOnboarding} />}
 
         {/* Footer */}
         <footer className="bg-white border-t border-stone-200 py-6 mt-12 text-xs text-stone-500">

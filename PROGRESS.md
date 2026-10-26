@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Dark mode is complete; first-login onboarding tips remain
+- **Current Step**: Step 5 feature list is complete; local website smoke and Render deployment attempt remain
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -61,13 +61,13 @@
     - [x] Persist user-scoped notifications with read/unread state and submission links
     - [x] Notify assigned reviewers and creators on approval, changes requested, and rejection
     - [x] Add authenticated inbox endpoints, UI bell, unread count, mark-read actions, and end-to-end coverage
-  - [ ] **Remaining Step 5 features (resume when quota allows)**
+  - [x] **Step 5 features, in requested order**
     - [x] Assignment due dates and SLA/overdue indicators
     - [x] Saved views (basic creator/manager search and filters already exist)
     - [x] Approval-report CSV/PDF export (audit-log CSV already exists)
     - [x] Self-service password change (admin-triggered password reset already exists)
     - [x] Dark mode
-    - [ ] First-login onboarding tips
+    - [x] First-login onboarding tips
 
 ## Decisions Made
 1. **Migrations & Database**: SQLite default locally, PostgreSQL (Neon) in production. Database migrations must always be executed via `alembic upgrade head`. Added dispute friction, media layout, and preference state migrations.
@@ -83,7 +83,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Assignment due dates, manager-only updates, and manager/reviewer overdue indicators are implemented, tested, and committed in `9015376`. Saved views are implemented for Creator and Manager with browser persistence isolated by account and role. Approval-report CSV/PDF export and self-service password change are implemented and verified. Dark mode is now implemented, persistent in the browser, and tested. Next in order: first-login onboarding tips. Admin password reset, basic search/filter controls, and audit CSV export already exist.
+Assignment due dates, manager-only updates, manager/reviewer overdue indicators, saved views, approval-report exports, self-service password change, dark mode, and first-login onboarding tips are implemented. Final next step: run a clean full verification sweep, inspect the public Render deployment if reachable, and attempt deployment only if the authorized Render and Neon accounts are available. Admin password reset, basic search/filter controls, and audit CSV export already exist.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -158,4 +158,9 @@ Assignment due dates, manager-only updates, and manager/reviewer overdue indicat
 
 ## Dark Mode (2026-10-27)
 - Added a persistent navigation toggle and dark color treatment for app surfaces, forms, status cards, notification rows, borders, and text. The preference is stored in the current browser.
-- Frontend regression tests cover reading, persisting, and applying both theme states. Full frontend tests, build, and full backend tests are scheduled in the final verification sweep.
+- Frontend regression tests cover reading, persisting, and applying both theme states. Frontend tests (**5 passed**) and production build passed; full backend tests are scheduled in the final verification sweep.
+
+## First-Login Onboarding Tips (2026-10-27)
+- Added first-sign-in quick-start dialog content specific to Creator, Manager, Reviewer, and Admin workflows and permissions. A navbar Tips button reopens it.
+- Dismissal is persisted per account and role in this browser. Tests cover account/role isolation and role-specific workflow guidance.
+- Final feature verification: fresh SQLite Alembic migration to head, full backend suite (**162 passed**), frontend tests (**7 passed**), frontend production build, and `git diff --check` all passed. Local website smoke and Render deployment access are next.

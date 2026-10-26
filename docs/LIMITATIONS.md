@@ -21,6 +21,7 @@ This page describes the current implementation in the repository. Hosting provid
 ## Deployment and data
 
 - Dark mode is a browser-local preference and does not sync across browsers or devices.
+- Role onboarding tips appear on first sign-in in each browser; reopening Tips is always available in the signed-in navigation. Dismissal is stored per account and role in browser storage.
 
 - SQLite is the local default. Production configuration requires PostgreSQL. Apply schema changes with `alembic upgrade head`.
 - Render remains on the repository's Docker runtime because image review needs the Tesseract system package. `render.yaml` enables image review for the demo service and selects Tesseract. The repository's `build.sh` can build the frontend, install backend requirements, and apply migrations in a native environment that has Node.js 18+; it does not change the configured Render runtime.

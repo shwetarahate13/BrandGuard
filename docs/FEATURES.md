@@ -23,6 +23,8 @@ Signed-in users can change their own password after verifying the current passwo
 
 Dark mode can be toggled from the navigation bar and its preference is saved in the current browser.
 
+On first sign-in in a browser, users see a quick-start dialog for their role: Creators, Managers, Reviewers, and Admins receive different workflow and permission tips. The Tips button reopens the dialog.
+
 The notification bell is available to signed-in roles. Reviewer assignment events go to the assigned reviewer; approval, changes-requested, and rejection decisions go to the creator. Notifications have read/unread state and open the related submission.
 
 ## Guideline health (Improvement A)
@@ -53,5 +55,5 @@ The notification bell is available to signed-in roles. Reviewer assignment event
 
 - The Creator dashboard's activity summary remains derived from decisions and comments. Persistent in-app notifications cover reviewer assignments and workflow decisions, but not finding-level decisions, comments, or email delivery.
 - Saved views store the current search and status filter in browser local storage, isolated by user and role; they do not sync across browsers or devices.
-- Admins can reset another user's password. First-login onboarding tips are not implemented.
+- Admins can reset another user's password. Onboarding dismissal is saved per account and role in browser storage.
 - See [LIMITATIONS.md](LIMITATIONS.md) for image-processing, data-scope, rate-limit, and hosting constraints.

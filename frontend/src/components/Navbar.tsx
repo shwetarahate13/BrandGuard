@@ -31,6 +31,7 @@ interface NavbarProps {
   onLogout: () => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
+  onShowOnboarding: () => void;
   currentPath: string;
   navigate: (path: string) => void;
 }
@@ -43,6 +44,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   darkMode,
   onToggleDarkMode,
+  onShowOnboarding,
   currentPath,
   navigate,
 }) => {
@@ -325,6 +327,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {user ? (
                 <div className="flex items-center gap-3 border-l border-stone-200 pl-3">
+                  <button
+                    type="button"
+                    onClick={onShowOnboarding}
+                    title="Role quick start tips"
+                    aria-label="Show role quick start tips"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    <span className="hidden xl:inline">Tips</span>
+                  </button>
                   {demoMode && <label className="hidden lg:flex items-center gap-2 text-[10px] font-semibold text-stone-600">
                     <span>Demo role</span>
                     <select
