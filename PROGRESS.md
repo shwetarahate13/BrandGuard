@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Assignment due dates and SLA/overdue indicators complete in `9015376`; remaining Step 5 features are deferred at 87% quota usage
+- **Current Step**: Fixed login credential 401 handling; remaining Step 5 features are deferred after the 87% quota checkpoint
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -136,3 +136,7 @@ Assignment due dates, manager-only updates, and manager/reviewer overdue indicat
 - Added integration coverage for default deadline creation, manager-only updates, role denials, clearing, overdue calculation, and unassigned submissions. A fresh SQLite migration to head passed; the full backend suite passed (**156 tests**); and the frontend production build passed.
 - Verification: **156 backend tests passed**, fresh SQLite migration to head passed, frontend production build passed, and `git diff --check` passed. Committed as `9015376`.
 - Usage check: **87% used (13% remaining)**. Stop optional feature work at this clean, verified step. Next in order: implement saved views for the existing creator/manager search and filter controls, with persistence, role isolation, and tests; then approval-report CSV/PDF export, self-service password change, dark mode, and first-login onboarding tips.
+
+## Login Credential Error Fix (2026-10-26)
+- Public `/auth/login` and `/auth/demo-login` requests no longer send a previously stored bearer token, and their credential 401 responses are shown as authentication errors instead of “Session expired.” Protected API 401 responses still clear the token and redirect to login.
+- Added frontend regression tests for both response paths. `npm test --prefix frontend` passed (2 tests), `npm run build --prefix frontend` passed, and `git diff --check` passed.

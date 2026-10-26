@@ -44,7 +44,10 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getToken();
+  // Login endpoints intentionally return 401 for bad credentials. Do not send
+  // a previously stored bearer token or translate those responses to expiry.
+  const isPublicAuthRequest = endpoint === "/auth/login" || endpoint === "/auth/demo-login";
+  const token = isPublicAuthRequest ? null : getToken();
   const headers = new Headers(options.headers || {});
 
   if (token) {
@@ -69,7 +72,7 @@ async function request<T>(
     clearTimeout(timer);
     if (onColdStartChange) onColdStartChange(false);
 
-    if (res.status === 401) {
+    if (res.status === 401 && !isPublicAuthRequest) {
       clearToken();
       if (!window.location.pathname.includes("/login")) {
         window.location.href = "/login";
