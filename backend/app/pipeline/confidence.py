@@ -53,8 +53,8 @@ def _normalize_span(span: str) -> str:
     return re.sub(r"\s+", " ", span).strip().casefold()
 
 
-def _dismissed_pattern_counts(db: Session) -> Counter[tuple[str, str, str]]:
-    """Count disputed clause/span pairs in this single-brand workspace."""
+def _dismissed_pattern_groups(db: Session) -> dict[tuple[str, str], dict[str, set[str]]]:
+    """Group distinct disputed findings by clause/span across the workspace."""
     dismissed = (
         db.query(
             Decision.original_span,
@@ -74,7 +74,9 @@ def _dismissed_pattern_counts(db: Session) -> Counter[tuple[str, str, str]]:
         )
         .all()
     )
-    dismissed_findings: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    groups: dict[tuple[str, str], dict[str, set[str]]] = defaultdict(
+        lambda: {"finding_ids": set(), "categories": set()}
+    )
     for original_span, clause_id, category, span_start, span_end, version_text, finding_id in dismissed:
         span = original_span
         if not span and span_start is not None and span_end is not None:
@@ -82,20 +84,29 @@ def _dismissed_pattern_counts(db: Session) -> Counter[tuple[str, str, str]]:
         normalized = _normalize_span(span or "")
         if normalized:
             category_name = category.value if hasattr(category, "value") else str(category)
-            dismissed_findings[(str(clause_id), normalized, category_name)].add(str(finding_id))
-    return Counter({key: len(finding_ids) for key, finding_ids in dismissed_findings.items()})
+            group = groups[(str(clause_id), normalized)]
+            group["finding_ids"].add(str(finding_id))
+            group["categories"].add(category_name)
+    return groups
 
 
 def suppressed_span_combinations(db: Session, threshold: int = 3) -> set[tuple[str, str]]:
     """Find guideline/span pairs disputed repeatedly in this single-brand workspace."""
-    counts = _dismissed_pattern_counts(db)
-    return {(clause_id, span) for (clause_id, span, _), count in counts.items() if count >= threshold}
+    groups = _dismissed_pattern_groups(db)
+    return {
+        key for key, group in groups.items()
+        if len(group["finding_ids"]) >= threshold
+    }
 
 
 def suppressed_counts_by_category(db: Session, threshold: int = 3) -> Counter[str]:
-    counts = _dismissed_pattern_counts(db)
-    suppressed = {key for key, count in counts.items() if count >= threshold}
-    return Counter(category for _, _, category in suppressed)
+    groups = _dismissed_pattern_groups(db)
+    return Counter(
+        category
+        for group in groups.values()
+        if len(group["finding_ids"]) >= threshold
+        for category in group["categories"]
+    )
 
 
 def should_suppress_finding(
@@ -103,7 +114,9 @@ def should_suppress_finding(
     original_span: str,
     suppressed: set[tuple[str, str]],
 ) -> bool:
-    if finding.get("source_type") != SourceType.guideline_clause.value:
+    source_type = finding.get("source_type")
+    source_type = source_type.value if hasattr(source_type, "value") else source_type
+    if source_type != SourceType.guideline_clause.value:
         return False
     source_id = str(finding.get("source_id") or "")
     normalized = _normalize_span(original_span)

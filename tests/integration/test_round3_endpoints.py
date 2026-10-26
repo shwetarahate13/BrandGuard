@@ -32,6 +32,7 @@ from backend.app.models.models import (
     UserRole,
 )
 from backend.app.services.auth import get_current_user
+from backend.app.pipeline.confidence import should_suppress_finding, suppressed_span_combinations
 from backend.app.workers.dfi_worker import dfi_scores_are_stale
 
 
@@ -386,7 +387,7 @@ def test_get_feedback_stats_reports_category_rates_and_suppression(api_client):
                 version_id=version_id,
                 span_start=0,
                 span_end=10,
-                category=FindingCategory.messaging,
+                category=FindingCategory.tone if index == 2 else FindingCategory.messaging,
                 issue="Clarify the claim.",
                 source_type=SourceType.guideline_clause,
                 source_id=clause.id,
@@ -407,7 +408,92 @@ def test_get_feedback_stats_reports_category_rates_and_suppression(api_client):
 
     assert response.status_code == 200
     messaging = next(item for item in response.json()["categories"] if item["category"] == "messaging")
-    assert messaging["decisions_count"] == 3
+    assert messaging["decisions_count"] == 2
     assert messaging["acceptance_rate"] == 0.0
     assert messaging["edit_rate"] == 0.0
     assert messaging["suppression_count"] == 1
+    tone = next(item for item in response.json()["categories"] if item["category"] == "tone")
+    assert tone["suppression_count"] == 1
+    with session_factory() as db:
+        patterns = suppressed_span_combinations(db)
+    assert ("clause-repeat", "claim text") in patterns
+    assert should_suppress_finding(
+        {"source_type": SourceType.guideline_clause, "source_id": "clause-repeat"},
+        "  CLAIM   TEXT ",
+        patterns,
+    )
+
+
+def test_reviewer_dismissal_trains_feedback_and_invalidates_guideline_health(api_client, monkeypatch):
+    client, session_factory, _manager = api_client
+    reviewer = User(
+        id="reviewer-feedback",
+        name="Compliance Reviewer",
+        email="reviewer-feedback@example.test",
+        password_hash="unused",
+        role=UserRole.reviewer,
+        is_active=True,
+    )
+    creator = User(
+        id="creator-reviewer-feedback",
+        name="Content Creator",
+        email="creator-reviewer-feedback@example.test",
+        password_hash="unused",
+        role=UserRole.creator,
+        is_active=True,
+    )
+    submission_id = "reviewer-dismiss-submission"
+    version_id = "reviewer-dismiss-version"
+    finding_id = "reviewer-dismiss-finding"
+    with session_factory.begin() as db:
+        clause = _add_clause(db, "reviewer-dismiss-clause")
+        db.add_all([reviewer, creator])
+        db.add(Submission(
+            id=submission_id,
+            creator_id=creator.id,
+            assigned_to_id=reviewer.id,
+            title="Escalated claim",
+            status=SubmissionStatus.in_review,
+        ))
+        db.add(SubmissionVersion(
+            id=version_id,
+            submission_id=submission_id,
+            version_no=1,
+            text="This product removes every stain.",
+            created_by=creator.id,
+        ))
+        db.add(Finding(
+            id=finding_id,
+            submission_id=submission_id,
+            version_id=version_id,
+            span_start=0,
+            span_end=34,
+            category=FindingCategory.unsupported_claim,
+            issue="The absolute claim needs review.",
+            source_type=SourceType.guideline_clause,
+            source_id=clause.id,
+            severity=FindingSeverity.major,
+            confidence=FindingConfidence.high,
+            needs_human=True,
+            suggested_rewrite="This product helps remove stains.",
+            status=FindingStatus.open,
+        ))
+
+    # Override the manager fixture's default identity for this reviewer workflow.
+    from backend.app.services.auth import get_current_user
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: reviewer)
+
+    response = client.post(
+        f"/api/findings/{finding_id}/escalate-review",
+        json={"action": "dismiss", "justification": "The cited clause does not prohibit this supported claim."},
+    )
+
+    assert response.status_code == 200
+    with session_factory() as db:
+        decision = db.query(Decision).filter(Decision.finding_id == finding_id).one()
+        assert decision.action == DecisionAction.dispute
+        assert decision.original_span == "This product removes every stain."
+        assert decision.suggested_rewrite == "This product helps remove stains."
+        assert decision.reason == "The cited clause does not prohibit this supported claim."
+        assert db.get(PreferenceModelState, "workspace-default").sample_count == 1
+        assert db.get(GuidelineClause, "reviewer-dismiss-clause").dfi_computed_at is None

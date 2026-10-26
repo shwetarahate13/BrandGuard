@@ -41,17 +41,32 @@ def _flesch_reading_ease(text: str) -> float:
     words = re.findall(r"\b[a-zA-Z0-9']+\b", text)
     if not words:
         return 100.0
-    sentences = max(1, len([s for s in re.split(r"[.!?]+", text.strip()) if s.strip()]))
+    try:
+        word_count = max(1, int(textstat.lexicon_count(text, removepunct=True)))
+        sentences = max(1, int(textstat.sentence_count(text)))
+    except Exception:
+        # textstat's English Flesch helper can require NLTK's optional cmudict
+        # corpus. Keep feature extraction deterministic and offline by using
+        # textstat's counts plus the local syllable estimate below.
+        logger.debug("textstat counts unavailable; using local text counts", exc_info=True)
+        word_count = len(words)
+        sentences = max(1, len([s for s in re.split(r"[.!?]+", text.strip()) if s.strip()]))
     syllable_count = sum(_count_syllables(w) for w in words)
-    words_count = len(words)
-    score = 206.835 - 1.015 * (words_count / sentences) - 84.6 * (syllable_count / words_count)
+    score = 206.835 - 1.015 * (word_count / sentences) - 84.6 * (syllable_count / word_count)
     return float(np.clip(score, 0.0, 100.0))
 
 
 def _sentence_length(text: str) -> float:
     words = re.findall(r"\b[a-zA-Z0-9']+\b", text)
-    sentences = max(1, len([s for s in re.split(r"[.!?]+", text.strip()) if s.strip()])) if text.strip() else 0
-    return len(words) / sentences if sentences else 0.0
+    if not text.strip():
+        return 0.0
+    try:
+        word_count = int(textstat.lexicon_count(text, removepunct=True))
+        sentence_count = int(textstat.sentence_count(text))
+        return word_count / max(1, sentence_count)
+    except Exception:
+        sentences = max(1, len([s for s in re.split(r"[.!?]+", text.strip()) if s.strip()]))
+        return len(words) / sentences
 
 
 def _formality_score(text: str) -> float:

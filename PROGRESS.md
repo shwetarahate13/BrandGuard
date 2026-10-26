@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Phase**: Phase 4 complete; Phase 5 (Improvement C, Reinforcement Feedback Loop) is next
+- **Current Phase**: Phase 5 complete; Phase 6 (Real-World Readiness and Deployment) is next
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -38,15 +38,16 @@
     - [x] PDF inspection with `pdfminer.six` page coordinates and finding `location` boxes
     - [x] Semi-transparent PDF page highlights
     - [x] Lazy-loaded OCR/CV and explicit `IMAGE_REVIEW_ENABLED` memory gate; measured image review exceeds the 450 MB target and is disabled by default
-  - [ ] **Phase 5: Improvement C, Reinforcement Feedback Loop**
-    - [ ] Snapshot original span, proposed rewrite, human edit on decisions
-    - [ ] Online SGD logistic regression (sentence length change, Flesch delta, formality delta)
-    - [ ] Persist model state in DB blob
-    - [ ] Train on accepts (+), edits (chosen +, rejected -), disputes (-)
-    - [ ] Rank rewrite candidates by predicted acceptance probability in confidence pipeline
-    - [ ] Suppress repeated disputed patterns (same clause + normalized span >= 3 distinct disputes, workspace-scoped)
-    - [ ] `GET /api/feedback/stats` (acceptance rate, edit rate, suppression counts)
-    - [ ] Dashboard integration and admin model reset
+  - [x] **Phase 5: Improvement C, Reinforcement Feedback Loop**
+    - [x] Snapshot original span, proposed rewrite, human edit on decisions; compliance dismissals also create dispute decisions
+    - [x] Online SGD logistic regression features: sentence length, Flesch readability, and formality deltas
+    - [x] Persist model state in a database blob
+    - [x] Train accepts (+), edits (chosen +, suggested -), and disputes (-)
+    - [x] Rank rewrite candidates by predicted acceptance probability in the confidence pipeline
+    - [x] Suppress repeated disputed patterns after 3 distinct findings for the same clause and normalized span
+    - [x] `GET /api/feedback/stats` reports acceptance rate, edit rate, and suppression counts by category
+    - [x] Creator/admin feedback views retained; manager command center now displays the category stats bar; admin model reset remains available
+    - [x] Targeted Phase 5 verification: 14 tests passed; frontend production build, Python compile, and `git diff --check` passed
   - [ ] **Phase 6: Real-World Readiness and Deployment (No Docker)**
     - [ ] Local non-Docker setup (uvicorn :8000, vite :5173 with proxy, SQLite/Postgres compatibility)
     - [ ] Render free native runtime (`render.yaml`, `build.sh`, SPA serving on `$PORT`)
@@ -67,6 +68,8 @@
 7. **Phase 2 verification**: 111 targeted permission/API tests passed, Vite production build passed, full SQLite migration chain applied with the reviewer FK verified, and the isolated end-to-end workflow smoke passed. Browser checks confirmed Creator, Manager, Reviewer, and Admin dashboards/nav; browser console had no errors or warnings. A local Vite proxy target was supplied through `BRANDGUARD_API_PROXY_TARGET` during UI verification; native local defaults are scheduled for Phase 6.
 8. **Phase 3 verification**: DFI session ownership now supports both request Sessions and APScheduler session factories. Newly computed timestamps and source-data invalidation prevent stale scores; a read recomputes stale data. SQLite Alembic upgrade to head and `npm run build` passed; the targeted permission/API suite passed 113 tests. One existing Chroma embedding-function deprecation warning remains.
 9. **Phase 4 verification**: RapidOCR 3.10.0 (packaged ONNX models) processed the real 1020×1320 sample image into 455 characters and 77 word boxes; `pdfminer.six` extracted page/line boxes from the real PDF fixture. Palette, logo clear-space, OCR geometry, PDF location, and image-memory-gate tests passed (17 targeted tests). Full-app OCR plus OpenCV peak RSS measured 611 MB on the development Mac, so image uploads/reviews require explicit `IMAGE_REVIEW_ENABLED=true`; `docs/LIMITATIONS.md` records the Render-free-tier restriction. `pip check`, Python compile, and diff checks passed.
+10. **Feedback training and suppression**: A dispute invalidates clause-health freshness and trains a negative rewrite example; compliance reviewer dismissals now follow the same path. Suppression groups distinct findings across categories for each clause and normalized span. This deployment has one workspace database, so suppression is workspace-wide; it is not yet tenant-isolated.
+11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Commit the completed Phase 4 image/PDF inspection changes, then start Phase 5 by tracing decision snapshot persistence, the existing SGD model blob, confidence ranking, and workspace-scoped dispute suppression before extending them.
+Start Phase 6 by auditing startup/configuration, authentication and upload paths, current Render files, and local SQLite/PostgreSQL compatibility; then implement and verify non-Docker local and Render deployment before moving to Phase 7.

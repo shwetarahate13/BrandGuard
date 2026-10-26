@@ -217,6 +217,14 @@ def review_escalated_finding(
         raise HTTPException(status_code=403, detail="Only a reviewer assigned to this submission can resolve escalated findings")
     if not finding_requires_reviewer_review(finding):
         raise HTTPException(status_code=400, detail="This finding is not escalated for compliance review")
+    latest_version = (
+        db.query(SubmissionVersion)
+        .filter(SubmissionVersion.submission_id == submission.id)
+        .order_by(SubmissionVersion.version_no.desc())
+        .first()
+    )
+    if not latest_version or latest_version.id != finding.version_id:
+        raise HTTPException(status_code=409, detail="This finding belongs to an older version; review the latest version instead")
 
     if payload.action == "confirm":
         finding.needs_human = False
@@ -225,6 +233,27 @@ def review_escalated_finding(
         finding.needs_human = False
         finding.status = FindingStatus.disputed
         note_body = f"[Compliance Dismissed]: {payload.justification.strip()}"
+        start = max(0, finding.span_start or 0)
+        end = min(len(latest_version.text), finding.span_end or start)
+        decision = Decision(
+            finding_id=finding.id,
+            user_id=current_user.id,
+            action=DecisionAction.dispute,
+            original_span=latest_version.text[start:end],
+            suggested_rewrite=finding.suggested_rewrite,
+            reason=payload.justification.strip(),
+        )
+        db.add(decision)
+        db.flush()
+        if finding.source_type == SourceType.guideline_clause and finding.source_id:
+            clause = db.query(GuidelineClause).filter(GuidelineClause.id == finding.source_id).first()
+            if clause:
+                clause.dfi_computed_at = None
+        try:
+            with db.begin_nested():
+                partial_fit(db, decision)
+        except Exception:
+            logger.exception("Preference model update failed for reviewer dismissal %s", decision.id)
 
     comment = Comment(
         submission_id=submission.id,

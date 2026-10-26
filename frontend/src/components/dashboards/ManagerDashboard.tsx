@@ -12,7 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { api } from "../../api";
-import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthClause, ActivityEvent } from "../../types";
+import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthClause, ActivityEvent, FeedbackCategoryStats } from "../../types";
 import { Skeleton } from "../Skeleton";
 import { useToast } from "../Toast";
 
@@ -27,6 +27,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
   const [insights, setInsights] = useState<InsightsSummary | null>(null);
   const [highRiskClauses, setHighRiskClauses] = useState<GuidelineHealthClause[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [feedbackStats, setFeedbackStats] = useState<FeedbackCategoryStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("in_review");
@@ -35,18 +36,20 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
   const loadData = async () => {
     try {
       setLoading(true);
-      const [subs, ins, health, activeReviewers, recentActivity] = await Promise.all([
+      const [subs, ins, health, activeReviewers, recentActivity, feedback] = await Promise.all([
         api.getSubmissions(),
         api.getInsightsSummary().catch(() => null),
         api.getGuidelineHealth().catch(() => []),
         api.getReviewers(),
         api.getRecentActivity().catch(() => []),
+        api.getFeedbackStats().catch(() => ({ categories: [] })),
       ]);
       setSubmissions(subs);
       setInsights(ins);
       setHighRiskClauses(health.filter((c) => c.dispute_friction_index > 30));
       setReviewers(activeReviewers);
       setActivity(recentActivity);
+      setFeedbackStats(feedback.categories);
     } catch (err: any) {
       showToast(err.message || "Failed to load command center data", "error");
     } finally {
@@ -247,6 +250,24 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
             </div>;
           })}
         </div>
+      </section>
+
+      <section aria-label="Feedback model statistics" className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-stone-900">Reviewer Feedback</h2>
+            <p className="mt-1 text-[11px] text-stone-600">Decision outcomes and recurring suppressed patterns by guideline category.</p>
+          </div>
+          <span className="text-[10px] uppercase tracking-wider font-bold text-purple-800 bg-purple-50 border border-purple-200 rounded-full px-2.5 py-1">Adaptive ranking</span>
+        </div>
+        {feedbackStats.length ? <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+          {feedbackStats.map((stat) => <div key={stat.category} className="rounded-xl bg-stone-50 border border-stone-200 p-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-wide text-stone-700">{stat.category.replace(/_/g, " ")}</h3>
+            <div className="mt-2 flex justify-between gap-2 text-[11px]"><span className="text-stone-600">Accepted</span><strong className="text-emerald-800">{Math.round(stat.acceptance_rate * 100)}%</strong></div>
+            <div className="mt-1 flex justify-between gap-2 text-[11px]"><span className="text-stone-600">Edited</span><strong className="text-amber-800">{Math.round(stat.edit_rate * 100)}%</strong></div>
+            <div className="mt-1 flex justify-between gap-2 text-[11px]"><span className="text-stone-600">Suppressed</span><strong className="text-rose-800">{stat.suppression_count}</strong></div>
+          </div>)}
+        </div> : <p className="mt-3 text-xs text-stone-600">No reviewer decisions recorded yet.</p>}
       </section>
 
       <section aria-label="Recent organization activity" className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
