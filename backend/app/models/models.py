@@ -345,3 +345,23 @@ class AuditLog(Base):
     created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_user_created", "user_id", "created_at"),
+        Index("ix_notifications_user_read", "user_id", "is_read"),
+    )
+
+    id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    submission_id = Column(String, ForeignKey("submissions.id", ondelete="SET NULL"), nullable=True)
+    kind = Column(String(40), nullable=False)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, nullable=False, default=False, server_default="false")
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+
+    user = relationship("User")
+    submission = relationship("Submission")

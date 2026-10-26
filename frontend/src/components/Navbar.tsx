@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Shield,
   FileText,
@@ -11,8 +11,13 @@ import {
   Flame,
   Menu,
   X,
+  Bell,
+  CheckCheck,
+  X as CloseIcon,
 } from "lucide-react";
 import { User, UserRole } from "../types";
+import { Notification } from "../types";
+import { api } from "../api";
 import { TransparencyModal } from "./TransparencyModal";
 
 interface NavbarProps {
@@ -36,6 +41,65 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      setNotificationsOpen(false);
+      return;
+    }
+    let active = true;
+    const loadNotifications = async () => {
+      try {
+        const items = await api.getNotifications({ limit: 100 });
+        if (active) {
+          setNotifications(items);
+          setNotificationError(null);
+        }
+      } catch (error) {
+        if (active) setNotificationError(error instanceof Error ? error.message : "Unable to load notifications.");
+      }
+    };
+    void loadNotifications();
+    const refresh = window.setInterval(loadNotifications, 45000);
+    return () => {
+      active = false;
+      window.clearInterval(refresh);
+    };
+  }, [user?.id]);
+
+  const unreadCount = notifications.filter((item) => !item.is_read).length;
+
+  const markAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications((items) => items.map((item) => ({ ...item, is_read: true })));
+      setNotificationError(null);
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : "Unable to update notifications.");
+    }
+  };
+
+  const openNotification = async (notification: Notification) => {
+    if (!notification.is_read) {
+      try {
+        await api.markNotificationRead(notification.id);
+        setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, is_read: true } : item));
+      } catch (error) {
+        setNotificationError(error instanceof Error ? error.message : "Unable to update notification.");
+        return;
+      }
+    }
+    setNotificationsOpen(false);
+    if (notification.submission_id) {
+      navigate(notification.kind === "review_assignment"
+        ? `/approval/${notification.submission_id}`
+        : `/review/${notification.submission_id}`);
+    }
+  };
 
   const getNavLinks = (role: UserRole) => {
     switch (role) {
@@ -132,6 +196,69 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>}
+              {user && <div className="relative">
+                <button
+                  type="button"
+                  aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
+                  aria-expanded={notificationsOpen}
+                  onClick={() => setNotificationsOpen((open) => !open)}
+                  className={`relative p-2 rounded-lg transition-colors ${notificationsOpen ? "bg-stone-100 text-stone-900" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}
+                >
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold leading-4 text-center">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>}
+                </button>
+                {notificationsOpen && <section
+                  role="region"
+                  aria-label="Notifications"
+                  className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl z-50"
+                >
+                  <div className="flex items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
+                    <div>
+                      <h2 className="text-sm font-bold text-stone-900">Notifications</h2>
+                      <p className="text-[10px] text-stone-500">Assignments and workflow decisions</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {unreadCount > 0 && <button
+                        type="button"
+                        onClick={markAllRead}
+                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold text-stone-600 hover:bg-stone-100"
+                      >
+                        <CheckCheck className="h-3.5 w-3.5" /> Mark all read
+                      </button>}
+                      <button
+                        type="button"
+                        aria-label="Close notifications"
+                        onClick={() => setNotificationsOpen(false)}
+                        className="rounded-md p-1.5 text-stone-500 hover:bg-stone-100"
+                      >
+                        <CloseIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  {notificationError && <p role="alert" className="px-4 py-2 text-xs text-rose-700 bg-rose-50">{notificationError}</p>}
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length === 0 ? <p className="px-4 py-8 text-center text-xs text-stone-500">No notifications yet.</p> : notifications.map((notification) => (
+                      <button
+                        type="button"
+                        key={notification.id}
+                        onClick={() => void openNotification(notification)}
+                        className={`block w-full border-b border-stone-100 px-4 py-3 text-left transition-colors hover:bg-stone-50 ${notification.is_read ? "bg-white" : "bg-amber-50/70"}`}
+                      >
+                        <span className="flex items-start gap-2">
+                          {!notification.is_read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-600" />}
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-bold text-stone-900">{notification.title}</span>
+                            <span className="mt-1 block text-[11px] leading-relaxed text-stone-600">{notification.message}</span>
+                            <span className="mt-1 block text-[10px] text-stone-400">{new Date(notification.created_at).toLocaleString()}</span>
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>}
+              </div>}
               {/* LLM Mode pill */}
               <button
                 onClick={() => setModalOpen(true)}

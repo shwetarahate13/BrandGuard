@@ -61,6 +61,17 @@ export interface Approval {
   user?: User;
 }
 
+export interface Notification {
+  id: string;
+  user_id: string;
+  submission_id?: string | null;
+  kind: "review_assignment" | "workflow_decision" | string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 export interface Finding {
   id: string;
   submission_id: string;

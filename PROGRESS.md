@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Steps 1–4 complete; Step 5 optional features is next if quota permits
+- **Current Step**: Steps 1–5 through persistent notifications complete; remaining Step 5 features are deferred at 79% quota usage
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -57,6 +57,17 @@
     - [x] Permission matrix tests cover every role/action cell and row-level/self-approval policy
     - [x] Improvement tests cover guideline health/recompute (A), OCR/PDF/media checks (B), and model training/suppression (C)
     - [x] Update `docs/FEATURES.md`, `docs/ROUND3_IMPROVEMENTS.md`, `docs/LIMITATIONS.md`, and `README.md`
+  - [x] **Step 5 feature: In-app notifications for assignments and workflow decisions**
+    - [x] Persist user-scoped notifications with read/unread state and submission links
+    - [x] Notify assigned reviewers and creators on approval, changes requested, and rejection
+    - [x] Add authenticated inbox endpoints, UI bell, unread count, mark-read actions, and end-to-end coverage
+  - [ ] **Remaining Step 5 features (resume when quota allows)**
+    - [ ] Assignment due dates and SLA/overdue indicators
+    - [ ] Saved views (basic creator/manager search and filters already exist)
+    - [ ] Approval-report CSV/PDF export (audit-log CSV already exists)
+    - [ ] Self-service password change (admin-triggered password reset already exists)
+    - [ ] Dark mode
+    - [ ] First-login onboarding tips
 
 ## Decisions Made
 1. **Migrations & Database**: SQLite default locally, PostgreSQL (Neon) in production. Database migrations must always be executed via `alembic upgrade head`. Added dispute friction, media layout, and preference state migrations.
@@ -72,7 +83,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Step 4 is committed. If quota permits, begin Step 5 with the highest-priority feature: persistent in-app notifications for reviewer assignments and workflow decisions. Complete it end to end with role-specific delivery, tests, and feature documentation before considering due dates/SLA enhancements.
+The highest-priority Step 5 feature, persistent assignment and workflow-decision notifications, is complete and committed. The latest usage check reports 79% used (21% remaining), so stop here. When quota allows, implement assignment due dates end to end: add an Alembic-managed due-date field and manager-only update API, show due dates and overdue/SLA state to managers and assigned reviewers, test permission and overdue behavior, update `FEATURES.md`, and commit. Then continue with saved views, approval-report CSV/PDF export, self-service password change, dark mode, and onboarding tips in the user's listed order; admin password reset, basic search/filter controls, and audit CSV export already exist.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -106,3 +117,11 @@ Step 4 is committed. If quota permits, begin Step 5 with the highest-priority fe
 - Created `docs/FEATURES.md` and `docs/ROUND3_IMPROVEMENTS.md` because README linked those files but they were missing. Rewrote `docs/LIMITATIONS.md` to match the current configuration and measured OCR backends; removed unsupported TLS/at-rest and obsolete OCR claims.
 - Updated README with exact local setup/run/test commands, production environment requirements, Render's retained Docker runtime rationale, and truthful role responsibilities. Removed the unsupported `EMBEDDING_BACKEND` setting from `.env.example`.
 - Updated the in-app Limitations screen so its security, LLM, image, and workspace disclosures match the current code. The Markdown links resolve, `npm run build --prefix frontend` passed, `git diff --check` passed, and the Step 3 full suite remained **154 passed** on its fresh isolated database.
+
+## Step 5: Persistent In-App Notifications (2026-10-26)
+- Added an Alembic migration and indexed notification table with per-user read state, authenticated list/read/read-all endpoints, and strict user ownership checks.
+- Reviewer assignment creates an inbox item for the assigned reviewer. Approval, changes-requested, and rejection decisions create inbox items for the creator, including the review note. The navbar bell shows an unread count, polls for updates, supports mark-read/mark-all-read, and opens the related submission.
+- Integration coverage verifies all three workflow decision types, reviewer assignment delivery, inbox isolation between roles, read state, and bulk mark-read behavior.
+- Browser end-to-end check created and checked a standard-risk submission as Creator, requested review, assigned a Reviewer as Manager, confirmed the Reviewer received and opened the assignment notification, approved as Manager, and confirmed the Creator received the approval note and opened the submission. No browser errors/warnings.
+- Verification: fresh SQLite migration to head passed; full backend suite **155 passed**; `npm run build --prefix frontend` passed; `git diff --check` passed. Updated README, feature inventory, and limitations to describe the inbox and its event scope.
+- Quota check: **79% used, 21% remaining**. Stop optional feature work at this committed state.

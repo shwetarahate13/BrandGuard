@@ -180,6 +180,18 @@ class SubmissionAssignRequest(BaseModel):
     reviewer_id: str
 
 
+class NotificationResponse(BaseModel):
+    id: str
+    user_id: str
+    submission_id: Optional[str] = None
+    kind: str
+    title: str
+    message: str
+    is_read: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
 class EscalatedReviewRequest(BaseModel):
     action: Literal["confirm", "dismiss"]
     justification: str = Field(min_length=3, max_length=2000)

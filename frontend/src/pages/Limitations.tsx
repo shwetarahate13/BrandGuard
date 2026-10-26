@@ -77,7 +77,7 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
             <span>Workspace and Feedback Boundaries</span>
           </div>
           <p className="text-xs text-stone-600 leading-relaxed">
-            This deployment has one workspace and no team/tenant boundary. Dispute statistics and repeated-pattern suppression are shared across that workspace. Creator dashboard activity messages are derived from decisions and review comments; there is no persistent inbox or reviewer assignment alert. Human review is required before content is published.
+            This deployment has one workspace and no team/tenant boundary. Dispute statistics and repeated-pattern suppression are shared across that workspace. The persistent in-app inbox covers reviewer assignments and workflow approval/changes/rejection events; it does not notify on finding-level decisions, comments, or email. The Creator dashboard also shows derived activity messages from decisions and review comments. Human review is required before content is published.
           </p>
         </div>
       </div>

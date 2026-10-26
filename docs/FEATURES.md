@@ -12,10 +12,12 @@ This inventory reflects behavior present in the current application. It does not
 
 ## Role-specific workspaces
 
-- **Creator:** My Work dashboard, own submissions, title/intent search, review findings, revision workflow, feedback metrics, and derived notifications for recent decisions and reviewer comments.
+- **Creator:** My Work dashboard, own submissions, title/intent search, review findings, revision workflow, feedback metrics, and persistent notifications for workflow decisions.
 - **Manager:** Team Command Center, organization trends and feedback statistics, status/search filters, submission age against the four-hour SLA target, reviewer assignment, standard-risk approval, changes requested/rejected, and guideline health.
 - **Reviewer:** Compliance Desk, assigned submissions and escalated findings, source lookup, compliance notes, and high-risk sign-off for assigned submissions.
 - **Admin:** User and role management, account activation and password reset, approved-source management, runtime settings, system status, audit log and CSV export, feedback statistics/reset, and organization insights.
+
+The notification bell is available to signed-in roles. Reviewer assignment events go to the assigned reviewer; approval, changes-requested, and rejection decisions go to the creator. Notifications have read/unread state and open the related submission.
 
 ## Guideline health (Improvement A)
 
@@ -43,7 +45,7 @@ This inventory reflects behavior present in the current application. It does not
 
 ## Current product boundaries
 
-- Creator notifications are derived from decisions and comments; there is no persistent notification inbox or assignment alert.
+- The Creator dashboard's activity summary remains derived from decisions and comments. Persistent in-app notifications cover reviewer assignments and workflow decisions, but not finding-level decisions, comments, or email delivery.
 - Manager and creator dashboards support search/filter controls, but saved views are not implemented.
 - CSV export covers audit logs. A dedicated approval-report CSV/PDF export is not implemented.
 - Admins can reset another user's password; self-service password change is not implemented.

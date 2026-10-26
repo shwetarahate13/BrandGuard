@@ -20,6 +20,7 @@ from backend.app.services.permissions import (
     has_escalated_risk,
 )
 from backend.app.utils.audit import log_action
+from backend.app.services.notifications import add_notification
 
 router = APIRouter(prefix="/submissions", tags=["workflow"])
 
@@ -113,6 +114,17 @@ def approve_submission(
     )
     db.add(approval)
     submission.status = SubmissionStatus.approved
+    message = f"{current_user.name} approved ‘{submission.title}’."
+    if payload.note and payload.note.strip():
+        message += f" Review note: {payload.note.strip()}"
+    add_notification(
+        db,
+        user_id=submission.creator_id,
+        submission_id=submission.id,
+        kind="workflow_decision",
+        title="Submission approved",
+        message=message,
+    )
 
     log_action(db, current_user.id, "approve_submission", "submission", submission.id, {"note": payload.note})
     db.commit()
@@ -170,6 +182,18 @@ def reject_or_request_changes(
     )
     db.add(approval)
     submission.status = target_status
+    decision_label = "requested changes on" if decision_val == "changes_requested" else "rejected"
+    message = f"{current_user.name} {decision_label} ‘{submission.title}’."
+    if payload.note and payload.note.strip():
+        message += f" Review note: {payload.note.strip()}"
+    add_notification(
+        db,
+        user_id=submission.creator_id,
+        submission_id=submission.id,
+        kind="workflow_decision",
+        title="Changes requested" if decision_val == "changes_requested" else "Submission rejected",
+        message=message,
+    )
 
     log_action(db, current_user.id, f"{decision_val}_submission", "submission", submission.id, {"note": payload.note})
     db.commit()

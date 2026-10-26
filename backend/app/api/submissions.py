@@ -20,6 +20,7 @@ from backend.app.services.auth import get_current_user
 from backend.app.services.permissions import (
     Action, check_permission, check_can_view_submission
 )
+from backend.app.services.notifications import add_notification
 from backend.app.utils.audit import log_action
 from backend.app.utils.text_extract import (
     extract_text,
@@ -330,7 +331,17 @@ def assign_submission(
     if not reviewer:
         raise HTTPException(status_code=400, detail="Assigned user must be an active reviewer")
 
+    previous_reviewer_id = submission.assigned_to_id
     submission.assigned_to_id = reviewer.id
+    if previous_reviewer_id != reviewer.id:
+        add_notification(
+            db,
+            user_id=reviewer.id,
+            submission_id=submission.id,
+            kind="review_assignment",
+            title="New review assignment",
+            message=f"{current_user.name} assigned you to review ‘{submission.title}’.",
+        )
     log_action(db, current_user.id, "assign_reviewer", "submission", submission.id, {
         "reviewer_id": reviewer.id,
         "reviewer_name": reviewer.name,

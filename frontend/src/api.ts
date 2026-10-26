@@ -18,6 +18,7 @@ import {
   CreatorPersonalStats,
   SystemSettings,
   AuditLog,
+  Notification,
 } from "./types";
 
 const API_BASE = "/api";
@@ -197,6 +198,18 @@ export const api = {
     }),
   getHistory: async (submissionId: string) =>
     request<any>(`/submissions/${submissionId}/history`),
+  getNotifications: async (params?: { unread_only?: boolean; limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.unread_only) query.set("unread_only", "true");
+    if (params?.limit) query.set("limit", String(params.limit));
+    if (params?.offset) query.set("offset", String(params.offset));
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return request<Notification[]>(`/notifications${suffix}`);
+  },
+  markNotificationRead: async (notificationId: string) =>
+    request<Notification>(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: "PATCH" }),
+  markAllNotificationsRead: async () =>
+    request<{ updated_count: number }>("/notifications/read-all", { method: "PATCH" }),
 
   // Admin Sources
   getGuidelines: async () => request<GuidelineDoc[]>("/admin/guidelines"),

@@ -24,6 +24,7 @@ from backend.app.models.models import (
     FindingStatus,
     GuidelineClause,
     GuidelineDoc,
+    Notification,
     PreferenceModelState,
     SourceType,
     Submission,
@@ -479,6 +480,86 @@ def test_get_feedback_stats_reports_category_rates_and_suppression(api_client):
         "  CLAIM   TEXT ",
         patterns,
     )
+
+
+def test_assignment_and_workflow_decisions_create_private_notifications(api_client, monkeypatch):
+    client, session_factory, manager = api_client
+    creator = User(
+        id="notify-creator", name="Notify Creator", email="notify-creator@example.test",
+        password_hash="x", role=UserRole.creator, is_active=True,
+    )
+    reviewer = User(
+        id="notify-reviewer", name="Notify Reviewer", email="notify-reviewer@example.test",
+        password_hash="x", role=UserRole.reviewer, is_active=True,
+    )
+    approved = Submission(
+        id="notify-approved", creator_id=creator.id, title="Approved copy",
+        status=SubmissionStatus.in_review,
+    )
+    changes = Submission(
+        id="notify-changes", creator_id=creator.id, title="Copy with requested changes",
+        status=SubmissionStatus.in_review,
+    )
+    rejected = Submission(
+        id="notify-rejected", creator_id=creator.id, title="Rejected copy",
+        status=SubmissionStatus.in_review,
+    )
+    with session_factory.begin() as db:
+        db.add_all([creator, reviewer, approved, changes, rejected])
+
+    assigned = client.post(
+        f"/api/submissions/{approved.id}/assign",
+        json={"reviewer_id": reviewer.id},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: reviewer)
+    reviewer_inbox = client.get("/api/notifications?unread_only=true")
+    assert reviewer_inbox.status_code == 200
+    assert len(reviewer_inbox.json()) == 1
+    assignment_notice = reviewer_inbox.json()[0]
+    assert assignment_notice["kind"] == "review_assignment"
+    assert assignment_notice["submission_id"] == approved.id
+    assert "Approved copy" in assignment_notice["message"]
+    assert assignment_notice["is_read"] is False
+
+    # A different authenticated user cannot read or change the reviewer's notification.
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+    assert client.patch(f"/api/notifications/{assignment_notice['id']}/read").status_code == 404
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: manager)
+    approval = client.post(
+        f"/api/submissions/{approved.id}/approve",
+        json={"decision": "approved", "note": "Approved for launch."},
+    )
+    assert approval.status_code == 200, approval.text
+    change_response = client.post(
+        f"/api/submissions/{changes.id}/reject",
+        json={"decision": "changes_requested", "note": "Update the supporting claim."},
+    )
+    assert change_response.status_code == 200, change_response.text
+    rejection = client.post(
+        f"/api/submissions/{rejected.id}/reject",
+        json={"decision": "rejected", "note": "This copy is outside the brief."},
+    )
+    assert rejection.status_code == 200, rejection.text
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+    inbox = client.get("/api/notifications")
+    assert inbox.status_code == 200
+    notices = inbox.json()
+    assert len(notices) == 3
+    assert {item["title"] for item in notices} == {
+        "Submission approved", "Changes requested", "Submission rejected",
+    }
+    approval_notice = next(item for item in notices if item["submission_id"] == approved.id)
+    assert "Approved for launch." in approval_notice["message"]
+    marked = client.patch("/api/notifications/read-all")
+    assert marked.json()["updated_count"] == 3
+    assert client.get("/api/notifications?unread_only=true").json() == []
+
+    with session_factory() as db:
+        assert db.query(Notification).count() == 4
 
 
 def test_reviewer_dismissal_trains_feedback_and_invalidates_guideline_health(api_client, monkeypatch):
