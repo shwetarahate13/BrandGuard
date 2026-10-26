@@ -125,3 +125,7 @@ The highest-priority Step 5 feature, persistent assignment and workflow-decision
 - Browser end-to-end check created and checked a standard-risk submission as Creator, requested review, assigned a Reviewer as Manager, confirmed the Reviewer received and opened the assignment notification, approved as Manager, and confirmed the Creator received the approval note and opened the submission. No browser errors/warnings.
 - Verification: fresh SQLite migration to head passed; full backend suite **155 passed**; `npm run build --prefix frontend` passed; `git diff --check` passed. Updated README, feature inventory, and limitations to describe the inbox and its event scope.
 - Quota check: **79% used, 21% remaining**. Stop optional feature work at this committed state.
+
+## GitHub Sync (2026-10-26)
+- Reconciled the in-progress `origin/main` merge while preserving the Phase 6 deployment example and limitations documentation; retained the remote PostgreSQL driver dependency update and clarified the JWT environment-variable description.
+- Prepared the remaining eligible workspace files for the requested GitHub commit. `.env`, databases, Chroma data, and uploads remain excluded by `.gitignore` and are not to be committed.

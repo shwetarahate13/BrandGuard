@@ -134,7 +134,7 @@ Docker files remain available for container-based deployment and are not needed 
 | :--- | :--- | :--- |
 | `ENVIRONMENT` | `development` | Production mode enforces PostgreSQL and a strong JWT secret |
 | `DATABASE_URL` | `sqlite:///./brandguard.db` | PostgreSQL connection string (Neon in production) |
-| `JWT_SECRET` | Generated per process in development | JWT signing secret; required in production |
+| `JWT_SECRET` | Generated per process when unset in development | JWT signing secret; set a stable value of at least 32 bytes in production |
 | `JWT_EXPIRE_MINUTES` | `480` | JWT expiration interval |
 | `LLM_PROVIDER` | `mock` | `mock` (offline deterministic) or `anthropic` |
 | `LLM_MODEL` | `claude-sonnet-4-20250514` | Target LLM model name |
