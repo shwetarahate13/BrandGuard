@@ -7,6 +7,8 @@ BrandGuard sits between content drafting and publishing to review text, DOCX, PD
 
 Every finding is **grounded in a cited source with an exact quote**, and suggested fixes are rendered as **word-level diffs** that preserve the creator's stated purpose.
 
+For step-by-step role instructions and feature explanations, see the [BrandGuard User Guide (PDF)](output/pdf/BrandGuard_User_Guide.pdf).
+
 ---
 
 ## Architecture

@@ -172,6 +172,10 @@ Assignment due dates, manager-only updates, manager/reviewer overdue indicators,
 - Updated README, FEATURES, and LIMITATIONS to describe the startup behavior. A fresh Alembic SQLite database passed the full backend suite (**163 tests**); frontend tests (**7 passed**), frontend production build, and `git diff --check` passed. Fix committed and pushed as `1241f63`.
 - After Render redeployed, Admin, Manager, Reviewer, and Creator password logins each returned HTTP 200; `/api/auth/me` returned the matching role for all four accounts on `brandguard-zxa4.onrender.com`.
 
+## Role-Based User Guide (2026-10-27)
+- Created `output/pdf/BrandGuard_User_Guide.pdf`, an eight-page guide with a shared workflow walkthrough, instructions for each role, feature explanations and importance, safeguards, limitations, and troubleshooting.
+- Rendered all pages for visual QA, fixed a cover-band overlap, and verified the final PDF has eight readable pages with the expected role and feature sections. Linked it from README.
+
 ## Final Website and Deployment Check (2026-10-27)
 - Started the frontend and API on isolated local ports with a fresh throwaway SQLite demo database. The Vite app document and `/api/health` both returned HTTP 200. Demo mode reported enabled, and Admin, Manager, Reviewer, and Creator each authenticated and received the matching `/api/auth/me` role.
 - The public `https://brandguard.onrender.com/api/health` endpoint returned HTTP 503 with Render's “This service has been suspended” page. The pushed branch is at `6165598` and the repository blueprint is configured for auto-deploy, but the suspended service does not serve the updated app.
