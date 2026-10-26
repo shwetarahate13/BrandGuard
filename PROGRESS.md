@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Demo password synchronization fix is tested; commit, push, and verify the live Render redeploy
+- **Current Step**: Demo password mismatch is fixed, deployed, and verified for all four roles
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -83,7 +83,7 @@
 11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
 
 ## Exact Next Step
-Assignment due dates, manager-only updates, manager/reviewer overdue indicators, saved views, approval-report exports, self-service password change, dark mode, and first-login onboarding tips are implemented. Current issue: synchronize stale demo password hashes in `DEMO_MODE=true`, then verify the live Render redeploy. Admin password reset, basic search/filter controls, and audit CSV export already exist.
+Assignment due dates, manager-only updates, manager/reviewer overdue indicators, saved views, approval-report exports, self-service password change, dark mode, first-login onboarding tips, and demo password synchronization are implemented. Demo credentials have been verified against the live Render service. Admin password reset, basic search/filter controls, and audit CSV export already exist.
 
 ## Phase 6 Resume Check (2026-10-26)
 - Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
@@ -169,7 +169,8 @@ Assignment due dates, manager-only updates, manager/reviewer overdue indicators,
 - Reproduced on `brandguard-zxa4.onrender.com`: `/api/health` and `/api/system/mode` returned HTTP 200 with demo mode enabled; all four displayed passwords returned HTTP 401, while all four role-based demo-login endpoints confirmed the accounts existed.
 - Root cause: demo accounts were seeded only when the database had zero users. Existing databases could retain old demo password hashes while the login page displayed current seed passwords.
 - Added a startup synchronizer that repairs or creates only the four reserved throwaway demo accounts when `DEMO_MODE=true`; it does not rerun sample-content seeding on a non-empty database or alter unrelated users. Added unit coverage for stale-password repair, missing accounts, role/active state, idempotency, and unchanged workspace users.
-- Updated README, FEATURES, and LIMITATIONS to describe the startup behavior. A fresh Alembic SQLite database passed the full backend suite (**163 tests**); frontend tests (**7 passed**), frontend production build, and `git diff --check` passed. Commit/push and live redeploy verification are next.
+- Updated README, FEATURES, and LIMITATIONS to describe the startup behavior. A fresh Alembic SQLite database passed the full backend suite (**163 tests**); frontend tests (**7 passed**), frontend production build, and `git diff --check` passed. Fix committed and pushed as `1241f63`.
+- After Render redeployed, Admin, Manager, Reviewer, and Creator password logins each returned HTTP 200; `/api/auth/me` returned the matching role for all four accounts on `brandguard-zxa4.onrender.com`.
 
 ## Final Website and Deployment Check (2026-10-27)
 - Started the frontend and API on isolated local ports with a fresh throwaway SQLite demo database. The Vite app document and `/api/health` both returned HTTP 200. Demo mode reported enabled, and Admin, Manager, Reviewer, and Creator each authenticated and received the matching `/api/auth/me` role.
