@@ -19,9 +19,12 @@ Tests:
    - Manager adds comment and gives final approval
    - Verify history & insights metrics
 """
+import os
 import sys
 import time
 import httpx
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 
@@ -31,27 +34,36 @@ def run_smoke_test(base_url: str):
     print(f"BrandGuard Production Smoke Test -> {base_url}")
     print("=" * 65)
 
-    client = httpx.Client(base_url=base_url, timeout=30.0)
+    if base_url in ("inprocess", "--inprocess", "local", "testclient"):
+        from fastapi.testclient import TestClient
+        from backend.app.main import app
+        client = TestClient(app)
+        healthy = True
+        r = client.get("/api/health")
+        assert r.status_code == 200, f"/api/health returned {r.status_code}: {r.text}"
+        print(f"  ✓ /api/health returned 200 OK: {r.json()} (in-process)")
+    else:
+        client = httpx.Client(base_url=base_url, timeout=30.0)
 
-    # 1. Health check & Cold Start Readiness
-    print("\n[Step 1] Checking /api/health with cold-start wait...")
-    max_wait = 60
-    start_time = time.time()
-    healthy = False
+        # 1. Health check & Cold Start Readiness
+        print("\n[Step 1] Checking /api/health with cold-start wait...")
+        max_wait = 60
+        start_time = time.time()
+        healthy = False
 
-    while time.time() - start_time < max_wait:
-        try:
-            r = client.get("/api/health")
-            if r.status_code == 200:
-                print(f"  ✓ /api/health returned 200 OK: {r.json()} (waited {time.time()-start_time:.1f}s)")
-                healthy = True
-                break
-        except Exception as e:
-            time.sleep(2)
+        while time.time() - start_time < max_wait:
+            try:
+                r = client.get("/api/health")
+                if r.status_code == 200:
+                    print(f"  ✓ /api/health returned 200 OK: {r.json()} (waited {time.time()-start_time:.1f}s)")
+                    healthy = True
+                    break
+            except Exception:
+                time.sleep(2)
 
-    if not healthy:
-        print("  ✗ Health check failed after 60s timeout.")
-        sys.exit(1)
+        if not healthy:
+            print("  ✗ Health check failed after 60s timeout.")
+            sys.exit(1)
 
     # 2. System Status
     print("\n[Step 2] Checking /api/system/status...")

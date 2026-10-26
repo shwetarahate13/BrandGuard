@@ -25,10 +25,33 @@ INFORMAL_MARKERS = {
 CONTRACTION_PATTERN = re.compile(r"\b\w+(?:n't|'re|'ve|'ll|'d|'m)\b", re.I)
 
 
+def _count_syllables(word: str) -> int:
+    word = word.lower().strip()
+    if not word:
+        return 0
+    if len(word) <= 3:
+        return 1
+    word = re.sub(r"(?:[^laeiouy]|ed|es|e)$", "", word)
+    word = re.sub(r"^y", "", word)
+    syllables = len(re.findall(r"[aeiouy]{1,2}", word))
+    return max(1, syllables)
+
+
+def _flesch_reading_ease(text: str) -> float:
+    words = re.findall(r"\b[a-zA-Z0-9']+\b", text)
+    if not words:
+        return 100.0
+    sentences = max(1, len([s for s in re.split(r"[.!?]+", text.strip()) if s.strip()]))
+    syllable_count = sum(_count_syllables(w) for w in words)
+    words_count = len(words)
+    score = 206.835 - 1.015 * (words_count / sentences) - 84.6 * (syllable_count / words_count)
+    return float(np.clip(score, 0.0, 100.0))
+
+
 def _sentence_length(text: str) -> float:
-    words = max(0, int(textstat.lexicon_count(text, removepunct=True)))
-    sentences = max(1, int(textstat.sentence_count(text))) if text.strip() else 0
-    return words / sentences if sentences else 0.0
+    words = re.findall(r"\b[a-zA-Z0-9']+\b", text)
+    sentences = max(1, len([s for s in re.split(r"[.!?]+", text.strip()) if s.strip()])) if text.strip() else 0
+    return len(words) / sentences if sentences else 0.0
 
 
 def _formality_score(text: str) -> float:
@@ -47,7 +70,7 @@ def feature_vector(original_span: str, rewrite: str) -> np.ndarray:
     candidate = rewrite or ""
     try:
         sentence_delta = _sentence_length(candidate) - _sentence_length(original)
-        flesch_delta = float(textstat.flesch_reading_ease(candidate)) - float(textstat.flesch_reading_ease(original))
+        flesch_delta = _flesch_reading_ease(candidate) - _flesch_reading_ease(original)
     except Exception:
         logger.exception("Could not calculate rewrite readability features")
         sentence_delta = 0.0
