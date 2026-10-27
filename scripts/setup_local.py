@@ -7,11 +7,20 @@ import re
 import secrets
 import subprocess
 import sys
+import tempfile
 import venv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MINIMUM_PYTHON = (3, 11)
+LARGE_REQUIREMENTS = {
+    "sentence-transformers",
+    "opencv-python",
+    "opencv-python-headless",
+    "rapidocr-onnxruntime",
+    "rapidocr",
+    "onnxruntime",
+}
 
 
 def venv_python() -> Path:
@@ -68,10 +77,33 @@ def write_local_env() -> dict[str, str]:
 
 def command_env(values: dict[str, str]) -> dict[str, str]:
     env = os.environ.copy()
+    env.setdefault("PIP_DEFAULT_TIMEOUT", "120")
+    env.setdefault("PIP_RETRIES", "5")
+    env.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "120")
+    env.setdefault("HF_HUB_ETAG_TIMEOUT", "30")
     for key, value in values.items():
         env.setdefault(key, value)
     env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     return env
+
+
+def partition_requirements(text: str) -> tuple[list[str], list[str]]:
+    """Install ordinary dependencies before the larger model/OCR wheels.
+
+    Splitting the pip transaction reduces peak temporary disk use on a judge's
+    laptop while preserving the same pinned requirements and markers.
+    """
+    base: list[str] = []
+    large: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            (large if line.startswith("#") else base).append(raw_line)
+            continue
+        package = line.split(";", 1)[0].strip().split("[", 1)[0]
+        package = package.split("==", 1)[0].split(">=", 1)[0].split("<=", 1)[0].lower()
+        (large if package in LARGE_REQUIREMENTS else base).append(raw_line)
+    return base, large
 
 
 def run(command: list[str], env: dict[str, str]) -> None:
@@ -95,8 +127,19 @@ def main() -> int:
 
     env = command_env(env_values)
     requirements = ROOT / "backend" / "requirements.txt"
-    print("Installing the pinned full local runtime (OCR, PDF, OpenCV, and neural retrieval)...")
-    run([str(python), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(requirements)], env)
+    base_requirements, large_requirements = partition_requirements(requirements.read_text(encoding="utf-8"))
+    print("Installing the pinned local runtime in two disk-conscious batches...")
+    with tempfile.TemporaryDirectory(prefix="brandguard-setup-") as temp_dir:
+        temp_root = Path(temp_dir)
+        base_file = temp_root / "requirements-base.txt"
+        large_file = temp_root / "requirements-large.txt"
+        base_file.write_text("\n".join(base_requirements) + "\n", encoding="utf-8")
+        large_file.write_text("\n".join(large_requirements) + "\n", encoding="utf-8")
+        pip = [str(python), "-m", "pip", "install", "--disable-pip-version-check", "--no-cache-dir"]
+        print("Installing application and database dependencies...")
+        run([*pip, "-r", str(base_file)], env)
+        print("Installing OCR and neural retrieval dependencies...")
+        run([*pip, "-r", str(large_file)], env)
 
     model_path = Path(env.get("EMBEDDING_MODEL_PATH", "./data/models/all-MiniLM-L6-v2")).expanduser()
     if not model_path.is_absolute():

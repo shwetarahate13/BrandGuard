@@ -17,18 +17,20 @@ FastAPI serves the committed frontend bundle and JSON API on one local port. Ale
 
 ## Clone and run
 
-Install Python 3.11 or newer. From macOS, Linux, or Windows PowerShell:
+Install Python 3.11 or newer. On macOS or Linux, use the command for your installed minor version (for example, `python3.11`):
 
 ```sh
 git clone https://github.com/shwetarahate13/BrandGuard.git
 cd BrandGuard
-python scripts/setup_local.py
-python scripts/run_local.py
+python3.12 scripts/setup_local.py
+python3.12 scripts/run_local.py
 ```
+
+In Windows PowerShell, use `py -3.12 scripts/setup_local.py` followed by `py -3.12 scripts/run_local.py`. Replace `3.12` with the installed Python 3.11+ version in either example.
 
 Open `http://localhost:8000`. Setup creates a virtual environment, installs pinned Python dependencies, downloads the retrieval model for offline use, creates a local `.env`, applies migrations, and seeds the local demo workspace. Node.js and Docker are not needed to run the app. Local setup enables `DEMO_MODE=true`; the login screen then shows the four throwaway demo accounts. Set `DEMO_MODE=false` in `.env` to disable demo accounts and sample data.
 
-To check the local setup, run `python scripts/doctor.py`. To run tests, use `.venv/bin/python -m pytest -q` on macOS/Linux or `& .venv/Scripts/python.exe -m pytest -q` in PowerShell.
+Run the doctor with the same Python launcher (`python3.12 scripts/doctor.py` on macOS/Linux or `py -3.12 scripts/doctor.py` in PowerShell). To run tests, use `.venv/bin/python -m pytest -q` on macOS/Linux or `& .venv/Scripts/python.exe -m pytest -q` in PowerShell.
 
 ## AI assistance
 

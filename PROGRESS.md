@@ -3,8 +3,8 @@
 ## Current state
 
 - Phase 0: complete and pushed in commit `2705e51` (`fix: verify role workspaces and theme contrast`).
-- Phase 1: implementation in progress in the current checkout; this checkpoint does not close the phase.
-- Next exact step: run `python scripts/setup_local.py`, `python scripts/run_local.py`, and a browser check from a clean clone on Python 3.11+ with at least 5 GiB free. The committed static bundle matches the successful frontend build; this host cannot complete the clean install because it has Python 3.9 system-wide and about 2 GiB free.
+- Phase 1: implementation complete; fresh README setup proof remains blocked by the local disk limit, so Phase 1 verification is not closed.
+- Next exact step: on a machine with at least 5 GiB free, run `python3.12 scripts/setup_local.py`, `python3.12 scripts/run_local.py`, and complete the clean-clone browser check. This host has Python 3.12 available but setup reached `ENOSPC` with about 2 GiB free, even after splitting pip installation into batches.
 
 ## Phase 0 — health check and bugs
 
@@ -22,7 +22,7 @@
 - Reworked setup and doctor scripts for the complete Python runtime and committed frontend bundle. README now gives local clone/run/test commands.
 - Removed old hosted deployment and reduced-runtime claims from active feature, limitation, improvement, judge, and sample documentation. Added `docs/PLAN_CHANGES.md`.
 - Verification: full backend suite passed (194 tests), frontend suite passed (7 tests), and production frontend build passed. The in-process smoke test covered all four demo roles, workflow permissions, certificates, PDF extraction/review locations, and image OCR. A separate local API run verified process-backed text, PDF, and image jobs.
-- The current machine has about 2 GiB free disk and its system Python is 3.9, below the project requirement. A clean install/model download could not be run here; it needs Python 3.11+ and at least 5 GiB free.
+- The clean setup was attempted twice. The original single pip transaction and the disk-conscious two-batch retry both failed with `ENOSPC` on this host's roughly 2 GiB of free disk; no setup `.venv` was left behind. The setup script now installs large OCR/neural dependencies separately and uses longer pip/model-download timeouts.
 
 ### Current cuts and limits
 
