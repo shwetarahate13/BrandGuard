@@ -51,9 +51,19 @@ The notification bell is available to signed-in roles. Reviewer assignment event
 - Alembic-managed schema changes; SQLite local default and PostgreSQL required in production; liveness routes at `/healthz`, `/api/health`, and `/api/healthz`.
 - `DEMO_MODE=false` by default. When enabled, the four throwaway demo accounts are created or synchronized on startup, including on an existing database. Sample demo content is added only when the database is empty.
 
+## Tamper-evident approvals
+
+- Every audit event belongs to a per-submission chain (or a workspace chain). Canonical JSON fields are hashed with SHA-256; each entry stores its previous hash, sequence, entry hash, and chained-at time. The migration backfills existing events and creates each stored chain head.
+- SQLite and PostgreSQL triggers reject updates and deletes on `audit_log`. Application APIs append audit events and expose no edit/delete action.
+- Approval records store the exact approved UTF-8 text hash, or original file-byte hash for PDF/image uploads. Approval creates a certificate PDF with version, title, hash, finding category counts and resolutions, reviewer justifications, approver details, AI engine/mode, chain head, and verification link.
+- Creators can download certificates for their submissions; managers/reviewers for submissions they handled; admins for all. Managers and admins can revoke certificates with a required reason recorded in the audit chain. A later approved version marks older certificates superseded.
+- Public `/verify` recomputes the chain and content hash and returns Valid, Tampered, Revoked, or Superseded with approval metadata only. It never returns approved copy. Pasted-copy checking reports an exact Match/Differs result; for PDF/image approvals, the pasted text is compared with extracted text while the file-byte hash is checked separately.
+- Admins can run and export an integrity report. `scripts/verify_audit_chain.py` checks the configured database offline; `scripts/demo_tamper.py` changes only a temporary SQLite copy to demonstrate detection.
+- See [LIMITATIONS.md](LIMITATIONS.md) for the trust boundary: the chain is internal to this database and is not an external timestamp.
+
 ## Current product boundaries
 
 - The Creator dashboard's activity summary remains derived from decisions and comments. Persistent in-app notifications cover reviewer assignments and workflow decisions, but not finding-level decisions, comments, or email delivery.
 - Saved views store the current search and status filter in browser local storage, isolated by user and role; they do not sync across browsers or devices.
 - Admins can reset another user's password. Onboarding dismissal is saved per account and role in browser storage.
-- See [LIMITATIONS.md](LIMITATIONS.md) for image-processing, data-scope, rate-limit, and hosting constraints.
+- See [LIMITATIONS.md](LIMITATIONS.md) for image-processing, data-scope, rate-limit, audit-chain, and hosting constraints.

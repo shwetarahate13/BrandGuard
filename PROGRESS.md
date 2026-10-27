@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Demo password mismatch is fixed, deployed, and verified for all four roles
+- **Current Step**: Parts 1 and 2 of the judge-ready local run and tamper-evident approval certificates are complete; final verification is next
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -189,4 +189,13 @@ Assignment due dates, manager-only updates, manager/reviewer overdue indicators,
 - Added planted text, PNG, and PDF samples; README now leads with the 5-minute macOS/Linux and Windows PowerShell setup, demo accounts, URLs, troubleshooting, and Node 18+ frontend-development requirements. Corrected the smoke test's stale demo passwords and added `/healthz` coverage.
 - Isolated in-process smoke test passed through all four role logins and the complete submission/review/approval flow. Doctor reported Python, dependency, database-write, and prebuilt-frontend checks passing; port 8000 was busy and it printed the alternate-port command.
 - Fresh-clone proof completed in `/private/tmp/brandguard-judge-part1`: `setup_local.py` installed the pinned lite profile, migrated and seeded SQLite, and `doctor.py` passed all five checks. The prebuilt `backend/app/static` bundle served the SPA without Node. Port 8000 was already occupied, so `run_local.py --port 8210` was used; `/healthz` returned 200, all four role logins returned their expected `/auth/me` roles, and the full `scripts/smoke_test.py` workflow passed. The only environment-specific adjustment was the alternate port.
-- Part 1 complete and committed as `a991732` (`feat: add offline judge-ready local setup`).
+- Part 1 complete and committed as `d23dffd` (`feat: add offline judge-ready local setup`).
+
+## Tamper-Evident Approval Certificates (Part 2 — 2026-10-27)
+- Added per-submission SHA-256 audit chains over canonical JSON, migration-time backfill for existing events, stored chain heads, and SQLite/PostgreSQL append-only triggers. No API exposes audit-row update or delete operations.
+- Approval stores the exact approved UTF-8 text hash or original PDF/image bytes hash, appends the approval event, and generates a compact certificate PDF. On-demand generation is available for earlier approved submissions. Certificates list version/title/hash, category counts and finding resolutions, reviewer justifications, approver roles/timestamps/comments, AI engine/mode, chain head, and verification URL.
+- Added public `/verify` metadata-only checks for valid, tampered, revoked, and superseded certificates; exact pasted-copy comparison; manager/admin revocation with required chained reason; role-scoped certificate downloads; and admin integrity report/CSV export.
+- Added Certificate Library, public Verify, and Admin Integrity Check screens. Added `scripts/verify_audit_chain.py`, safe-copy-only `scripts/demo_tamper.py`, `docs/JUDGE_GUIDE.md`, and certificate/security entries in README, FEATURES, and LIMITATIONS. The limitations explain the database-only trust boundary and how to externally anchor a certificate chain head.
+- Added 11 integration checks for chain verification/tampering, SQLite triggers, PDF detail/privacy, text and binary content hashes, copy match/diff, role scope, revocation, superseding, on-demand generation, and admin integrity access.
+- Verification: all 11 focused certificate tests passed; frontend production build passed and the committed FastAPI static bundle was refreshed. An older Part 1 SQLite database migrated and backfilled 13 events across two valid chains; post-migration UPDATE/DELETE attempts were blocked. The updated smoke test passed all four role logins, full review/approval, certificate download, public verification/copy match, and admin integrity check. `demo_tamper.py` caught a modified row in a disposable DB copy without changing the original.
+- Part 2 implementation complete.

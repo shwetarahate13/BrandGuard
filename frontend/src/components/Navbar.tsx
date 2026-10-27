@@ -17,6 +17,8 @@ import {
   LockKeyhole,
   Moon,
   Sun,
+  BadgeCheck,
+  Fingerprint,
 } from "lucide-react";
 import { User, UserRole } from "../types";
 import { Notification } from "../types";
@@ -150,6 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         return [
           { label: "My Work", path: "/", icon: FileText },
           { label: "New Content Check", path: "/new", icon: PlusCircle },
+          { label: "Certificates", path: "/certificates", icon: BadgeCheck },
           { label: "Limitations", path: "/limitations", icon: HelpCircle },
         ];
       case "manager":
@@ -158,12 +161,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           { label: "Guideline Health", path: "/dashboard/guideline-health", icon: Flame },
           { label: "Org Insights", path: "/insights", icon: BarChart3 },
           { label: "Approved Sources", path: "/sources", icon: Database },
+          { label: "Certificates", path: "/certificates", icon: BadgeCheck },
           { label: "Limitations", path: "/limitations", icon: HelpCircle },
         ];
       case "reviewer":
         return [
           { label: "Compliance Desk", path: "/", icon: Shield },
           { label: "Approved Sources (Read-Only)", path: "/sources", icon: Database },
+          { label: "Certificates", path: "/certificates", icon: BadgeCheck },
           { label: "Limitations", path: "/limitations", icon: HelpCircle },
         ];
       case "admin":
@@ -172,6 +177,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           { label: "Approved Sources", path: "/sources", icon: Database },
           { label: "Guideline Health", path: "/dashboard/guideline-health", icon: Flame },
           { label: "Org Insights", path: "/insights", icon: BarChart3 },
+          { label: "Certificates", path: "/certificates", icon: BadgeCheck },
+          { label: "Integrity Check", path: "/admin/integrity", icon: Fingerprint },
           { label: "Limitations", path: "/limitations", icon: HelpCircle },
         ];
       default:

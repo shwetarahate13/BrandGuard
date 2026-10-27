@@ -58,7 +58,54 @@ export interface Approval {
   decision: "approved" | "changes_requested" | "rejected";
   note?: string;
   created_at: string;
+  content_hash?: string | null;
   user?: User;
+}
+
+export interface CertificateInfo {
+  certificate_id: string;
+  title: string;
+  status: "valid" | "superseded" | "revoked" | "tampered" | string;
+  approved_version: number;
+  content_hash: string;
+  approved_at: string | null;
+  approver: { name: string; role: UserRole | string };
+  approval_comment?: string | null;
+  ai_engine: string;
+  ai_mode: string;
+  audit_chain_head_hash: string;
+  verification_url: string;
+  audit_chain_valid?: boolean;
+  content_hash_valid?: boolean;
+  revoked_at?: string | null;
+  revocation_audit_head_hash?: string | null;
+}
+
+export interface PublishedCopyResult {
+  certificate_id: string;
+  status: string;
+  copy_result: "Match" | "Differs";
+  comparison_scope: string;
+  message: string;
+  content_hash_valid: boolean;
+}
+
+export interface AuditIntegrityChain {
+  scope_id: string;
+  submission_id: string | null;
+  entry_count: number;
+  valid: boolean;
+  head_hash: string | null;
+  errors: string[];
+}
+
+export interface AuditIntegrityReport {
+  checked_at: string;
+  total_chains: number;
+  valid_chains: number;
+  invalid_chains: number;
+  total_entries: number;
+  chains: AuditIntegrityChain[];
 }
 
 export interface Notification {

@@ -36,6 +36,9 @@ class Action(str, Enum):
     SYSTEM_STATUS_VIEW = "system:status_view"
     AUDIT_LOG_VIEW = "audit_log:view"
     AUDIT_LOG_EXPORT = "audit_log:export"
+    AUDIT_INTEGRITY_VIEW = "audit_integrity:view"
+    CERTIFICATE_DOWNLOAD = "certificate:download"
+    CERTIFICATE_REVOKE = "certificate:revoke"
     APPROVAL_REPORT_EXPORT = "approval_report:export"
     FEEDBACK_STATS_VIEW = "feedback:stats_view"
     FEEDBACK_RESET = "feedback:reset"
@@ -51,6 +54,7 @@ PERMISSION_MATRIX: Dict[UserRole, Set[Action]] = {
         Action.SUBMISSION_COMMENT,
         Action.FINDINGS_DECIDE,
         Action.PERSONAL_STATS_VIEW,
+        Action.CERTIFICATE_DOWNLOAD,
     },
     UserRole.manager: {
         Action.SUBMISSION_VIEW_ALL,
@@ -65,6 +69,8 @@ PERMISSION_MATRIX: Dict[UserRole, Set[Action]] = {
         Action.FEEDBACK_STATS_VIEW,
         Action.ORG_INSIGHTS_VIEW,
         Action.APPROVAL_REPORT_EXPORT,
+        Action.CERTIFICATE_DOWNLOAD,
+        Action.CERTIFICATE_REVOKE,
     },
     UserRole.reviewer: {
         Action.SUBMISSION_VIEW_ASSIGNED,
@@ -72,6 +78,7 @@ PERMISSION_MATRIX: Dict[UserRole, Set[Action]] = {
         Action.FINDINGS_ESCALATE_REVIEW,
         Action.SUBMISSION_COMMENT,
         Action.SOURCES_READ,
+        Action.CERTIFICATE_DOWNLOAD,
     },
     UserRole.admin: {
         Action.SUBMISSION_VIEW_ALL,
@@ -84,6 +91,9 @@ PERMISSION_MATRIX: Dict[UserRole, Set[Action]] = {
         Action.SYSTEM_STATUS_VIEW,
         Action.AUDIT_LOG_VIEW,
         Action.AUDIT_LOG_EXPORT,
+        Action.AUDIT_INTEGRITY_VIEW,
+        Action.CERTIFICATE_DOWNLOAD,
+        Action.CERTIFICATE_REVOKE,
         Action.FEEDBACK_STATS_VIEW,
         Action.FEEDBACK_RESET,
         Action.ORG_INSIGHTS_VIEW,

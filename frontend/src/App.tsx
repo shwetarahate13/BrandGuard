@@ -14,6 +14,9 @@ import { AdminSources } from "./pages/AdminSources";
 import { Insights } from "./pages/Insights";
 import { GuidelineHealth } from "./pages/GuidelineHealth";
 import { Limitations } from "./pages/Limitations";
+import { CertificateLibrary } from "./pages/CertificateLibrary";
+import { VerifyCertificate } from "./pages/VerifyCertificate";
+import { IntegrityCheck } from "./pages/IntegrityCheck";
 import { applyDarkMode, readDarkMode, saveDarkMode } from "./theme";
 import { hasSeenOnboarding, markOnboardingSeen } from "./onboarding";
 
@@ -60,7 +63,7 @@ export const App: React.FC = () => {
 
   const navigate = (path: string) => {
     window.history.pushState({}, "", path);
-    setCurrentPath(path);
+    setCurrentPath(new URL(path, window.location.origin).pathname);
     window.scrollTo(0, 0);
   };
 
@@ -123,7 +126,9 @@ export const App: React.FC = () => {
   // Routing logic with strict Role-based UI mirroring
   const renderLogin = () => <Login onLoginSuccess={handleLoginSuccess} demoMode={demoMode} />;
   let content = null;
-  if (!user && currentPath !== "/limitations") {
+  if (currentPath === "/verify") {
+    content = <VerifyCertificate />;
+  } else if (!user && currentPath !== "/limitations") {
     content = renderLogin();
   } else if (currentPath === "/login") {
     content = renderLogin();
@@ -165,6 +170,10 @@ export const App: React.FC = () => {
     }
   } else if (currentPath === "/limitations") {
     content = <Limitations navigate={navigate} />;
+  } else if (currentPath === "/certificates") {
+    content = user ? <CertificateLibrary user={user} navigate={navigate} /> : renderLogin();
+  } else if (currentPath === "/admin/integrity") {
+    content = user?.role === "admin" ? <IntegrityCheck /> : user ? <Dashboard user={user} navigate={navigate} /> : renderLogin();
   } else {
     content = user ? <Dashboard user={user} navigate={navigate} /> : renderLogin();
   }
@@ -208,6 +217,7 @@ export const App: React.FC = () => {
               >
                 Known Limitations & Disclosures
               </button>
+              <button onClick={() => navigate("/verify")} className="hover:text-stone-900 underline underline-offset-4">Verify Certificate</button>
               <span>Pre-publication governance • AI suggests, humans decide</span>
             </div>
           </div>

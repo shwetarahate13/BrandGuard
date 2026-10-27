@@ -77,6 +77,12 @@ class ApprovalDecision(str, enum.Enum):
     rejected = "rejected"
 
 
+class CertificateStatus(str, enum.Enum):
+    valid = "valid"
+    superseded = "superseded"
+    revoked = "revoked"
+
+
 class SourceType(str, enum.Enum):
     guideline_clause = "guideline_clause"
     approved_fact = "approved_fact"
@@ -327,6 +333,7 @@ class Approval(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     decision = Column(SAEnum(ApprovalDecision), nullable=False)
     note = Column(Text, nullable=True)
+    content_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
     submission = relationship("Submission", back_populates="approvals")
@@ -336,17 +343,64 @@ class Approval(Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
-    __table_args__ = (Index("ix_audit_created_at", "created_at"),)
+    __table_args__ = (
+        Index("ix_audit_created_at", "created_at"),
+        Index("ix_audit_submission_sequence", "submission_id", "sequence_no"),
+    )
 
     id = Column(String, primary_key=True, default=gen_id)
+    submission_id = Column(String, nullable=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=True)
     action = Column(String(100), nullable=False)
     entity = Column(String(100), nullable=True)
     entity_id = Column(String, nullable=True)
     meta = Column(JSON, default=dict)
     created_at = Column(DateTime, default=utcnow)
+    sequence_no = Column(Integer, nullable=False, default=1)
+    prev_hash = Column(String(64), nullable=True)
+    entry_hash = Column(String(64), nullable=False)
+    chained_at = Column(DateTime, nullable=False, default=utcnow)
 
     user = relationship("User")
+
+
+class AuditChainHead(Base):
+    __tablename__ = "audit_chain_heads"
+
+    scope_id = Column(String(100), primary_key=True)
+    head_hash = Column(String(64), nullable=False)
+    sequence_no = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, nullable=False, default=utcnow)
+
+
+class ApprovalCertificate(Base):
+    __tablename__ = "approval_certificates"
+    __table_args__ = (
+        Index("ix_certificates_submission_created", "submission_id", "created_at"),
+        Index("ix_certificates_status", "status"),
+    )
+
+    certificate_id = Column(String(48), primary_key=True)
+    approval_id = Column(String, ForeignKey("approvals.id"), nullable=False, unique=True)
+    submission_id = Column(String, ForeignKey("submissions.id", ondelete="RESTRICT"), nullable=False)
+    version_id = Column(String, ForeignKey("submission_versions.id"), nullable=False)
+    version_no = Column(Integer, nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    audit_head_hash = Column(String(64), nullable=False)
+    ai_engine = Column(String(200), nullable=False)
+    ai_mode = Column(String(80), nullable=False)
+    verification_url = Column(String(1000), nullable=False)
+    status = Column(String(20), nullable=False, default=CertificateStatus.valid.value)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    revoked_by_id = Column(String, ForeignKey("users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revocation_reason = Column(Text, nullable=True)
+    revocation_audit_head_hash = Column(String(64), nullable=True)
+
+    approval = relationship("Approval")
+    submission = relationship("Submission")
+    version = relationship("SubmissionVersion")
+    revoked_by = relationship("User")
 
 
 class Notification(Base):

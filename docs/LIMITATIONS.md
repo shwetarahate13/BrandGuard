@@ -37,3 +37,10 @@ This page describes the current implementation in the repository. Hosting provid
 - If an external LLM provider is enabled, it processes the review or rewrite inputs described above. Mock/offline mode makes no external LLM request.
 - This repository configures application security headers. HTTPS termination, database encryption at rest, backups, and retention depend on the selected hosting and database providers and their settings; the application does not independently verify those controls.
 - When `DEMO_MODE=true`, the four shared throwaway accounts are created or have their passwords synchronized on startup, even if the database already contains other users. Sample demo content is seeded only on an empty database. Keep demo mode off for private workspaces and never use the throwaway demo passwords for real accounts.
+
+## Audit-chain trust boundary
+
+- The audit hash chain and database triggers prove consistency within the current database state. They are not an external timestamp, independent witness, or proof of when an event happened outside this database.
+- Someone with full control of the database and application environment could rebuild the rows and their hashes, and replace the stored chain heads. The triggers prevent ordinary application and SQL update/delete paths, but they do not make a database administrator cryptographically powerless.
+- Each certificate includes the chain-head hash at its approval or generation point. An organization can publish or anchor that hash in an independently controlled system to make later full-database rewrites detectable against that external record.
+- Public verification returns approval metadata and integrity results, never the approved content or revocation reason. A pasted-copy check processes only the submitted text for exact comparison; it is not stored or returned.

@@ -255,6 +255,25 @@ def run_smoke_test(base_url: str):
     insights = r.json()
     print(f"  ✓ Insights Summary: {insights['total_submissions']} submissions, {insights['accepted_count']} accepted fixes, {insights['dropped_findings_count']} dropped citations")
 
+    print("\n[Step 7] Verifying Approval Certificate & Audit Integrity...")
+    r = client.get("/api/certificates", headers=creator_auth)
+    assert r.status_code == 200, r.text
+    certificates = [item for item in r.json() if item["title"] == submission_payload["title"]]
+    assert certificates, "Creator should be able to list their approved certificate"
+    certificate = certificates[0]
+    certificate_id = certificate["certificate_id"]
+    r = client.get(f"/api/certificates/{certificate_id}/download", headers=creator_auth)
+    assert r.status_code == 200 and r.content.startswith(b"%PDF"), "Certificate PDF download failed"
+    r = client.get(f"/api/certificates/verify/{certificate_id}")
+    assert r.status_code == 200 and r.json()["status"] == "valid", f"Public verification failed: {r.text}"
+    assert submission_payload["text"] not in r.text, "Public verification must not return approved content"
+    r = client.post(f"/api/certificates/verify/{certificate_id}/copy", json={"text": versions[1]["text"]})
+    assert r.status_code == 200 and r.json()["copy_result"] == "Match", f"Approved-copy match failed: {r.text}"
+    r = client.get("/api/admin/integrity-check", headers=admin_auth)
+    assert r.status_code == 200 and r.json()["invalid_chains"] == 0, f"Audit integrity check failed: {r.text}"
+    print(f"  ✓ Certificate {certificate_id} downloaded; public verification and pasted-copy match passed")
+    print(f"  ✓ Admin integrity check verified {r.json()['total_chains']} chain(s)")
+
     print("\n" + "=" * 65)
     print("ALL SMOKE TESTS PASSED CLEANLY (100% SUCCESS)!")
     print("BrandGuard role and workflow smoke checks passed.")

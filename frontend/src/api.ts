@@ -19,6 +19,9 @@ import {
   SystemSettings,
   AuditLog,
   Notification,
+  CertificateInfo,
+  PublishedCopyResult,
+  AuditIntegrityReport,
 } from "./types";
 
 const API_BASE = "/api";
@@ -239,6 +242,26 @@ export const api = {
     downloadFile(`/reports/approvals.${format}`, `brandguard_approval_report.${format}`),
   downloadAuditLogCsv: async () =>
     downloadFile("/admin/audit-logs/export", "brandguard_audit_log.csv"),
+  getCertificates: async () => request<CertificateInfo[]>("/certificates"),
+  downloadCertificate: async (certificateId: string) =>
+    downloadFile(`/certificates/${encodeURIComponent(certificateId)}/download`, `brandguard-certificate-${certificateId}.pdf`),
+  downloadSubmissionCertificate: async (submissionId: string) =>
+    downloadFile(`/submissions/${encodeURIComponent(submissionId)}/certificate`, `brandguard-certificate-${submissionId}.pdf`),
+  revokeCertificate: async (certificateId: string, reason: string) =>
+    request<{ certificate_id: string; status: string; revoked_at: string }>(`/certificates/${encodeURIComponent(certificateId)}/revoke`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  verifyCertificate: async (certificateId: string) =>
+    request<CertificateInfo>(`/certificates/verify/${encodeURIComponent(certificateId)}`),
+  verifyPublishedCopy: async (certificateId: string, text: string) =>
+    request<PublishedCopyResult>(`/certificates/verify/${encodeURIComponent(certificateId)}/copy`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  getAuditIntegrity: async () => request<AuditIntegrityReport>("/admin/integrity-check"),
+  downloadAuditIntegrity: async () =>
+    downloadFile("/admin/integrity-check/export", "brandguard_integrity_check.csv"),
   getNotifications: async (params?: { unread_only?: boolean; limit?: number; offset?: number }) => {
     const query = new URLSearchParams();
     if (params?.unread_only) query.set("unread_only", "true");

@@ -30,6 +30,7 @@ EXPECTED = {
         Action.SUBMISSION_COMMENT,
         Action.FINDINGS_DECIDE,
         Action.PERSONAL_STATS_VIEW,
+        Action.CERTIFICATE_DOWNLOAD,
     },
     UserRole.manager: {
         Action.SUBMISSION_VIEW_ALL,
@@ -44,6 +45,8 @@ EXPECTED = {
         Action.FEEDBACK_STATS_VIEW,
         Action.ORG_INSIGHTS_VIEW,
         Action.APPROVAL_REPORT_EXPORT,
+        Action.CERTIFICATE_DOWNLOAD,
+        Action.CERTIFICATE_REVOKE,
     },
     UserRole.reviewer: {
         Action.SUBMISSION_VIEW_ASSIGNED,
@@ -51,6 +54,7 @@ EXPECTED = {
         Action.FINDINGS_ESCALATE_REVIEW,
         Action.SUBMISSION_COMMENT,
         Action.SOURCES_READ,
+        Action.CERTIFICATE_DOWNLOAD,
     },
     UserRole.admin: {
         Action.SUBMISSION_VIEW_ALL,
@@ -63,6 +67,9 @@ EXPECTED = {
         Action.SYSTEM_STATUS_VIEW,
         Action.AUDIT_LOG_VIEW,
         Action.AUDIT_LOG_EXPORT,
+        Action.AUDIT_INTEGRITY_VIEW,
+        Action.CERTIFICATE_DOWNLOAD,
+        Action.CERTIFICATE_REVOKE,
         Action.FEEDBACK_STATS_VIEW,
         Action.FEEDBACK_RESET,
         Action.ORG_INSIGHTS_VIEW,

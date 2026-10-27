@@ -28,6 +28,7 @@ from backend.app.api.guidelines import router as guidelines_router
 from backend.app.api.feedback import router as feedback_router
 from backend.app.api.notifications import router as notifications_router
 from backend.app.api.reports import router as reports_router
+from backend.app.api.certificates import router as certificates_router, admin_router as integrity_router
 from backend.app.services.rate_limit import endpoint_rate_limiter
 from backend.app.pipeline.retriever import reindex_if_empty
 from backend.app.workers.dfi_worker import run_dfi_worker
@@ -177,6 +178,8 @@ app.include_router(guidelines_router, prefix=api_prefix)
 app.include_router(feedback_router, prefix=api_prefix)
 app.include_router(notifications_router, prefix=api_prefix)
 app.include_router(reports_router, prefix=api_prefix)
+app.include_router(certificates_router, prefix=api_prefix)
+app.include_router(integrity_router, prefix=api_prefix)
 
 
 @app.get("/healthz")

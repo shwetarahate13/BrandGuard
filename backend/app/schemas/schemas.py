@@ -389,6 +389,7 @@ class ApprovalResponse(BaseModel):
     version_id: Optional[str] = None
     user_id: str
     decision: str
+    content_hash: Optional[str] = None
     note: Optional[str] = None
     created_at: datetime
     user: Optional[UserResponse] = None
@@ -399,12 +400,17 @@ class ApprovalResponse(BaseModel):
 
 class AuditLogResponse(BaseModel):
     id: str
+    submission_id: Optional[str] = None
     user_id: Optional[str] = None
     action: str
     entity: Optional[str] = None
     entity_id: Optional[str] = None
     meta: dict = {}
     created_at: datetime
+    sequence_no: int = 1
+    prev_hash: Optional[str] = None
+    entry_hash: str
+    chained_at: datetime
     user: Optional[UserResponse] = None
     model_config = {"from_attributes": True}
 

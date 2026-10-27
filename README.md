@@ -51,6 +51,8 @@ The seeded demo logins are:
 | Reviewer | `reviewer@nexora.dev` | `ReviewerDemo2026!` |
 | Admin | `admin@nexora.dev` | `AdminDemo2026!` |
 
+For the short role-by-role walkthrough, open [the 5-minute Judge Guide](docs/JUDGE_GUIDE.md). It covers the local review path, finding fixes, four-role handoff, certificate download and public verification, plus the three improvements.
+
 ### Troubleshooting
 
 | Problem | Fix |
@@ -129,10 +131,13 @@ flowchart TD
 11. **Reviewer Feedback Loop**: Accept, edit, and dispute decisions train a persisted online logistic-regression model. Future rewrites are ranked by estimated acceptance probability; repeated disputed clause/span pairs are suppressed after three distinct findings. Suppression uses the current single-brand workspace because this deployment has no separate team table.
 12. **Account and Operations Controls**: bcrypt password hashing, a 12-character password minimum, expiring JWTs, login lockout, request rate limits, role-scoped access, security headers, request IDs, and Alembic-managed schema changes.
 13. **In-App Notifications**: Reviewer assignments notify the assigned reviewer; approval, changes-requested, and rejection decisions notify the creator. The persistent bell inbox tracks unread/read state and opens the relevant submission.
+14. **Tamper-Evident Approval Certificates**: Each submission has a SHA-256 hash-chained audit log protected from update/delete by SQLite/PostgreSQL triggers. Approval creates a downloadable PDF with the approved content hash, findings and resolutions, approvers, AI mode, and chain head. Public `/verify` checks integrity without showing content and compares a pasted published copy. Managers/admins can revoke with a required reason; admins can check and export every chain.
 
 ---
 
 ## Development and Deployment
+
+To inspect audit integrity without starting the web app, run `python scripts/verify_audit_chain.py`. Use `python scripts/demo_tamper.py` after audit events exist to see a verifier catch a modified temporary database copy; it never changes the configured database. For known implementation boundaries, see [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 
 Node.js 18+ and npm are needed only when changing the React frontend. For Vite development, install frontend dependencies and start the dev server while `run_local.py` serves the API:
 
@@ -208,3 +213,5 @@ The smoke test requires the backend to be running in another terminal. The evalu
 - [`docs/FEATURES.md`](docs/FEATURES.md): Implemented capabilities and current product boundaries.
 - [`docs/ROUND3_IMPROVEMENTS.md`](docs/ROUND3_IMPROVEMENTS.md): Implementation and verification notes for Improvements A, B, and C.
 - [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): Deployment, image-processing, data-scope, and security disclosures.
+- [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md): Five-minute role walkthrough and click path.
+- [`docs/FEATURES.md`](docs/FEATURES.md): Implemented feature inventory, including certificates and audit integrity.

@@ -1,12 +1,13 @@
 """Workflow API routes: comments, request review, approvals, rejections, and audit history."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, SubmissionStatus,
-    Comment, Approval, ApprovalDecision, AuditLog
+    Comment, Approval, ApprovalCertificate, ApprovalDecision, AuditLog
 )
+from backend.app.llm.client import get_llm_mode
 from backend.app.schemas.schemas import (
     CommentCreate, CommentResponse, ApprovalCreate, ApprovalResponse,
     AuditLogResponse
@@ -21,6 +22,7 @@ from backend.app.services.permissions import (
 )
 from backend.app.utils.audit import log_action
 from backend.app.services.notifications import add_notification
+from backend.app.services.certificates import approved_content_hash, create_certificate, render_certificate_pdf
 
 router = APIRouter(prefix="/submissions", tags=["workflow"])
 
@@ -83,6 +85,7 @@ def request_review(
 def approve_submission(
     submission_id: str,
     payload: ApprovalCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -104,6 +107,9 @@ def approve_submission(
         .order_by(SubmissionVersion.version_no.desc())
         .first()
     )
+    if not latest_version:
+        raise HTTPException(status_code=409, detail="There is no version available to approve")
+    content_hash = approved_content_hash(submission, latest_version)
 
     approval = Approval(
         submission_id=submission.id,
@@ -111,6 +117,7 @@ def approve_submission(
         user_id=current_user.id,
         decision=ApprovalDecision.approved,
         note=payload.note,
+        content_hash=content_hash,
     )
     db.add(approval)
     submission.status = SubmissionStatus.approved
@@ -126,7 +133,30 @@ def approve_submission(
         message=message,
     )
 
-    log_action(db, current_user.id, "approve_submission", "submission", submission.id, {"note": payload.note})
+    audit_event = log_action(
+        db,
+        current_user.id,
+        "approve_submission",
+        "submission",
+        submission.id,
+        {"note": payload.note, "content_hash": content_hash},
+        submission_id=submission.id,
+    )
+    approval.created_at = audit_event.created_at
+    engine = get_llm_mode()
+    create_certificate(
+        db,
+        approval=approval,
+        submission=submission,
+        version=latest_version,
+        audit_head_hash=audit_event.entry_hash,
+        ai_engine=engine,
+        ai_mode="offline mock" if engine == "mock/offline" else "live provider",
+        base_url=str(request.base_url),
+    )
+    db.flush()
+    latest_certificate = db.query(ApprovalCertificate).filter_by(approval_id=approval.id).one()
+    render_certificate_pdf(db, latest_certificate)
     db.commit()
     db.refresh(approval)
     return approval
@@ -228,8 +258,8 @@ def get_submission_history(
     )
     audit_logs = (
         db.query(AuditLog)
-        .filter(AuditLog.entity_id == submission_id)
-        .order_by(AuditLog.created_at.asc())
+        .filter(AuditLog.submission_id == submission_id)
+        .order_by(AuditLog.sequence_no.asc())
         .all()
     )
     comments = (
