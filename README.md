@@ -12,6 +12,7 @@ Judges can run BrandGuard with Python 3.11+ on macOS, Linux, or Windows. The def
 From a fresh clone, in the repository folder:
 
 ```bash
+git clone https://github.com/shwetarahate13/BrandGuard.git
 python scripts/setup_local.py
 python scripts/doctor.py
 python scripts/run_local.py
@@ -22,6 +23,7 @@ Use `python3` in place of `python` if that is how Python 3.11+ is installed on y
 ### Windows PowerShell
 
 ```powershell
+git clone https://github.com/shwetarahate13/BrandGuard.git
 py -3.11 scripts/setup_local.py
 py -3.11 scripts/doctor.py
 py -3.11 scripts/run_local.py
