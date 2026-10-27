@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.database import get_session_factory
 from backend.app.seed import run_seed
+from backend.app.models.models import Approval, Decision
 
 client = TestClient(app)
 
@@ -64,6 +65,12 @@ def test_full_governance_workflow_and_rbac():
         headers=h_creator,
     )
     assert res_decide.status_code == 200
+    duplicate_accept = client.post(
+        f"/api/findings/{term_finding['id']}/decision",
+        json={"action": "accept"},
+        headers=h_creator,
+    )
+    assert duplicate_accept.status_code == 409
 
     # Verify new version created with accepted rewrite
     res_sub_updated = client.get(f"/api/submissions/{sub_id}", headers=h_creator)
@@ -83,6 +90,7 @@ def test_full_governance_workflow_and_rbac():
     res_req = client.post(f"/api/submissions/{sub_id}/request-review", headers=h_creator)
     assert res_req.status_code == 200
     assert res_req.json()["submission_status"] == "in_review"
+    assert client.post(f"/api/submissions/{sub_id}/request-review", headers=h_creator).status_code == 409
 
     # 7. RBAC Guard: Creator CANNOT approve their own submission
     res_creator_approve = client.post(
@@ -108,6 +116,14 @@ def test_full_governance_workflow_and_rbac():
     )
     assert res_mgr_approve.status_code == 200
     assert res_mgr_approve.json()["decision"] == "approved"
+    repeated_approval = client.post(
+        f"/api/submissions/{sub_id}/approve",
+        json={"decision": "approved", "note": "Duplicate click"},
+        headers=h_manager,
+    )
+    assert repeated_approval.status_code == 409
+    with get_session_factory()() as db:
+        assert db.query(Approval).filter(Approval.submission_id == sub_id).count() == 1
 
     # Verify submission status is now approved
     res_final = client.get(f"/api/submissions/{sub_id}", headers=h_manager)
@@ -177,6 +193,14 @@ def test_edit_dispute_changes_rejection_resubmission_and_review_assignment():
     })
     assert disputed.status_code == 200, disputed.text
     assert disputed.json()["action"] == "dispute"
+    repeated_dispute = client.post("/api/decisions", headers=creator, json={
+        "finding_id": link_finding["id"],
+        "action": "dispute",
+        "reason": "Repeated submit should not create a second decision.",
+    })
+    assert repeated_dispute.status_code == 409
+    with get_session_factory()() as db:
+        assert db.query(Decision).filter(Decision.finding_id == link_finding["id"]).count() == 1
     assert client.post(f"/api/submissions/{submission_id}/request-review", headers=creator).status_code == 200
 
     changes = client.post(f"/api/submissions/{submission_id}/reject", headers=manager, json={

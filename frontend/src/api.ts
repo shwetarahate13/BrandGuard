@@ -168,14 +168,16 @@ export const api = {
     intent?: string;
     text?: string;
     content_type?: string;
-  }) =>
+  }, idempotencyKey?: string) =>
     request<Submission>("/submissions", {
       method: "POST",
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       body: JSON.stringify(data),
     }),
-  uploadSubmission: async (formData: FormData, onProgress?: (progress: number, message: string) => void) => {
+  uploadSubmission: async (formData: FormData, onProgress?: (progress: number, message: string) => void, idempotencyKey?: string) => {
     const response = await request<Submission | BackgroundJob>("/submissions/upload?background=true", {
       method: "POST",
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       body: formData,
     });
     if ("kind" in response && response.kind === "document-extraction") {
@@ -235,9 +237,10 @@ export const api = {
     }),
 
   // Workflow
-  addComment: async (submissionId: string, body: string, findingId?: string) =>
+  addComment: async (submissionId: string, body: string, findingId?: string, idempotencyKey?: string) =>
     request<Comment>(`/submissions/${submissionId}/comments`, {
       method: "POST",
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       body: JSON.stringify({ body, finding_id: findingId }),
     }),
   requestReview: async (submissionId: string) =>

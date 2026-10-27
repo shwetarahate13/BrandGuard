@@ -1,3 +1,5 @@
+import pytest
+
 from backend.app.workers import background_jobs as jobs_module
 
 
@@ -42,11 +44,11 @@ class _FakeContext:
         return self.process
 
 
-def _queued_job(owner_id="creator"):
+def _queued_job(owner_id="creator", kind="content-review"):
     return {
         "id": "job-test",
         "owner_id": owner_id,
-        "kind": "content-review",
+        "kind": kind,
         "status": "queued",
         "progress": 0,
         "message": "Waiting",
@@ -58,13 +60,14 @@ def _queued_job(owner_id="creator"):
     }
 
 
-def test_background_job_timeout_terminates_worker_process(monkeypatch):
+@pytest.mark.parametrize("kind", ["content-review", "document-extraction"])
+def test_background_job_timeout_terminates_worker_process(monkeypatch, kind):
     context = _FakeContext()
     manager = jobs_module.BackgroundJobs()
-    manager._jobs["job-test"] = _queued_job()
+    manager._jobs["job-test"] = _queued_job(kind=kind)
     monkeypatch.setattr(jobs_module.multiprocessing, "get_context", lambda _method: context)
 
-    manager._run("job-test", "content-review", {}, timeout_seconds=0)
+    manager._run("job-test", kind, {}, timeout_seconds=0)
 
     job = manager.get("job-test", "creator")
     assert context.process.terminated

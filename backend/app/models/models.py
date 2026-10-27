@@ -4,7 +4,7 @@ import enum
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, String, Text, Integer, Float, Boolean, DateTime, LargeBinary,
-    ForeignKey, Enum as SAEnum, JSON, Index
+    ForeignKey, Enum as SAEnum, JSON, Index, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
@@ -235,6 +235,23 @@ class SubmissionVersion(Base):
     __table_args__ = (
         Index("ix_version_submission", "submission_id", "version_no", unique=True),
     )
+
+
+class IdempotencyRecord(Base):
+    """Persist create/upload request keys so retries cannot duplicate drafts."""
+    __tablename__ = "idempotency_records"
+    __table_args__ = (
+        UniqueConstraint("user_id", "scope", "key", name="uq_idempotency_user_scope_key"),
+        Index("ix_idempotency_resource", "resource_id"),
+    )
+
+    id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    scope = Column(String(80), nullable=False)
+    key = Column(String(128), nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    resource_id = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
 
 
 class Finding(Base):

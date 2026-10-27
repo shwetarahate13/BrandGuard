@@ -154,6 +154,14 @@ class SubmissionCreate(BaseModel):
     text: Optional[str] = Field(default=None, max_length=200_000)
     content_type: str = "text"
 
+    @field_validator("title")
+    @classmethod
+    def title_is_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Submission title cannot be blank")
+        return value
+
 class SubmissionResponse(BaseModel):
     id: str
     creator_id: str
@@ -301,7 +309,14 @@ class VersionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 class VersionCreate(BaseModel):
-    text: str
+    text: str = Field(min_length=1, max_length=200_000)
+
+    @field_validator("text")
+    @classmethod
+    def version_text_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Submission content cannot be blank")
+        return value
 
 
 # ── Findings ──
@@ -363,8 +378,15 @@ class DecisionResponse(BaseModel):
 # ── Comments ──
 
 class CommentCreate(BaseModel):
-    body: str
+    body: str = Field(min_length=1, max_length=5000)
     finding_id: Optional[str] = None
+
+    @field_validator("body")
+    @classmethod
+    def comment_body_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Comment cannot be blank")
+        return value.strip()
 
 class CommentResponse(BaseModel):
     id: str

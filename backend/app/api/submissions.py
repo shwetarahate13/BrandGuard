@@ -1,16 +1,18 @@
 """Submissions API routes: create, upload, view, check, and add versions."""
 from datetime import datetime, timedelta, timezone
+import hashlib
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Path as APIPath, Query, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Header, Path as APIPath, Query, status
 from fastapi.responses import Response, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from backend.app.config import get_settings
 from backend.app.database import get_db, get_session_factory
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, SubmissionStatus,
-    ContentType, Finding, GuidelineClause
+    ContentType, Finding, GuidelineClause, IdempotencyRecord, gen_id,
 )
 from backend.app.schemas.schemas import (
     SubmissionCreate, SubmissionResponse, SubmissionListResponse,
@@ -21,6 +23,7 @@ from backend.app.services.permissions import (
     Action, check_permission, check_can_view_submission
 )
 from backend.app.services.notifications import add_notification
+from backend.app.services.idempotency import find_idempotency_record, request_fingerprint, remember_request
 from backend.app.utils.audit import log_action
 from backend.app.utils.text_extract import (
     extract_text,
@@ -79,6 +82,7 @@ def _extract_uploaded_version(version_id: str, owner_id: str, progress):
             if failed:
                 parent_id = failed.submission_id
                 db.delete(failed)
+                db.query(IdempotencyRecord).filter(IdempotencyRecord.resource_id == parent_id).delete(synchronize_session=False)
                 parent = db.query(Submission).filter(Submission.id == parent_id).first()
                 if parent and parent.status == SubmissionStatus.draft:
                     db.delete(parent)
@@ -129,6 +133,8 @@ def _submit_background_job(**kwargs):
 
 
 def validate_submission_text(text: str) -> None:
+    if not text or not text.strip():
+        raise HTTPException(status_code=422, detail="Submission content cannot be empty or whitespace-only")
     max_words = get_settings().MAX_TEXT_WORDS
     if len(text.split()) > max_words:
         raise HTTPException(
@@ -145,6 +151,7 @@ def check_submission_access(submission: Submission, user: User):
 @router.post("", response_model=SubmissionResponse)
 def create_submission(
     payload: SubmissionCreate,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -155,7 +162,19 @@ def create_submission(
     except ValueError:
         ctype = ContentType.text
 
+    text_content = payload.text or ""
+    validate_submission_text(text_content)
+    request_hash = request_fingerprint(payload.model_dump(mode="json"))
+    existing = find_idempotency_record(db, current_user.id, "submission-create", idempotency_key, request_hash)
+    if existing:
+        submission = db.query(Submission).filter(Submission.id == existing.resource_id).first()
+        if submission:
+            return submission
+        db.delete(existing)
+        db.commit()
+
     submission = Submission(
+        id=gen_id(),
         creator_id=current_user.id,
         title=payload.title.strip(),
         intent=payload.intent.strip() if payload.intent else None,
@@ -163,22 +182,29 @@ def create_submission(
         content_type=ctype,
     )
     db.add(submission)
-    db.flush()
 
     # Create Version 1
-    text_content = payload.text or ""
-    validate_submission_text(text_content)
     v1 = SubmissionVersion(
+        id=gen_id(),
         submission_id=submission.id,
         version_no=1,
         text=text_content,
         created_by=current_user.id,
     )
     db.add(v1)
-    db.flush()
+    remember_request(db, current_user.id, "submission-create", idempotency_key, request_hash, submission.id)
 
-    log_action(db, current_user.id, "create_submission", "submission", submission.id)
-    db.commit()
+    try:
+        log_action(db, current_user.id, "create_submission", "submission", submission.id)
+        db.commit()
+    except (IntegrityError, OperationalError) as exc:
+        db.rollback()
+        existing = find_idempotency_record(db, current_user.id, "submission-create", idempotency_key, request_hash)
+        if existing:
+            winner = db.query(Submission).filter(Submission.id == existing.resource_id).first()
+            if winner:
+                return winner
+        raise HTTPException(status_code=409, detail="A submission may have been created at the same time. Refresh your list before retrying.") from exc
     db.refresh(submission)
     return submission
 
@@ -190,6 +216,7 @@ async def upload_submission(
     intent: Optional[str] = Form(None),
     content_type: Optional[str] = Form("text"),
     background: bool = Query(False),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -212,6 +239,58 @@ async def upload_submission(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    request_hash = request_fingerprint({
+        "title": title.strip() or filename,
+        "intent": intent.strip() if intent else None,
+        "content_type": content_type or "text",
+        "filename": filename,
+        "mime_type": mime_type,
+        "sha256": hashlib.sha256(contents).hexdigest(),
+        "background": background,
+    })
+    existing = find_idempotency_record(db, current_user.id, "submission-create", idempotency_key, request_hash)
+    if existing:
+        prior = db.query(Submission).filter(Submission.id == existing.resource_id).first()
+        version = (
+            db.query(SubmissionVersion)
+            .filter(SubmissionVersion.submission_id == existing.resource_id)
+            .order_by(SubmissionVersion.version_no.desc())
+            .first()
+        )
+        if prior and version:
+            if version.text.strip():
+                return prior
+            if background and version.source_file:
+                job = _submit_background_job(
+                    owner_id=current_user.id,
+                    kind="document-extraction",
+                    payload={"version_id": version.id, "owner_id": current_user.id},
+                    timeout_seconds=180,
+                    dedupe_key=f"extract:{version.id}",
+                )
+                return JSONResponse(status_code=202, content={**job, "submission_id": prior.id})
+            if version.source_file:
+                try:
+                    if mime_type == "application/pdf":
+                        extracted, source_layout = extract_pdf_text_with_layout(contents)
+                    elif mime_type.startswith("image/"):
+                        handler = get_content_handler(mime_type)
+                        if handler is None:
+                            raise ValueError(f"No content handler registered for {mime_type}")
+                        extracted, source_layout = handler.extract_content(contents)
+                    else:
+                        extracted = extract_text(contents, filename)
+                        source_layout = None
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+                validate_submission_text(extracted)
+                version.text = extracted
+                version.source_layout = source_layout
+                db.commit()
+                return prior
+        db.delete(existing)
+        db.commit()
+
     if background and mime_type in {
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -226,6 +305,7 @@ async def upload_submission(
         else:
             ctype = ContentType.image
         submission = Submission(
+            id=gen_id(),
             creator_id=current_user.id,
             title=title.strip() or filename,
             intent=intent.strip() if intent else None,
@@ -233,8 +313,8 @@ async def upload_submission(
             content_type=ctype,
         )
         db.add(submission)
-        db.flush()
         version = SubmissionVersion(
+            id=gen_id(),
             submission_id=submission.id,
             version_no=1,
             text="",
@@ -244,10 +324,27 @@ async def upload_submission(
             source_filename=filename,
         )
         db.add(version)
-        db.flush()
         version_id = version.id
-        log_action(db, current_user.id, "upload_submission", "submission", submission.id, {"filename": filename})
-        db.commit()
+        remember_request(db, current_user.id, "submission-create", idempotency_key, request_hash, submission.id)
+        try:
+            log_action(db, current_user.id, "upload_submission", "submission", submission.id, {"filename": filename})
+            db.commit()
+        except (IntegrityError, OperationalError) as exc:
+            db.rollback()
+            existing = find_idempotency_record(db, current_user.id, "submission-create", idempotency_key, request_hash)
+            if existing:
+                winner = db.query(Submission).filter(Submission.id == existing.resource_id).first()
+                winner_version = db.query(SubmissionVersion).filter(SubmissionVersion.submission_id == existing.resource_id).order_by(SubmissionVersion.version_no.desc()).first()
+                if winner and winner_version:
+                    job = _submit_background_job(
+                        owner_id=current_user.id,
+                        kind="document-extraction",
+                        payload={"version_id": winner_version.id, "owner_id": current_user.id},
+                        timeout_seconds=180,
+                        dedupe_key=f"extract:{winner_version.id}",
+                    )
+                    return JSONResponse(status_code=202, content={**job, "submission_id": winner.id})
+            raise HTTPException(status_code=409, detail="A submission may have been uploaded at the same time. Refresh your list before retrying.") from exc
         db.refresh(submission)
         job = _submit_background_job(
             owner_id=current_user.id,
@@ -286,6 +383,7 @@ async def upload_submission(
         ctype = ContentType.text
 
     submission = Submission(
+        id=gen_id(),
         creator_id=current_user.id,
         title=title.strip() or filename,
         intent=intent.strip() if intent else None,
@@ -293,9 +391,9 @@ async def upload_submission(
         content_type=ctype,
     )
     db.add(submission)
-    db.flush()
 
     v1 = SubmissionVersion(
+        id=gen_id(),
         submission_id=submission.id,
         version_no=1,
         text=extracted,
@@ -306,10 +404,19 @@ async def upload_submission(
         source_layout=source_layout,
     )
     db.add(v1)
-    db.flush()
+    remember_request(db, current_user.id, "submission-create", idempotency_key, request_hash, submission.id)
 
-    log_action(db, current_user.id, "upload_submission", "submission", submission.id, {"filename": filename})
-    db.commit()
+    try:
+        log_action(db, current_user.id, "upload_submission", "submission", submission.id, {"filename": filename})
+        db.commit()
+    except (IntegrityError, OperationalError) as exc:
+        db.rollback()
+        existing = find_idempotency_record(db, current_user.id, "submission-create", idempotency_key, request_hash)
+        if existing:
+            winner = db.query(Submission).filter(Submission.id == existing.resource_id).first()
+            if winner:
+                return winner
+        raise HTTPException(status_code=409, detail="A submission may have been uploaded at the same time. Refresh your list before retrying.") from exc
     db.refresh(submission)
     return submission
 
@@ -551,6 +658,7 @@ def check_submission(
     )
     if not latest_version:
         raise HTTPException(status_code=400, detail="Submission has no content versions")
+    validate_submission_text(latest_version.text)
     if (
         latest_version.source_mime_type
         and latest_version.source_mime_type.startswith("image/")
@@ -625,6 +733,14 @@ def add_version(
         .order_by(SubmissionVersion.version_no.desc())
         .first()
     )
+    latest_version = (
+        db.query(SubmissionVersion)
+        .filter(SubmissionVersion.submission_id == submission_id)
+        .order_by(SubmissionVersion.version_no.desc())
+        .first()
+    )
+    if latest_version and latest_version.text == payload.text:
+        return latest_version
     next_ver = (max_ver[0] + 1) if max_ver else 1
 
     new_version = SubmissionVersion(
@@ -635,7 +751,19 @@ def add_version(
     )
     db.add(new_version)
     submission.status = SubmissionStatus.draft  # New version returns to draft until checked
-    log_action(db, current_user.id, "add_version", "submission_version", new_version.id, {"version_no": next_ver})
-    db.commit()
+    try:
+        log_action(db, current_user.id, "add_version", "submission_version", new_version.id, {"version_no": next_ver})
+        db.commit()
+    except (IntegrityError, OperationalError) as exc:
+        db.rollback()
+        latest = (
+            db.query(SubmissionVersion)
+            .filter(SubmissionVersion.submission_id == submission_id)
+            .order_by(SubmissionVersion.version_no.desc())
+            .first()
+        )
+        if latest and latest.text == payload.text:
+            return latest
+        raise HTTPException(status_code=409, detail="A newer version was saved at the same time. Refresh and try again.") from exc
     db.refresh(new_version)
     return new_version

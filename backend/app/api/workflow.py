@@ -1,11 +1,12 @@
 """Workflow API routes: comments, request review, approvals, rejections, and audit history."""
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, SubmissionStatus,
-    Comment, Approval, ApprovalCertificate, ApprovalDecision, AuditLog
+    Comment, Approval, ApprovalCertificate, ApprovalDecision, AuditLog, gen_id,
 )
 from backend.app.llm.client import get_llm_mode
 from backend.app.schemas.schemas import (
@@ -22,6 +23,7 @@ from backend.app.services.permissions import (
 )
 from backend.app.utils.audit import log_action
 from backend.app.services.notifications import add_notification
+from backend.app.services.idempotency import find_idempotency_record, request_fingerprint, remember_request
 from backend.app.services.certificates import approved_content_hash, create_certificate, render_certificate_pdf
 
 router = APIRouter(prefix="/submissions", tags=["workflow"])
@@ -31,6 +33,7 @@ router = APIRouter(prefix="/submissions", tags=["workflow"])
 def add_comment(
     submission_id: str,
     payload: CommentCreate,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -41,15 +44,40 @@ def add_comment(
 
     check_can_view_submission(current_user, submission)
 
+    fingerprint = request_fingerprint({
+        "submission_id": submission.id,
+        "body": payload.body,
+        "finding_id": payload.finding_id,
+    })
+    scope = f"submission-comment:{submission.id}"
+    existing = find_idempotency_record(db, current_user.id, scope, idempotency_key, fingerprint)
+    if existing:
+        comment = db.query(Comment).filter(Comment.id == existing.resource_id).first()
+        if comment:
+            return comment
+        db.delete(existing)
+        db.commit()
+
     comment = Comment(
+        id=gen_id(),
         submission_id=submission.id,
         finding_id=payload.finding_id,
         user_id=current_user.id,
         body=payload.body.strip(),
     )
     db.add(comment)
-    log_action(db, current_user.id, "add_comment", "submission", submission.id)
-    db.commit()
+    remember_request(db, current_user.id, scope, idempotency_key, fingerprint, comment.id)
+    try:
+        log_action(db, current_user.id, "add_comment", "submission", submission.id)
+        db.commit()
+    except (IntegrityError, OperationalError) as exc:
+        db.rollback()
+        existing = find_idempotency_record(db, current_user.id, scope, idempotency_key, fingerprint)
+        if existing:
+            saved_comment = db.query(Comment).filter(Comment.id == existing.resource_id).first()
+            if saved_comment:
+                return saved_comment
+        raise HTTPException(status_code=409, detail="The comment may have been saved at the same time. Refresh before retrying.") from exc
     db.refresh(comment)
     return comment
 
@@ -70,11 +98,28 @@ def request_review(
         raise HTTPException(status_code=403, detail="Creators can only request review for their own submissions")
 
     if submission.status != SubmissionStatus.checked:
+        if submission.status == SubmissionStatus.in_review:
+            raise HTTPException(status_code=409, detail="This submission is already in review")
         raise HTTPException(
             status_code=400,
             detail="Run a review on the latest content version before requesting manager review",
         )
 
+    try:
+        transitioned = (
+            db.query(Submission)
+            .filter(Submission.id == submission.id, Submission.status == SubmissionStatus.checked)
+            .update({Submission.status: SubmissionStatus.in_review}, synchronize_session=False)
+        )
+    except OperationalError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Another review request is being saved. Refresh to see the result.") from exc
+    if transitioned != 1:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Only a checked submission can be routed for review; refresh its current status",
+        )
     submission.status = SubmissionStatus.in_review
     log_action(db, current_user.id, "request_review", "submission", submission.id)
     db.commit()
@@ -111,6 +156,20 @@ def approve_submission(
         raise HTTPException(status_code=409, detail="There is no version available to approve")
     content_hash = approved_content_hash(submission, latest_version)
 
+    try:
+        transitioned = (
+            db.query(Submission)
+            .filter(Submission.id == submission.id, Submission.status == SubmissionStatus.in_review)
+            .update({Submission.status: SubmissionStatus.approved}, synchronize_session=False)
+        )
+    except OperationalError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Another decision is being saved. Refresh to see the result.") from exc
+    if transitioned != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This submission has already received a decision")
+    submission.status = SubmissionStatus.approved
+
     approval = Approval(
         submission_id=submission.id,
         version_id=latest_version.id if latest_version else None,
@@ -120,7 +179,6 @@ def approve_submission(
         content_hash=content_hash,
     )
     db.add(approval)
-    submission.status = SubmissionStatus.approved
     message = f"{current_user.name} approved ‘{submission.title}’."
     if payload.note and payload.note.strip():
         message += f" Review note: {payload.note.strip()}"
@@ -203,6 +261,20 @@ def reject_or_request_changes(
         .first()
     )
 
+    try:
+        transitioned = (
+            db.query(Submission)
+            .filter(Submission.id == submission.id, Submission.status == SubmissionStatus.in_review)
+            .update({Submission.status: target_status}, synchronize_session=False)
+        )
+    except OperationalError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Another decision is being saved. Refresh to see the result.") from exc
+    if transitioned != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This submission has already received a decision")
+    submission.status = target_status
+
     approval = Approval(
         submission_id=submission.id,
         version_id=latest_version.id if latest_version else None,
@@ -211,7 +283,6 @@ def reject_or_request_changes(
         note=payload.note,
     )
     db.add(approval)
-    submission.status = target_status
     decision_label = "requested changes on" if decision_val == "changes_requested" else "rejected"
     message = f"{current_user.name} {decision_label} ‘{submission.title}’."
     if payload.note and payload.note.strip():

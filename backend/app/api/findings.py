@@ -3,6 +3,7 @@ from typing import List
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Path as APIPath
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 
 from backend.app.database import get_db
 from backend.app.models.models import (
@@ -87,11 +88,36 @@ def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, curr
     )
     if not source_version or not latest_version or source_version.id != latest_version.id:
         raise HTTPException(status_code=409, detail="This finding belongs to an older version; review the latest version instead")
+    if finding.status != FindingStatus.open:
+        raise HTTPException(status_code=409, detail="This finding has already been decided")
+    if action_lower == "edit" and not (payload.edited_text or "").strip():
+        raise HTTPException(status_code=422, detail="Edited wording cannot be empty")
     original_span = ""
     if source_version and finding.span_start is not None and finding.span_end is not None:
         start = max(0, finding.span_start)
         end = min(len(source_version.text), finding.span_end)
         original_span = source_version.text[start:end]
+
+    # Claim an open finding in the database before writing the decision. The
+    # conditional update makes concurrent duplicate actions a clean 409.
+    decision_status = {
+        "accept": FindingStatus.accepted,
+        "edit": FindingStatus.edited,
+        "dispute": FindingStatus.disputed,
+    }[action_lower]
+    try:
+        claimed = (
+            db.query(Finding)
+            .filter(Finding.id == finding.id, Finding.status == FindingStatus.open)
+            .update({Finding.status: decision_status}, synchronize_session=False)
+        )
+    except OperationalError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Another decision is being saved. Refresh to see the result.") from exc
+    if claimed != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This finding has already been decided")
+    finding.status = decision_status
 
     # Capture an immutable snapshot of the text pair used for online training.
     decision = Decision(
@@ -121,13 +147,6 @@ def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, curr
         logger.exception("Preference model update failed for decision %s", decision.id)
 
     # Update finding status
-    if action_lower == "accept":
-        finding.status = FindingStatus.accepted
-    elif action_lower == "edit":
-        finding.status = FindingStatus.edited
-    elif action_lower == "dispute":
-        finding.status = FindingStatus.disputed
-
     # If accept or edit: generate next version with the replacement applied
     replacement_text = None
     if action_lower == "accept" and finding.suggested_rewrite:

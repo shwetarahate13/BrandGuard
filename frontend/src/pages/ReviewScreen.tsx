@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -47,6 +47,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   // Comment input
   const [newComment, setNewComment] = useState("");
   const [comments, setComments] = useState<any[]>([]);
+  const commentAttempt = useRef<{ signature: string; key: string } | null>(null);
 
   // A creator must be able to revise a submission after a manager requests
   // changes, including when the check found no individual finding to edit.
@@ -55,6 +56,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const [savingRevision, setSavingRevision] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [reviewProgress, setReviewProgress] = useState({ percent: 0, message: "" });
+  const [decisionPendingId, setDecisionPendingId] = useState<string | null>(null);
+  const [workflowPending, setWorkflowPending] = useState(false);
+  const [commentPending, setCommentPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Expanded sources state
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
@@ -135,17 +140,24 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   }, [submissionId, latestVersion?.id, latestVersion?.source_mime_type, sourceRetry, canPreviewSource]);
 
   const handleAccept = async (finding: Finding) => {
+    if (decisionPendingId || reviewing) return;
+    setDecisionPendingId(finding.id);
+    setActionError(null);
     try {
       await api.submitDecision(finding.id, "accept");
       await runBackgroundCheck(submissionId);
       await loadData();
     } catch (err: any) {
-      alert(`The decision was saved, but the latest version could not be rechecked: ${err.message}`);
+      setActionError(`Could not finish accepting this finding. ${err.message}`);
+    } finally {
+      setDecisionPendingId(null);
     }
   };
 
   const handleEditSubmit = async () => {
-    if (!editingFinding) return;
+    if (!editingFinding || decisionPendingId || reviewing) return;
+    setDecisionPendingId(editingFinding.id);
+    setActionError(null);
     try {
       await api.submitDecision(editingFinding.id, "edit", editText);
       setEditingFinding(null);
@@ -153,42 +165,62 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       await runBackgroundCheck(submissionId);
       await loadData();
     } catch (err: any) {
-      alert(`The edit was saved, but the latest version could not be rechecked: ${err.message}`);
+      setActionError(`Could not finish applying this edit. ${err.message}`);
+    } finally {
+      setDecisionPendingId(null);
     }
   };
 
   const handleDisputeSubmit = async () => {
-    if (!disputingFinding) return;
+    if (!disputingFinding || decisionPendingId || reviewing) return;
+    setDecisionPendingId(disputingFinding.id);
+    setActionError(null);
     try {
       await api.submitDecision(disputingFinding.id, "dispute", undefined, disputeReason);
       setDisputingFinding(null);
       setDisputeReason("");
       await loadData();
     } catch (err: any) {
-      alert(`Error disputing finding: ${err.message}`);
+      setActionError(`Could not submit this dispute. ${err.message}`);
+    } finally {
+      setDecisionPendingId(null);
     }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || commentPending) return;
+    const body = newComment.trim();
+    const signature = JSON.stringify({ body, findingId: selectedFindingId || undefined });
+    if (!commentAttempt.current || commentAttempt.current.signature !== signature) {
+      commentAttempt.current = { signature, key: crypto.randomUUID() };
+    }
+    setCommentPending(true);
+    setActionError(null);
     try {
-      await api.addComment(submissionId, newComment.trim(), selectedFindingId || undefined);
+      await api.addComment(submissionId, body, selectedFindingId || undefined, commentAttempt.current.key);
+      commentAttempt.current = null;
       setNewComment("");
       const hist = await api.getHistory(submissionId);
       setComments(hist.comments || []);
     } catch (err: any) {
-      alert(`Error adding comment: ${err.message}`);
+      setActionError(`Could not add the comment. ${err.message}`);
+    } finally {
+      setCommentPending(false);
     }
   };
 
   const handleRequestReview = async () => {
+    if (workflowPending) return;
+    setWorkflowPending(true);
+    setActionError(null);
     try {
       await api.requestReview(submissionId);
       await loadData();
-      alert("Submission successfully routed to Manager / Reviewer for sign-off.");
     } catch (err: any) {
-      alert(`Error requesting review: ${err.message}`);
+      setActionError(`Could not request review. ${err.message}`);
+    } finally {
+      setWorkflowPending(false);
     }
   };
 
@@ -372,10 +404,11 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           {user.role === "creator" && submission.creator_id === user.id && submission.status === "checked" && (
             <button
               onClick={handleRequestReview}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow transition-all"
+              disabled={workflowPending}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow transition-all disabled:opacity-50"
             >
               <Send className="w-3.5 h-3.5 text-amber-400" />
-              Request Manager Review
+              {workflowPending ? "Requesting review…" : "Request Manager Review"}
             </button>
           )}
 
@@ -398,6 +431,11 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           <div className="h-1.5 rounded-full bg-brand-100 overflow-hidden">
             <div className="h-full bg-brand-600 transition-all" style={{ width: `${reviewProgress.percent}%` }} />
           </div>
+        </div>
+      )}
+      {actionError && (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800" role="alert">
+          {actionError} You can retry after checking the current status.
         </div>
       )}
 
@@ -514,9 +552,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               />
               <button
                 type="submit"
-                className="px-3.5 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold hover:bg-stone-800"
+                disabled={commentPending || !newComment.trim()}
+                className="px-3.5 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold hover:bg-stone-800 disabled:opacity-50"
               >
-                Send
+                {commentPending ? "Sending…" : "Send"}
               </button>
             </form>
           </div>
@@ -629,6 +668,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                         {f.suggested_rewrite && (
                           <button
                             type="button"
+                            disabled={!!decisionPendingId || reviewing}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleAccept(f);
@@ -636,12 +676,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                             className="flex-1 py-1.5 px-3 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-sm inline-flex items-center justify-center gap-1 transition-colors"
                           >
                             <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            Accept Fix
+                            {decisionPendingId === f.id ? "Applying…" : "Accept Fix"}
                           </button>
                         )}
 
                         <button
                           type="button"
+                          disabled={!!decisionPendingId || reviewing}
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingFinding(f);
@@ -655,6 +696,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
 
                         <button
                           type="button"
+                          disabled={!!decisionPendingId || reviewing}
                           onClick={(e) => {
                             e.stopPropagation();
                             setDisputingFinding(f);
@@ -692,15 +734,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setEditingFinding(null)}
+                disabled={!!decisionPendingId}
                 className="px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleEditSubmit}
-                className="px-4 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold hover:bg-stone-800"
+                disabled={!!decisionPendingId || !editText.trim()}
+                className="px-4 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold hover:bg-stone-800 disabled:opacity-50"
               >
-                Apply Edit
+                {decisionPendingId ? "Applying…" : "Apply Edit"}
               </button>
             </div>
           </div>
@@ -727,15 +771,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setDisputingFinding(null)}
+                disabled={!!decisionPendingId}
                 className="px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDisputeSubmit}
-                className="px-4 py-1.5 bg-rose-700 text-white rounded-lg text-xs font-semibold hover:bg-rose-800"
+                disabled={!!decisionPendingId || !disputeReason.trim()}
+                className="px-4 py-1.5 bg-rose-700 text-white rounded-lg text-xs font-semibold hover:bg-rose-800 disabled:opacity-50"
               >
-                Submit Dispute
+                {decisionPendingId ? "Submitting…" : "Submit Dispute"}
               </button>
             </div>
           </div>

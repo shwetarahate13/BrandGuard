@@ -1,12 +1,15 @@
 """Integration coverage for the new guideline, media, and feedback APIs."""
 import uuid
 import io
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 import pdfplumber
 from fastapi.testclient import TestClient
+from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -14,11 +17,13 @@ from sqlalchemy.pool import StaticPool
 from backend.app.api import guidelines as guidelines_api
 from backend.app.api import auth as auth_api
 from backend.app.api import submissions as submissions_api
+from backend.app.api import workflow as workflow_api
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.models import (
     Decision,
     DecisionAction,
+    Comment,
     Finding,
     FindingCategory,
     FindingConfidence,
@@ -189,6 +194,205 @@ def test_login_route_locks_out_repeated_invalid_password_attempts(api_client):
     assert int(locked.headers["retry-after"]) > 0
     clear_login_failures(email, "testclient")
     endpoint_rate_limiter._requests.pop(("testclient", "^/api/auth/login$"), None)
+
+
+def test_submission_rejects_blank_and_over_limit_text_and_accepts_unicode(api_client, monkeypatch):
+    client, session_factory, manager = api_client
+    creator = User(
+        id="phase2-input-creator", name="Input Creator", email="phase2-input@example.test",
+        password_hash="unused", role=UserRole.creator, is_active=True,
+    )
+    with session_factory.begin() as db:
+        db.add(creator)
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+
+    for value in ("", "   ", "\n\t  "):
+        response = client.post("/api/submissions", json={
+            "title": "Whitespace draft", "text": value,
+        })
+        assert response.status_code == 422, response.text
+    assert client.post("/api/submissions", json={"title": "   ", "text": "Valid content"}).status_code == 422
+    assert client.post("/api/submissions", json={
+        "title": "Too many words", "text": "word " * 20_001,
+    }).status_code == 413
+
+    accepted = client.post("/api/submissions", json={
+        "title": "Unicode review", "text": "A friendly 😊 note with café and 東京 characters.",
+    })
+    assert accepted.status_code == 200, accepted.text
+    submission_id = accepted.json()["id"]
+    assert "😊" in accepted.json()["versions"][0]["text"]
+    assert client.post(f"/api/submissions/{submission_id}/versions", json={"text": " \n\t "}).status_code == 422
+
+
+def test_upload_rejects_wrong_empty_corrupt_and_oversized_files(api_client, monkeypatch):
+    from backend.app.utils import text_extract
+
+    client, session_factory, _manager = api_client
+    creator = User(
+        id="phase2-upload-creator", name="Upload Creator", email="phase2-upload@example.test",
+        password_hash="unused", role=UserRole.creator, is_active=True,
+    )
+    with session_factory.begin() as db:
+        db.add(creator)
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+
+    def upload(filename: str, contents: bytes, mime: str):
+        return client.post(
+            "/api/submissions/upload",
+            data={"title": "Upload validation"},
+            files={"file": (filename, contents, mime)},
+        )
+
+    assert upload("wrong.pdf", b"not a PDF", "application/pdf").status_code == 400
+    assert upload("empty.txt", b"", "text/plain").status_code == 422
+    assert upload("empty.pdf", b"", "application/pdf").status_code == 400
+    assert upload("empty.docx", b"", "application/vnd.openxmlformats-officedocument.wordprocessingml.document").status_code == 400
+    assert upload("empty.png", b"", "image/png").status_code == 400
+    assert upload("corrupt.pdf", b"%PDF-1.4\nnot a valid PDF body", "application/pdf").status_code == 400
+    assert upload("corrupt.docx", b"PK\x03\x04truncated archive", "application/vnd.openxmlformats-officedocument.wordprocessingml.document").status_code == 400
+    assert upload("corrupt.png", b"\x89PNG\r\n\x1a\ntruncated image", "image/png").status_code == 400
+
+    small_upload_settings = SimpleNamespace(MAX_UPLOAD_SIZE_MB=1, IMAGE_REVIEW_ENABLED=True, MAX_TEXT_WORDS=20_000)
+    monkeypatch.setattr(submissions_api, "get_settings", lambda: small_upload_settings)
+    monkeypatch.setattr(text_extract, "get_settings", lambda: small_upload_settings)
+    assert upload("large.txt", b"a" * (1024 * 1024 + 1), "text/plain").status_code == 413
+
+
+def test_create_and_upload_idempotency_keys_replay_without_duplicate_submissions(api_client, monkeypatch):
+    client, session_factory, _manager = api_client
+    creator = User(
+        id="phase2-idempotency-creator", name="Idempotency Creator", email="phase2-idempotency@example.test",
+        password_hash="unused", role=UserRole.creator, is_active=True,
+    )
+    with session_factory.begin() as db:
+        db.add(creator)
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+
+    create_payload = {"title": "Retry-safe draft", "text": "One stable submission body."}
+    create_headers = {"Idempotency-Key": "phase2-create-0001"}
+    first = client.post("/api/submissions", json=create_payload, headers=create_headers)
+    repeated = client.post("/api/submissions", json=create_payload, headers=create_headers)
+    assert first.status_code == repeated.status_code == 200
+    assert first.json()["id"] == repeated.json()["id"]
+    changed = client.post("/api/submissions", json={**create_payload, "text": "Different body."}, headers=create_headers)
+    assert changed.status_code == 409
+    comment_headers = {"Idempotency-Key": "phase2-comment-0001"}
+    comment_url = f"/api/submissions/{first.json()['id']}/comments"
+    comment_payload = {"body": "Please check this reference."}
+    comment = client.post(comment_url, json=comment_payload, headers=comment_headers)
+    comment_retry = client.post(comment_url, json=comment_payload, headers=comment_headers)
+    assert comment.status_code == comment_retry.status_code == 200
+    assert comment.json()["id"] == comment_retry.json()["id"]
+    assert client.post(comment_url, json={"body": "Changed request."}, headers=comment_headers).status_code == 409
+
+    upload_headers = {"Idempotency-Key": "phase2-upload-0001"}
+    def upload():
+        return client.post(
+            "/api/submissions/upload",
+            data={"title": "Retry-safe upload"},
+            files={"file": ("retry.txt", b"A readable text upload for safe retry.", "text/plain")},
+            headers=upload_headers,
+        )
+    uploaded = upload()
+    uploaded_again = upload()
+    assert uploaded.status_code == uploaded_again.status_code == 200
+    assert uploaded.json()["id"] == uploaded_again.json()["id"]
+    with session_factory() as db:
+        assert db.query(Submission).filter(Submission.creator_id == creator.id).count() == 2
+        assert db.query(Comment).filter(Comment.submission_id == first.json()["id"]).count() == 1
+
+
+def test_background_upload_retry_reuses_pending_submission(api_client, monkeypatch):
+    from PIL import Image
+
+    client, session_factory, _manager = api_client
+    creator = User(
+        id="phase2-background-idem-creator", name="Background Creator", email="phase2-bg-idem@example.test",
+        password_hash="unused", role=UserRole.creator, is_active=True,
+    )
+    with session_factory.begin() as db:
+        db.add(creator)
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator)
+    monkeypatch.setattr(submissions_api, "_submit_background_job", lambda **_kwargs: {
+        "id": "deduped-extraction-job", "kind": "document-extraction", "status": "queued",
+        "progress": 0, "message": "Waiting", "result": None, "error": None,
+    })
+    image = io.BytesIO()
+    Image.new("RGB", (2, 2), "white").save(image, format="PNG")
+    headers = {"Idempotency-Key": "phase2-png-upload-01"}
+
+    def upload():
+        return client.post(
+            "/api/submissions/upload?background=true",
+            data={"title": "Retryable image"},
+            files={"file": ("retry.png", image.getvalue(), "image/png")},
+            headers=headers,
+        )
+    first, retried = upload(), upload()
+    assert first.status_code == retried.status_code == 202
+    assert first.json()["submission_id"] == retried.json()["submission_id"]
+    with session_factory() as db:
+        assert db.query(Submission).filter(Submission.creator_id == creator.id).count() == 1
+
+
+def test_two_managers_approving_at_once_create_one_decision(tmp_path, monkeypatch):
+    """Competing approvals resolve as one success and one conflict, not a 500."""
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'concurrent-approvals.sqlite3'}",
+        connect_args={"check_same_thread": False, "timeout": 10},
+    )
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    creator = User(id="concurrent-owner", name="Owner", email="owner-concurrent@example.test", password_hash="x", role=UserRole.creator, is_active=True)
+    managers = {
+        key: User(id=key, name=key, email=f"{key}@example.test", password_hash="x", role=UserRole.manager, is_active=True)
+        for key in ("manager-concurrent-a", "manager-concurrent-b")
+    }
+    submission = Submission(id="concurrent-approval-sub", creator_id=creator.id, title="Competing approvals", status=SubmissionStatus.in_review)
+    version = SubmissionVersion(id="concurrent-approval-ver", submission_id=submission.id, version_no=1, text="A reviewed campaign draft.", created_by=creator.id)
+    with session_factory.begin() as db:
+        db.add_all([creator, *managers.values(), submission, version])
+
+    def override_db():
+        db = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    def override_user(request: Request):
+        return managers[request.headers["x-test-manager"]]
+
+    monkeypatch.setitem(app.dependency_overrides, get_db, override_db)
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, override_user)
+    barrier = threading.Barrier(2)
+    original_view_check = workflow_api.check_can_view_submission
+
+    def wait_until_both_loaded(user, row):
+        original_view_check(user, row)
+        barrier.wait(timeout=5)
+
+    monkeypatch.setattr(workflow_api, "check_can_view_submission", wait_until_both_loaded)
+    client = TestClient(app)
+    try:
+        def approve(user_id):
+            return client.post(
+                f"/api/submissions/{submission.id}/approve",
+                headers={"x-test-manager": user_id},
+                json={"decision": "approved", "note": "Reviewed."},
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(pool.map(approve, managers))
+        assert sorted(response.status_code for response in responses) == [200, 409], [response.text for response in responses]
+        with session_factory() as db:
+            assert db.query(Approval).filter(Approval.submission_id == submission.id).count() == 1
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
+        client.close()
+        engine.dispose()
 
 
 def test_get_guideline_health_returns_real_clause_rows(api_client):

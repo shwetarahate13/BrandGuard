@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Upload, FileText, ArrowLeft, Loader2, Sparkles, AlertCircle } from "lucide-react";
 import { api } from "../api";
 interface NewSubmissionProps {
@@ -15,14 +15,18 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
   const [progressMessage, setProgressMessage] = useState("");
   const [progressPercent, setProgressPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const submissionAttempt = useRef<{ signature: string; key: string } | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       if (selected.size > 25 * 1024 * 1024) {
+        setFile(null);
+        submissionAttempt.current = null;
         setError("File size exceeds 25 MB limit. Please select a smaller document.");
         return;
       }
+      submissionAttempt.current = null;
       setFile(selected);
       if (!title) {
         setTitle(selected.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "));
@@ -48,6 +52,17 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
 
     try {
       let created;
+      const signature = JSON.stringify({
+        tab,
+        title: title.trim(),
+        intent: intent.trim(),
+        text: tab === "paste" ? text.trim() : undefined,
+        file: tab === "upload" && file ? [file.name, file.size, file.lastModified, file.type] : undefined,
+      });
+      if (!submissionAttempt.current || submissionAttempt.current.signature !== signature) {
+        submissionAttempt.current = { signature, key: crypto.randomUUID() };
+      }
+      const idempotencyKey = submissionAttempt.current.key;
       if (tab === "paste") {
         if (!text.trim()) {
           setError("Please paste or write content to check.");
@@ -59,7 +74,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
           intent: intent.trim(),
           text: text.trim(),
           content_type: "text",
-        });
+        }, idempotencyKey);
       } else {
         if (!file) {
           setError("Please select a file to upload.");
@@ -73,7 +88,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
         created = await api.uploadSubmission(formData, (progress, message) => {
           setProgressPercent(progress);
           setProgressMessage(message);
-        });
+        }, idempotencyKey);
       }
 
       // Automatically run governance check
