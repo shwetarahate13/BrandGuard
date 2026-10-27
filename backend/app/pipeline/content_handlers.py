@@ -368,8 +368,12 @@ class ImageContentHandler:
             if (asset_path := _asset_path(asset)) is not None
         ]
         if readable_logo_assets:
-            import cv2
-
+            try:
+                import cv2
+            except ImportError:
+                logger.warning("Approved-logo template matching is unavailable because OpenCV is not installed")
+                readable_logo_assets = []
+        if readable_logo_assets:
             search_scale = min(1.0, 1600 / max(width, height))
             search_pixels = cv2.resize(pixels, None, fx=search_scale, fy=search_scale, interpolation=cv2.INTER_AREA) if search_scale < 1 else pixels
             haystack = cv2.cvtColor(search_pixels, cv2.COLOR_RGB2GRAY)

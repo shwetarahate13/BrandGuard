@@ -3,6 +3,7 @@ from io import BytesIO
 from types import SimpleNamespace
 
 from PIL import Image, ImageDraw
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -105,6 +106,7 @@ def test_image_handler_returns_actionable_message_when_disabled(monkeypatch):
 
 
 def test_logo_clear_space_requires_readable_logo_and_measurable_guideline(monkeypatch, tmp_path):
+    pytest.importorskip("cv2", reason="OpenCV is required for logo template matching")
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
     canvas = Image.new("RGB", (240, 160), "white")
@@ -148,6 +150,40 @@ def test_logo_clear_space_requires_readable_logo_and_measurable_guideline(monkey
     clearspace = next(finding for finding in with_measurable_rule if "clear space" in finding["issue"].lower())
     assert "at least 20px" in clearspace["issue"]
     assert clearspace["location"]["bbox"] == [10, 15, 42, 39]
+    engine.dispose()
+
+
+def test_readable_logo_without_opencv_skips_matching_without_breaking_image_review(monkeypatch, tmp_path):
+    import builtins
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    image_bytes = BytesIO()
+    Image.new("RGB", (64, 48), "white").save(image_bytes, format="PNG")
+    logo_path = tmp_path / "approved-logo.png"
+    Image.new("RGB", (16, 12), "black").save(logo_path, format="PNG")
+    monkeypatch.setattr(
+        content_handlers,
+        "get_settings",
+        lambda: SimpleNamespace(IMAGE_REVIEW_ENABLED=True, ASSET_STORAGE_DIR=str(tmp_path)),
+    )
+    original_import = builtins.__import__
+
+    def reject_opencv(name, *args, **kwargs):
+        if name == "cv2":
+            raise ImportError("OpenCV is unavailable in the light install")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", reject_opencv)
+    with Session(engine) as db:
+        db.add(Asset(id="readable-logo", kind=AssetKind.logo, name="Approved logo", file_path=str(logo_path)))
+        db.commit()
+        findings, sources = content_handlers.ImageContentHandler("image/png").inspect(
+            image_bytes.getvalue(), {"regions": []}, db
+        )
+
+    assert findings == []
+    assert sources == []
     engine.dispose()
 
 

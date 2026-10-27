@@ -1,7 +1,8 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Judge-ready local run, tamper-evident certificates, and final verification are complete
+- **Current Step**: Round 3 local-only restart — Phase 0 complete; Phase 1 is next.
+- The completed hosted-deployment work below is historical. The current Round 3 decision is local-only and supersedes it.
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -206,3 +207,11 @@ Assignment due dates, manager-only updates, manager/reviewer overdue indicators,
 - Frontend tests passed (**7/7**), and `npm run build --prefix frontend` passed. `frontend/dist` matches the committed FastAPI `backend/app/static` bundle.
 - Secret/file scan passed across 162 tracked paths: no `.env`, database files, Chroma/upload directories, private-key files, or key/token markers. `git diff --check` passed.
 - Part 3 complete; final verification and the fixture correction are committed in this checkpoint.
+
+## Round 3 Local-Only Restart (2026-10-28)
+- Phase 0 complete against the canonical source commit `017f48f`: full backend suite **189 passed**, frontend tests **7 passed**, frontend production build passed, and the isolated `scripts/smoke_test.py inprocess` passed all four demo logins, the main workflow, RBAC, certificate download/verification, and admin integrity check.
+- Added `tests/conftest.py` so tests use a temporary SQLite database migrated through Alembic rather than depending on a developer database. Added graceful image-review behavior when optional OpenCV logo matching is unavailable.
+- Replaced the patchwork dark overrides with semantic light/dark tokens and mapped the existing Tailwind palette to them. Updated image/PDF canvas highlights to follow theme changes. `scripts/check_theme_contrast.py` verified all listed text pairs at 4.5:1 or higher and UI pairs at 3:1 or higher.
+- Headless Chrome visited all 32 role/navigation/theme combinations (Creator 3, Manager 5, Reviewer 3, Admin 5, each in light and dark), and exercised notifications, tips, password and transparency dialogs, and logout. **0 browser errors; 0 HTTP 5xx.**
+- Refreshed the committed SPA bundle. `.env.example` no longer contains a database connection string.
+- Exact next step: Phase 1 — remove hosted-service artifacts and references; implement the full local dependency/setup path, neural retrieval with fallback, pip-only OCR, async model warm-up, and the raised input caps.

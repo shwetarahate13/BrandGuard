@@ -71,8 +71,9 @@ const FindingCanvasOverlay: React.FC<FindingCanvasOverlayProps> = ({
         const width = ((x1 - x0) / sourceWidth) * rect.width;
         const height = ((y1 - y0) / sourceHeight) * rect.height;
         const selected = finding.id === selectedFindingId;
-        context.fillStyle = selected ? "rgba(244, 63, 94, 0.35)" : "rgba(251, 191, 36, 0.24)";
-        context.strokeStyle = selected ? "rgba(190, 18, 60, 0.95)" : "rgba(217, 119, 6, 0.85)";
+        const tokens = getComputedStyle(document.documentElement);
+        context.fillStyle = tokens.getPropertyValue(selected ? "--highlight-selected-fill" : "--highlight-fill").trim();
+        context.strokeStyle = tokens.getPropertyValue(selected ? "--highlight-selected-stroke" : "--highlight-stroke").trim();
         context.lineWidth = selected ? 3 : 2;
         context.fillRect(x, top, width, height);
         context.strokeRect(x, top, width, height);
@@ -80,8 +81,13 @@ const FindingCanvasOverlay: React.FC<FindingCanvasOverlayProps> = ({
     };
     const observer = new ResizeObserver(draw);
     observer.observe(parent);
+    const themeObserver = new MutationObserver(draw);
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     draw();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      themeObserver.disconnect();
+    };
   }, [findings, pdfCoordinates, selectedFindingId, sourceHeight, sourceWidth]);
 
   const handleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
