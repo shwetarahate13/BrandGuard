@@ -513,7 +513,20 @@ def test_assignment_and_workflow_decisions_create_private_notifications(api_clie
         status=SubmissionStatus.in_review,
     )
     with session_factory.begin() as db:
-        db.add_all([creator, reviewer, approved, changes, rejected])
+        db.add_all([
+            creator,
+            reviewer,
+            approved,
+            changes,
+            rejected,
+            SubmissionVersion(
+                id="notify-approved-v1",
+                submission_id=approved.id,
+                version_no=1,
+                text="Approved copy text for notification coverage.",
+                created_by=creator.id,
+            ),
+        ])
 
     assigned = client.post(
         f"/api/submissions/{approved.id}/assign",

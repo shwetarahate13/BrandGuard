@@ -1,7 +1,7 @@
 # BrandGuard - Progress & Phase Checklist
 
 ## Status Summary
-- **Current Step**: Parts 1 and 2 of the judge-ready local run and tamper-evident approval certificates are complete; final verification is next
+- **Current Step**: Judge-ready local run, tamper-evident certificates, and final verification are complete
 - **Phase Checklist**:
   - [x] **Phase 1: Fix Existing Bugs First**
     - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
@@ -198,4 +198,11 @@ Assignment due dates, manager-only updates, manager/reviewer overdue indicators,
 - Added Certificate Library, public Verify, and Admin Integrity Check screens. Added `scripts/verify_audit_chain.py`, safe-copy-only `scripts/demo_tamper.py`, `docs/JUDGE_GUIDE.md`, and certificate/security entries in README, FEATURES, and LIMITATIONS. The limitations explain the database-only trust boundary and how to externally anchor a certificate chain head.
 - Added 11 integration checks for chain verification/tampering, SQLite triggers, PDF detail/privacy, text and binary content hashes, copy match/diff, role scope, revocation, superseding, on-demand generation, and admin integrity access.
 - Verification: all 11 focused certificate tests passed; frontend production build passed and the committed FastAPI static bundle was refreshed. An older Part 1 SQLite database migrated and backfilled 13 events across two valid chains; post-migration UPDATE/DELETE attempts were blocked. The updated smoke test passed all four role logins, full review/approval, certificate download, public verification/copy match, and admin integrity check. `demo_tamper.py` caught a modified row in a disposable DB copy without changing the original.
-- Part 2 implementation complete.
+- Part 2 complete and committed as `a13d988` (`feat: add tamper-evident approval certificates`).
+
+## Final Verification (Part 3 — 2026-10-27)
+- Updated the approval notification integration fixture to include a real approved version, which is now required for content hashing and certificate generation.
+- The final backend suite passed: **188 passed** on a fresh temporary SQLite database migrated to Alembic head. The earlier attempt against the ignored workspace `brandguard.db` surfaced its stale pre-existing schema (`assignment_due_at` was missing); that workspace database was left untouched.
+- Frontend tests passed (**7/7**), and `npm run build --prefix frontend` passed. `frontend/dist` matches the committed FastAPI `backend/app/static` bundle.
+- Secret/file scan passed across 162 tracked paths: no `.env`, database files, Chroma/upload directories, private-key files, or key/token markers. `git diff --check` passed.
+- Part 3 complete; final verification and the fixture correction are committed in this checkpoint.
