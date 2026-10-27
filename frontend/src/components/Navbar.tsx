@@ -28,6 +28,9 @@ import { TransparencyModal } from "./TransparencyModal";
 interface NavbarProps {
   user: User | null;
   llmMode: string;
+  retrievalState: string;
+  retrievalEngine: string;
+  retrievalDetail: string;
   demoMode: boolean;
   onDemoRoleSwitch: (role: UserRole) => void;
   onLogout: () => void;
@@ -41,6 +44,9 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   user,
   llmMode,
+  retrievalState,
+  retrievalEngine,
+  retrievalDetail,
   demoMode,
   onDemoRoleSwitch,
   onLogout,
@@ -320,6 +326,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {llmMode}
                 </span>
               </button>
+
+              <span
+                role="status"
+                title={retrievalDetail}
+                aria-label={`Source retrieval engine: ${retrievalState}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-semibold ${retrievalState === "ready" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${retrievalState === "ready" ? "bg-emerald-600" : "bg-amber-600"}`} />
+                {retrievalState === "warming_up" || retrievalState === "reindexing"
+                  ? "Warming"
+                  : retrievalEngine === "all-MiniLM-L6-v2" ? "Neural" : "Hash"}
+              </span>
 
               <button
                 type="button"

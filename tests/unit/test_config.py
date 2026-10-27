@@ -16,11 +16,17 @@ def test_postgres_legacy_scheme_normalizes_to_postgresql():
     assert settings.database_url_sync == "postgresql://user:pass@db.example.test/brandguard"
 
 
-def test_lite_mode_always_disables_image_review():
-    settings = Settings(_env_file=None, BRANDGUARD_LITE=True, IMAGE_REVIEW_ENABLED=True)
+def test_full_local_runtime_uses_requested_caps_and_pip_ocr_by_default():
+    settings = Settings(_env_file=None)
 
-    assert settings.BRANDGUARD_LITE is True
-    assert settings.IMAGE_REVIEW_ENABLED is False
+    assert settings.MAX_UPLOAD_SIZE_MB == 25
+    assert settings.MAX_TEXT_WORDS == 20_000
+    assert settings.IMAGE_REVIEW_ENABLED is True
+    assert settings.OCR_BACKEND == "rapidocr"
+    assert settings.RETRIEVAL_TOP_K >= 10
+
+    with pytest.raises(ValidationError, match="MAX_UPLOAD_SIZE_MB"):
+        Settings(_env_file=None, MAX_UPLOAD_SIZE_MB=26)
 
 
 def test_cors_configuration_requires_exact_origins_and_positive_jwt_expiry():

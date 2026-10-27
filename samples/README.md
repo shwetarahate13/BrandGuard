@@ -1,9 +1,9 @@
-# Judge sample files
+# Fictional sample content
 
-These fictional campaign files contain deliberate review issues for a local demo:
+These campaign samples contain deliberate review issues for local demonstrations:
 
-- `campaign-copy.txt`: avoided terminology, unsupported health and safety claims, an absolute superlative, and vague link text.
-- `campaign-image.png`: visible unsupported claims and vague link text for full-mode OCR/image review.
-- `campaign-copy.pdf`: the same types of copy issues in a small, text-based PDF.
+- `campaign-copy.txt`: avoided terminology, unsupported health and safety claims, an absolute superlative, and vague link wording.
+- `campaign-image.png`: visible promotional claims and vague link wording for OCR and visual review.
+- `campaign-copy.pdf`: similar copy issues in a small text-based PDF with page coordinates.
 
-In lite mode, PDF and text review work. Image upload displays the lite-mode image-review message.
+All product names, claims, and campaign details in these samples are fictional.

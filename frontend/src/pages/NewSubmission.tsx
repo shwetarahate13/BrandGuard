@@ -12,13 +12,15 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
+  const [progressPercent, setProgressPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
-      if (selected.size > 5 * 1024 * 1024) {
-        setError("File size exceeds 5 MB limit. Please select a smaller document.");
+      if (selected.size > 25 * 1024 * 1024) {
+        setError("File size exceeds 25 MB limit. Please select a smaller document.");
         return;
       }
       setFile(selected);
@@ -35,8 +37,13 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
       setError("Please provide a title for this submission.");
       return;
     }
+    if (tab === "paste" && text.trim().split(/\s+/).length > 20_000) {
+      setError("This check supports up to 20,000 words. Shorten the content and try again.");
+      return;
+    }
 
     setLoading(true);
+    setProgressMessage("Preparing your submission.");
     setError(null);
 
     try {
@@ -63,15 +70,23 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
         formData.append("file", file);
         formData.append("title", title.trim());
         formData.append("intent", intent.trim());
-        created = await api.uploadSubmission(formData);
+        created = await api.uploadSubmission(formData, (progress, message) => {
+          setProgressPercent(progress);
+          setProgressMessage(message);
+        });
       }
 
       // Automatically run governance check
-      await api.checkSubmission(created.id);
+      await api.checkSubmission(created.id, (progress, message) => {
+        setProgressPercent(progress);
+        setProgressMessage(message);
+      });
       navigate(`/review/${created.id}`);
     } catch (err: any) {
       setError(err.message || "Failed to create and check submission.");
       setLoading(false);
+      setProgressMessage("");
+      setProgressPercent(0);
     }
   };
 
@@ -171,13 +186,14 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
               <div>
                 <textarea
                   rows={8}
+                  maxLength={200_000}
                   placeholder="Paste marketing copy, press releases, product descriptions, or email drafts..."
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   className="w-full p-3.5 text-sm font-sans border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 leading-relaxed"
                 />
                 <div className="flex justify-between items-center text-[11px] text-stone-400 mt-1">
-                  <span>Cap: 5,000 words per check</span>
+                  <span>Cap: 20,000 words per check</span>
                   <span>{text.split(/\s+/).filter(Boolean).length} words</span>
                 </div>
               </div>
@@ -196,7 +212,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
                     {file ? file.name : "Click to select or drag and drop a document or image"}
                   </p>
                   <p className="text-[11px] text-stone-400 mt-1">
-                    Supports text, Markdown, HTML, PDF, Word, PNG, JPEG, and SVG files up to 5 MB.
+                    Supports text, Markdown, HTML, PDF, Word, PNG, JPEG, and SVG files up to 25 MB.
                   </p>
                 </label>
               </div>
@@ -205,6 +221,16 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
 
           {/* Action buttons */}
           <div className="pt-4 flex items-center justify-end gap-3 border-t border-stone-100">
+            {loading && (
+              <div className="mr-auto min-w-40 flex-1" role="status" aria-live="polite">
+                <div className="flex justify-between text-[11px] text-stone-600 mb-1">
+                  <span>{progressMessage}</span><span>{progressPercent}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden">
+                  <div className="h-full bg-amber-500 transition-all" style={{ width: `${progressPercent}%` }} />
+                </div>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => navigate("/")}
@@ -220,7 +246,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-                  Running Review Engine...
+                  {progressMessage || "Running Review Engine…"}
                 </>
               ) : (
                 "Run Brand Governance Check"

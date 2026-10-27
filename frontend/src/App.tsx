@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { api, clearToken, getToken, setColdStartListener, setToken } from "./api";
+import { api, clearToken, getToken, setToken } from "./api";
 import { User } from "./types";
 import { Navbar } from "./components/Navbar";
 import { OnboardingTips } from "./components/OnboardingTips";
-import { ColdStartBanner } from "./components/ColdStartBanner";
 import { ToastProvider } from "./components/Toast";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
@@ -24,23 +23,37 @@ export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [llmMode, setLlmMode] = useState("mock/offline");
   const [demoMode, setDemoMode] = useState(false);
+  const [retrieval, setRetrieval] = useState({ state: "warming_up", engine: "HashingVectorizer fallback", detail: "Loading retrieval status." });
   const [demoSwitchError, setDemoSwitchError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isWaking, setIsWaking] = useState(false);
   const [darkMode, setDarkMode] = useState(() => readDarkMode());
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
-  // Setup cold start listener
   useEffect(() => {
-    api.getSystemMode().then((mode) => {
-      setLlmMode(mode.llm_mode);
-      setDemoMode(mode.demo_mode);
-    }).catch(() => setLlmMode("unavailable"));
-  }, []);
-
-  useEffect(() => {
-    setColdStartListener((waking) => setIsWaking(waking));
+    let active = true;
+    let timer: number | undefined;
+    const refreshMode = async () => {
+      try {
+        const mode = await api.getSystemMode();
+        if (!active) return;
+        setLlmMode(mode.llm_mode);
+        setDemoMode(mode.demo_mode);
+        setRetrieval(mode.retrieval);
+        if (["warming_up", "reindexing", "not_started"].includes(mode.retrieval.state)) {
+          timer = window.setTimeout(refreshMode, 1200);
+        }
+      } catch {
+        if (!active) return;
+        setLlmMode("unavailable");
+        timer = window.setTimeout(refreshMode, 3000);
+      }
+    };
+    void refreshMode();
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -181,11 +194,12 @@ export const App: React.FC = () => {
   return (
     <ToastProvider>
       <div className="min-h-screen flex flex-col bg-stone-50 text-stone-900 font-sans">
-        <ColdStartBanner isWaking={isWaking} />
-
         <Navbar
           user={user}
           llmMode={llmMode}
+          retrievalState={retrieval.state}
+          retrievalEngine={retrieval.engine}
+          retrievalDetail={retrieval.detail}
           demoMode={demoMode}
           onDemoRoleSwitch={handleDemoRoleSwitch}
           onLogout={handleLogout}

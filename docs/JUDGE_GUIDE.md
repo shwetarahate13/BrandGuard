@@ -1,33 +1,40 @@
-# BrandGuard Judge Guide
+# Judge guide
 
-This five-minute path uses the local lite run and the four visible demo roles. The offline mock engine works without API keys.
+Run `python scripts/setup_local.py`, then `python scripts/run_local.py`, and open `http://localhost:8000`. Local setup enables demo mode; select one of the four accounts in the login-page panel. No demo password needs to be copied. If the panel is absent, check that `DEMO_MODE=true` is set in `.env` and restart the app.
 
-## Start
+## Creator
 
-From the repository root:
+1. Open **New Content Check**. Use a sample from `samples/` or paste your own content, then run the check.
+2. Open each cited source beside a finding. Accept a suggestion, edit it, or dispute it with a reason.
+3. Save and check the revised version, then **Request review**. The status stepper shows progress through review, sign-off, and approval.
+4. After a decision, use **My Work** to reopen the item. Find approval certificates from **Certificates**.
 
-```bash
-python scripts/setup_local.py
-python scripts/run_local.py
-```
+## Manager
 
-Open `http://127.0.0.1:8000`. Lite mode supports text and PDF review; image review displays a clear disabled message. Use `python scripts/setup_local.py --full` when you want to see OCR and visual image checks.
+1. Open **Command Center** and select a submission. Review its findings and creator's decisions.
+2. Assign a reviewer when compliance sign-off is required; set or adjust the due date.
+3. Open **Guideline Health**. Inspect clause friction and dispute themes, then use **Recompute now** to refresh the latest values.
+4. Approve standard-risk content, or request changes/reject it. High-risk items require reviewer sign-off before manager approval.
+5. Use the approval report action to download a CSV or PDF of decisions.
 
-## Click path
+## Reviewer
 
-1. **Creator — run a review and fix findings.** Sign in with `creator@nexora.dev` / `CreatorDemo2026!`. Choose **New Content Check** and use the planted copy in `samples/campaign-copy.txt` (or upload `samples/campaign-copy.pdf`). Run the review to see cited findings. Accept the terminology rewrite for “cheap”, edit vague link wording, and save the corrected version. Re-run the review so findings belong to the version you submit. The Creator dashboard’s feedback metrics show the accept/edit signals used by the preference model.
-2. **Creator — submit.** On the submission review page, choose **Request review**. The sample retains an unsupported health claim so the submission requires compliance sign-off.
-3. **Manager — route and inspect.** Sign in with `manager@nexora.dev` / `ManagerDemo2026!`. In **Command Center**, open the submission and assign the seeded Reviewer. Add a review comment. The manager cannot sign off the high-risk health claim alone. Open **Guideline Health** to see clause dispute friction, trends, and the recompute action (Improvement A).
-4. **Reviewer — record compliance approval.** Sign in with `reviewer@nexora.dev` / `ReviewerDemo2026!`. Open the assigned item from **Compliance Desk**, review the cited source, and record a justified confirmed/dismissed escalation decision. Approve the item. For Improvement B, open the PDF sample in the review screen and inspect its page-coordinate highlights; full mode also shows OCR text and image overlays.
-5. **Creator — download and verify.** Sign back in as Creator and open **Certificates**. Download the new PDF, then open its **Verify** link. The public page should show **Valid** and the approval metadata, without the approved copy. Paste the approved version text into the copy checker to see **Match**; change a word and check again for **Differs**.
-6. **Admin — inspect integrity and feedback.** Sign in with `admin@nexora.dev` / `AdminDemo2026!`. Open **Integrity Check** to recompute every chain and export the safe results CSV. Admin can also inspect feedback statistics and the audit log; Admin cannot approve submissions.
+1. Open **Compliance Desk** and choose an assigned or escalated submission.
+2. Compare the claim, cited source, and retrieved evidence. Confirm or dismiss each escalation with a written justification.
+3. Complete the compliance checklist and add evidence notes, then sign off. A manager makes the final approval decision.
+4. Use reviewer metrics to inspect turnaround and decision outcomes.
 
-## What to look for
+## Admin
 
-- **Improvement A — guideline-gap insights:** managers/admins see dispute friction by guideline clause and can recompute the metrics.
-- **Improvement B — image and spatial review:** PDF findings link to page locations in lite mode. Full mode enables image OCR, palette/logo checks, and visual overlays. Lite mode intentionally explains when image review is not enabled.
-- **Improvement C — human feedback loop:** accept/edit/dispute decisions train the persisted preference model. Creator feedback metrics and manager/admin feedback statistics show the recorded outcomes.
-- **Four-eyes control:** creators cannot approve their own work, admins cannot approve, and escalated high-risk work needs an assigned Reviewer.
-- **Certificate integrity:** database triggers block ordinary audit-row updates/deletes; public verification recomputes hashes and checks the approved content without disclosing it.
+1. Open **Admin** to manage users and approved sources. The Admin role cannot approve submissions.
+2. On the Admin dashboard, inspect feedback statistics and reset the preference model if needed.
+3. Open **Audit Log** or **Integrity Check** to inspect event history and verify audit chains.
+4. Use **System Status** to check database, source-index, and LLM status; the navigation badge reports retrieval-engine warm-up and selection.
 
-See [LIMITATIONS.md](LIMITATIONS.md) for the audit-chain trust boundary and other implementation limits.
+## Three improvements
+
+- **Guideline-Gap Insights (A):** clause health and dispute friction are on the manager/admin **Guideline Health** page.
+- **Image Review and Format-Aware PDF Inspection (B):** upload an image or PDF from New Content Check, then open its findings to see OCR boxes or page highlights.
+- **Reinforcement Feedback Loop (C):** accept, edit, or dispute findings as Creator; then inspect feedback statistics as Creator, Manager, or Admin.
+
+The demo records are fictional. See [FEATURES.md](FEATURES.md) for capabilities and [LIMITATIONS.md](LIMITATIONS.md) for review boundaries.

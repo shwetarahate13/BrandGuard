@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import re
+import shutil
 import threading
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,9 @@ from backend.app.models.models import Asset, AssetKind, GuidelineClause
 logger = logging.getLogger(__name__)
 
 SUPPORTED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/svg+xml"}
-MAX_IMAGE_PIXELS = 12_000_000
+MAX_IMAGE_PIXELS = 30_000_000
 _OCR_ENGINE = None
+_OCR_ENGINE_STYLE = ""
 _OCR_ENGINE_LOCK = threading.Lock()
 
 
@@ -70,18 +72,20 @@ def _open_image(contents: bytes, mime_type: str) -> Any:
 
 
 def _get_ocr_engine():
-    global _OCR_ENGINE
+    global _OCR_ENGINE, _OCR_ENGINE_STYLE
     if _OCR_ENGINE is None:
         with _OCR_ENGINE_LOCK:
             if _OCR_ENGINE is None:
-                from rapidocr import RapidOCR
-
-                _OCR_ENGINE = RapidOCR(params={
-                    "Global.use_cls": False,
-                    "EngineConfig.onnxruntime.intra_op_num_threads": 1,
-                    "EngineConfig.onnxruntime.inter_op_num_threads": 1,
-                    "EngineConfig.onnxruntime.enable_cpu_mem_arena": False,
-                })
+                try:
+                    from rapidocr_onnxruntime import RapidOCR
+                    _OCR_ENGINE = RapidOCR()
+                    _OCR_ENGINE_STYLE = "onnxruntime_legacy"
+                except ImportError:
+                    # rapidocr-onnxruntime has no Python 3.13 wheel metadata;
+                    # the upstream package provides the same ONNX engine there.
+                    from rapidocr import RapidOCR
+                    _OCR_ENGINE = RapidOCR(params={"Global.use_cls": False})
+                    _OCR_ENGINE_STYLE = "rapidocr"
     return _OCR_ENGINE
 
 
@@ -114,11 +118,18 @@ def _sequence(value: Any) -> list[Any]:
 
 
 def _ocr(image: Any) -> tuple[str, list[dict[str, Any]]]:
-    if get_settings().OCR_BACKEND == "tesseract":
+    if get_settings().OCR_BACKEND == "tesseract" and shutil.which("tesseract"):
         return _tesseract_ocr(image)
+    if get_settings().OCR_BACKEND == "tesseract":
+        logger.warning("Tesseract is not installed; using the pip-only RapidOCR backend")
 
     try:
-        result = _get_ocr_engine()(image, return_word_box=True)
+        engine = _get_ocr_engine()
+        try:
+            raw_result = engine(image, return_word_box=True)
+        except TypeError:
+            raw_result = engine(image)
+        result = raw_result[0] if isinstance(raw_result, tuple) else raw_result
     except Exception as exc:
         logger.exception("Image OCR failed")
         raise ValueError("Unable to read text from image; the RapidOCR runtime could not process it") from exc
@@ -128,6 +139,13 @@ def _ocr(image: Any) -> tuple[str, list[dict[str, Any]]]:
     offset = 0
     word_lines = _sequence(getattr(result, "word_results", None))
     words = [word for line in word_lines for word in line]
+    if not words and isinstance(result, (list, tuple)):
+        # rapidocr-onnxruntime 1.4.x returns (box, text, score) lines.
+        words = [
+            (line[1], line[2], line[0])
+            for line in result
+            if isinstance(line, (list, tuple)) and len(line) >= 3
+        ]
     if not words:
         boxes = _sequence(getattr(result, "boxes", None))
         texts = _sequence(getattr(result, "txts", None))
@@ -307,9 +325,7 @@ class ImageContentHandler:
         try:
             settings = get_settings()
             if not settings.IMAGE_REVIEW_ENABLED:
-                if getattr(settings, "BRANDGUARD_LITE", False):
-                    raise ValueError("Image review is not enabled in lite mode. Run 'python scripts/setup_local.py --full' to install image-processing dependencies.")
-                raise ValueError("Image review is disabled on this instance; enable IMAGE_REVIEW_ENABLED on a larger-memory instance")
+                raise ValueError("Image review is disabled in this configuration; set IMAGE_REVIEW_ENABLED=true to enable it")
             image = _open_image(contents, self.mime_type)
             text, regions = _ocr(image)
             return text, {"media": "image", "width": image.width, "height": image.height, "regions": regions}

@@ -18,7 +18,7 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
         </button>
         <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Known Limitations & Disclosures</h1>
         <p className="text-xs text-stone-500 mt-1">
-          Current review, security, and deployment boundaries.
+          Current review, security, and local-run boundaries.
         </p>
       </div>
 
@@ -37,10 +37,10 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
               <strong>Document review:</strong> TXT, DOCX, and PDF uploads are reviewed as extracted text. PDF finding highlights use extracted page coordinates and may be approximate for complex, rotated, or decorative layouts. DOCX is not reviewed as rendered pages.
             </li>
             <li>
-              <strong>Image review:</strong> PNG, JPEG, and sanitized SVG checks require <code>IMAGE_REVIEW_ENABLED=true</code>. OCR can miss stylized text; palette and logo checks depend on approved asset records, and clear-space checks need a measurable guideline.
+              <strong>Image review:</strong> Local setup enables PNG, JPEG, and sanitized SVG checks. OCR can miss stylized text; palette and logo checks depend on approved asset records, and clear-space checks need a measurable guideline.
             </li>
             <li>
-              <strong>Input limits:</strong> Uploads are capped at 5 MB, raster images at 12 megapixels, and text checks at 5,000 words.
+              <strong>Input limits:</strong> Uploads are capped at 25 MB, raster images at 30 megapixels, and text checks at 20,000 words.
             </li>
           </ul>
         </div>
@@ -62,7 +62,7 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
               <strong>Rate limits:</strong> Login lockout and endpoint limits are stored in process memory and are not shared across multiple workers or replicas.
             </li>
             <li>
-              <strong>Transport and storage:</strong> The app sets security headers, but HTTPS termination, database encryption at rest, backups, and retention depend on your hosting and database providers.
+              <strong>Transport and storage:</strong> The local app sets security headers. The local database, uploaded files, and backups remain under the computer user's control.
             </li>
             <li>
               <strong>External LLMs:</strong> When Anthropic is enabled, each reviewed text segment, the creator's stated intent, and retrieved source excerpts are sent to the provider. Guideline rewrite requests send the current clause and dispute examples. Mock/offline mode makes no external LLM request.
@@ -77,7 +77,7 @@ export const Limitations: React.FC<LimitationsProps> = ({ navigate }) => {
             <span>Workspace and Feedback Boundaries</span>
           </div>
           <p className="text-xs text-stone-600 leading-relaxed">
-            This deployment has one workspace and no team/tenant boundary. Dispute statistics and repeated-pattern suppression are shared across that workspace. The persistent in-app inbox covers reviewer assignments and workflow approval/changes/rejection events; it does not notify on finding-level decisions, comments, or email. The Creator dashboard also shows derived activity messages from decisions and review comments. Human review is required before content is published.
+            This local workspace has no team or tenant boundary. Dispute statistics and repeated-pattern suppression are shared across it. The persistent in-app inbox covers reviewer assignments and workflow approval/changes/rejection events; it does not notify on finding-level decisions, comments, or email. The Creator dashboard also shows derived activity messages from decisions and review comments. Human review is required before content is published.
           </p>
         </div>
       </div>

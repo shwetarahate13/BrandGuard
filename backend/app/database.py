@@ -31,18 +31,12 @@ def get_engine():
         connect_args["check_same_thread"] = False
         kwargs["pool_pre_ping"] = True
     else:
-        # PostgreSQL settings for Neon
+        # PostgreSQL connection pooling for local or remote servers.
         kwargs["pool_size"] = 5
         kwargs["max_overflow"] = 2
         kwargs["pool_pre_ping"] = True
         kwargs["pool_recycle"] = 300
-        if "sslmode" not in url:
-            if "?" in url:
-                url += "&sslmode=require"
-            else:
-                url += "?sslmode=require"
-
-    # Retry connection for Neon cold starts
+    # Retry a transient database connection failure before reporting startup failure.
     max_retries = 3
     for attempt in range(max_retries):
         try:

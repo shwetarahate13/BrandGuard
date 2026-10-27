@@ -21,7 +21,6 @@ from backend.app.utils.text_extract import sanitize_upload_filename, sniff_uploa
 
 
 def test_production_configuration_requires_stable_secret_and_postgres(monkeypatch):
-    monkeypatch.delenv("RENDER", raising=False)
     Settings(
         _env_file=None,
         ENVIRONMENT="production",

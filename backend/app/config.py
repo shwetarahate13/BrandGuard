@@ -1,6 +1,5 @@
 """BrandGuard application configuration."""
 import secrets
-import os
 from functools import lru_cache
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
@@ -25,6 +24,8 @@ class Settings(BaseSettings):
     # ChromaDB
     CHROMA_PERSIST_DIR: str = "./data/chroma"
     ASSET_STORAGE_DIR: str = "./data/assets"
+    EMBEDDING_MODEL_PATH: str = "./data/models/all-MiniLM-L6-v2"
+    RETRIEVAL_TOP_K: int = Field(default=12, ge=1, le=50)
 
     # LLM
     LLM_PROVIDER: str = "mock"  # "anthropic" or "mock"
@@ -34,27 +35,21 @@ class Settings(BaseSettings):
     LLM_MAX_RETRIES: int = 2
 
     # Upload limits
-    MAX_UPLOAD_SIZE_MB: int = Field(default=5, ge=1, le=5)
-    MAX_TEXT_WORDS: int = 5000
-    # RapidOCR/ONNX can exceed small-instance memory budgets; opt in only on
-    # instances sized for image processing. PDF text extraction stays enabled.
-    IMAGE_REVIEW_ENABLED: bool = False
-    OCR_BACKEND: Literal["rapidocr", "tesseract"] = "tesseract"
+    MAX_UPLOAD_SIZE_MB: int = Field(default=25, ge=1, le=25)
+    MAX_TEXT_WORDS: int = Field(default=20_000, ge=1, le=20_000)
+    IMAGE_REVIEW_ENABLED: bool = True
+    OCR_BACKEND: Literal["rapidocr", "tesseract"] = "rapidocr"
+    HEAVY_JOB_CONCURRENCY: int = Field(default=2, ge=1, le=8)
 
     # Demo users/data and demo-role switching are opt-in.
     DEMO_MODE: bool = False
 
-    # Lightweight local mode deliberately omits image/OCR dependencies.
-    BRANDGUARD_LITE: bool = False
-
-    # Set this only when the frontend is hosted on a separate origin.
+    # Set only for a separately hosted frontend; local Vite development proxies API calls.
     CORS_ORIGINS: str = ""
 
     @model_validator(mode="after")
     def validate_runtime_configuration(self):
-        if self.BRANDGUARD_LITE:
-            self.IMAGE_REVIEW_ENABLED = False
-        production = self.ENVIRONMENT.casefold() == "production" or os.getenv("RENDER", "").casefold() == "true"
+        production = self.ENVIRONMENT.casefold() == "production"
         if production:
             if len(self.JWT_SECRET.encode("utf-8")) < 32:
                 raise ValueError("JWT_SECRET must be set to at least 32 bytes in production")

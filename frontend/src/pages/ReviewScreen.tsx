@@ -53,6 +53,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const [revisionText, setRevisionText] = useState("");
   const [revisionError, setRevisionError] = useState<string | null>(null);
   const [savingRevision, setSavingRevision] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewProgress, setReviewProgress] = useState({ percent: 0, message: "" });
 
   // Expanded sources state
   const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
@@ -97,6 +99,16 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const sourceMimeType = latestVersion?.source_mime_type;
   const canPreviewSource = sourceMimeType === "application/pdf" || !!sourceMimeType?.startsWith("image/");
 
+  const runBackgroundCheck = async (id: string) => {
+    setReviewing(true);
+    setReviewProgress({ percent: 0, message: "Starting review." });
+    try {
+      return await api.checkSubmission(id, (percent, message) => setReviewProgress({ percent, message }));
+    } finally {
+      setReviewing(false);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     let objectUrl: string | null = null;
@@ -125,7 +137,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const handleAccept = async (finding: Finding) => {
     try {
       await api.submitDecision(finding.id, "accept");
-      await api.checkSubmission(submissionId);
+      await runBackgroundCheck(submissionId);
       await loadData();
     } catch (err: any) {
       alert(`The decision was saved, but the latest version could not be rechecked: ${err.message}`);
@@ -138,7 +150,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       await api.submitDecision(editingFinding.id, "edit", editText);
       setEditingFinding(null);
       setEditText("");
-      await api.checkSubmission(submissionId);
+      await runBackgroundCheck(submissionId);
       await loadData();
     } catch (err: any) {
       alert(`The edit was saved, but the latest version could not be rechecked: ${err.message}`);
@@ -191,7 +203,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     setRevisionError(null);
     try {
       await api.addVersion(submission.id, text);
-      await api.checkSubmission(submission.id);
+      await runBackgroundCheck(submission.id);
       await loadData();
     } catch (err) {
       setRevisionError(err instanceof Error ? err.message : "Unable to save and check the revised version.");
@@ -378,6 +390,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
         </div>
       </div>
 
+      {reviewing && (
+        <div className="mb-6 rounded-xl border border-brand-200 bg-brand-50 p-3" role="status" aria-live="polite">
+          <div className="flex justify-between gap-4 text-xs text-brand-900 mb-1">
+            <span>{reviewProgress.message}</span><span>{reviewProgress.percent}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-brand-100 overflow-hidden">
+            <div className="h-full bg-brand-600 transition-all" style={{ width: `${reviewProgress.percent}%` }} />
+          </div>
+        </div>
+      )}
+
       {user.role === "creator" && submission.creator_id === user.id &&
         (submission.status === "changes_requested" || submission.status === "rejected") && (
           <form
@@ -403,7 +426,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={savingRevision || !revisionText.trim()}
+                disabled={savingRevision || reviewing || !revisionText.trim()}
                 className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 disabled:opacity-50"
               >
                 {savingRevision ? "Saving and checking…" : "Save revision & run check"}

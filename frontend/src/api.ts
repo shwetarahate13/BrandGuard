@@ -26,9 +26,31 @@ import {
 
 const API_BASE = "/api";
 
-export let onColdStartChange: ((isWaking: boolean) => void) | null = null;
-export function setColdStartListener(listener: (isWaking: boolean) => void) {
-  onColdStartChange = listener;
+type BackgroundJob = {
+  id: string;
+  kind: string;
+  status: "queued" | "running" | "completed" | "failed";
+  progress: number;
+  message: string;
+  error?: string | null;
+  result?: Record<string, any> | null;
+  submission_id?: string;
+};
+
+async function waitForBackgroundJob<T extends Record<string, any>>(
+  initial: BackgroundJob,
+  onProgress?: (progress: number, message: string) => void
+): Promise<T> {
+  const deadline = Date.now() + 310_000;
+  let job = initial;
+  while (Date.now() < deadline) {
+    onProgress?.(job.progress, job.message);
+    if (job.status === "completed") return (job.result || {}) as T;
+    if (job.status === "failed") throw new Error(job.error || job.message || "Background review failed.");
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    job = await request<BackgroundJob>(`/jobs/${encodeURIComponent(job.id)}`);
+  }
+  throw new Error("The review is taking longer than expected. Return to this submission and retry it.");
 }
 
 export function getToken(): string | null {
@@ -61,19 +83,11 @@ async function request<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  // Cold start timer for free tier
-  const timer = setTimeout(() => {
-    if (onColdStartChange) onColdStartChange(true);
-  }, 2500);
-
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
       headers,
     });
-
-    clearTimeout(timer);
-    if (onColdStartChange) onColdStartChange(false);
 
     if (res.status === 401 && !isPublicAuthRequest) {
       clearToken();
@@ -94,8 +108,6 @@ async function request<T>(
 
     return (await res.json()) as T;
   } catch (err: any) {
-    clearTimeout(timer);
-    if (onColdStartChange) onColdStartChange(false);
     throw err;
   }
 }
@@ -161,11 +173,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  uploadSubmission: async (formData: FormData) =>
-    request<Submission>("/submissions/upload", {
+  uploadSubmission: async (formData: FormData, onProgress?: (progress: number, message: string) => void) => {
+    const response = await request<Submission | BackgroundJob>("/submissions/upload?background=true", {
       method: "POST",
       body: formData,
-    }),
+    });
+    if ("kind" in response && response.kind === "document-extraction") {
+      await waitForBackgroundJob(response, onProgress);
+      return request<Submission>(`/submissions/${encodeURIComponent(response.submission_id || "")}`);
+    }
+    return response;
+  },
   getSubmissionSource: async (submissionId: string, versionId: string): Promise<Blob> => {
     const token = getToken();
     const response = await fetch(`${API_BASE}/submissions/${encodeURIComponent(submissionId)}/versions/${encodeURIComponent(versionId)}/source`, {
@@ -186,11 +204,16 @@ export const api = {
     }
     return response.blob();
   },
-  checkSubmission: async (id: string) =>
-    request<{ status: string; findings_count: number; submission_status: string }>(
-      `/submissions/${id}/check`,
+  checkSubmission: async (id: string, onProgress?: (progress: number, message: string) => void) => {
+    const response = await request<{ status: string; findings_count: number; submission_status: string } | BackgroundJob>(
+      `/submissions/${encodeURIComponent(id)}/check?background=true`,
       { method: "POST" }
-    ),
+    );
+    if ("kind" in response && response.kind === "content-review") {
+      return waitForBackgroundJob(response, onProgress);
+    }
+    return response;
+  },
   addVersion: async (id: string, text: string) =>
     request<any>(`/submissions/${id}/versions`, {
       method: "POST",
@@ -401,6 +424,10 @@ export const api = {
 
   // System
   getSystemStatus: async () => request<SystemStatus>("/system/status"),
-  getSystemMode: async () => request<{ llm_mode: string; demo_mode: boolean }>("/system/mode"),
+  getSystemMode: async () => request<{
+    llm_mode: string;
+    demo_mode: boolean;
+    retrieval: { state: string; engine: string; detail: string };
+  }>("/system/mode"),
   getHealth: async () => request<{ status: string; version: string }>("/health"),
 };

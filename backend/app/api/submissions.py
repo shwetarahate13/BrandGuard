@@ -2,12 +2,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Path as APIPath, Query, status
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, select
 
 from backend.app.config import get_settings
-from backend.app.database import get_db
+from backend.app.database import get_db, get_session_factory
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, SubmissionStatus,
     ContentType, Finding, GuidelineClause
@@ -33,8 +33,99 @@ from backend.app.utils.text_extract import (
 from backend.app.pipeline.content_handlers import get_content_handler
 from urllib.parse import quote
 from backend.app.pipeline.runner import run_pipeline
+from backend.app.workers.background_jobs import BackgroundQueueFull, background_jobs
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
+
+
+def _extract_uploaded_version(version_id: str, owner_id: str, progress):
+    """Extract a slow PDF/image/DOCX upload in a bounded worker."""
+    from backend.app.models.models import User
+
+    factory = get_session_factory()
+    db = factory()
+    try:
+        version = db.query(SubmissionVersion).filter(SubmissionVersion.id == version_id).first()
+        submission = db.query(Submission).filter(Submission.id == version.submission_id).first() if version else None
+        if not version or not submission or submission.creator_id != owner_id:
+            raise ValueError("Uploaded submission is no longer available")
+        if not db.query(User.id).filter(User.id == owner_id, User.is_active.is_(True)).first():
+            raise ValueError("Your account is no longer active")
+
+        progress(10, "Validating uploaded document.")
+        contents = version.source_file or b""
+        mime_type = version.source_mime_type or ""
+        progress(30, "Extracting text and page or image coordinates.")
+        if mime_type == "application/pdf":
+            extracted, source_layout = extract_pdf_text_with_layout(contents)
+        elif mime_type.startswith("image/"):
+            handler = get_content_handler(mime_type)
+            if handler is None:
+                raise ValueError(f"No content handler registered for {mime_type}")
+            extracted, source_layout = handler.extract_content(contents)
+        else:
+            extracted = extract_text(contents, version.source_filename or "uploaded.docx")
+            source_layout = None
+        validate_submission_text(extracted)
+        progress(90, "Saving extracted content.")
+        version.text = extracted
+        version.source_layout = source_layout
+        db.commit()
+        return {"submission_id": submission.id}
+    except Exception:
+        db.rollback()
+        if version_id:
+            failed = db.query(SubmissionVersion).filter(SubmissionVersion.id == version_id).first()
+            if failed:
+                parent_id = failed.submission_id
+                db.delete(failed)
+                parent = db.query(Submission).filter(Submission.id == parent_id).first()
+                if parent and parent.status == SubmissionStatus.draft:
+                    db.delete(parent)
+                db.commit()
+        raise
+    finally:
+        db.close()
+
+
+def _run_check_job(submission_id: str, version_id: str, owner_id: str, progress):
+    """Run the governance pipeline with an independent, worker-owned session."""
+    factory = get_session_factory()
+    with factory() as db:
+        user = db.query(User).filter(User.id == owner_id, User.is_active.is_(True)).first()
+        submission = db.query(Submission).filter(Submission.id == submission_id).first()
+        version = db.query(SubmissionVersion).filter(
+            SubmissionVersion.id == version_id,
+            SubmissionVersion.submission_id == submission_id,
+        ).first()
+        if not user or not submission or not version:
+            raise ValueError("Submission or active user is no longer available")
+        check_permission(user, Action.SUBMISSION_CREATE)
+        check_can_view_submission(user, submission)
+        progress(10, "Preparing approved sources and review rules.")
+        db.query(Finding).filter(Finding.version_id == version.id).delete()
+        db.query(GuidelineClause).update({GuidelineClause.dfi_computed_at: None})
+        db.commit()
+        findings = run_pipeline(submission, version, db, progress=progress)
+        if submission.status == SubmissionStatus.draft:
+            submission.status = SubmissionStatus.checked
+        log_action(db, user.id, "check_submission", "submission", submission.id, {
+            "version_no": version.version_no,
+            "findings_count": len(findings),
+        })
+        db.commit()
+        return {
+            "submission_id": submission.id,
+            "findings_count": len(findings),
+            "submission_status": submission.status.value,
+        }
+
+
+def _submit_background_job(**kwargs):
+    try:
+        return background_jobs.submit(**kwargs)
+    except BackgroundQueueFull as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
 
 
 def validate_submission_text(text: str) -> None:
@@ -98,6 +189,7 @@ async def upload_submission(
     title: str = Form(...),
     intent: Optional[str] = Form(None),
     content_type: Optional[str] = Form("text"),
+    background: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -111,20 +203,60 @@ async def upload_submission(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     settings = get_settings()
     if declared_mime_type.startswith("image/") and not settings.IMAGE_REVIEW_ENABLED:
-        detail = (
-            "Image review is not enabled in lite mode. Run 'python scripts/setup_local.py --full' "
-            "to install image-processing dependencies."
-            if getattr(settings, "BRANDGUARD_LITE", False)
-            else "Image review is disabled on this instance. Enable IMAGE_REVIEW_ENABLED on a larger-memory instance."
-        )
         raise HTTPException(
             status_code=503,
-            detail=detail,
+            detail="Image review is disabled in this configuration; set IMAGE_REVIEW_ENABLED=true to enable it.",
         )
     try:
         mime_type = sniff_upload_mime_type(contents, filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if background and mime_type in {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/png",
+        "image/jpeg",
+        "image/svg+xml",
+    }:
+        if mime_type == "application/pdf":
+            ctype = ContentType.pdf
+        elif mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            ctype = ContentType.docx
+        else:
+            ctype = ContentType.image
+        submission = Submission(
+            creator_id=current_user.id,
+            title=title.strip() or filename,
+            intent=intent.strip() if intent else None,
+            status=SubmissionStatus.draft,
+            content_type=ctype,
+        )
+        db.add(submission)
+        db.flush()
+        version = SubmissionVersion(
+            submission_id=submission.id,
+            version_no=1,
+            text="",
+            created_by=current_user.id,
+            source_file=contents,
+            source_mime_type=mime_type,
+            source_filename=filename,
+        )
+        db.add(version)
+        db.flush()
+        version_id = version.id
+        log_action(db, current_user.id, "upload_submission", "submission", submission.id, {"filename": filename})
+        db.commit()
+        db.refresh(submission)
+        job = _submit_background_job(
+            owner_id=current_user.id,
+            kind="document-extraction",
+            payload={"version_id": version_id, "owner_id": current_user.id},
+            timeout_seconds=180,
+            dedupe_key=f"extract:{version.id}",
+        )
+        return JSONResponse(status_code=202, content={**job, "submission_id": submission.id})
     source_layout = None
     try:
         if mime_type == "application/pdf":
@@ -398,6 +530,7 @@ def update_assignment_due_date(
 @router.post("/{submission_id}/check")
 def check_submission(
     submission_id: str,
+    background: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -424,6 +557,20 @@ def check_submission(
         and not get_settings().IMAGE_REVIEW_ENABLED
     ):
         raise HTTPException(status_code=503, detail="Image review is disabled on this instance")
+
+    if background:
+        job = _submit_background_job(
+            owner_id=current_user.id,
+            kind="content-review",
+            payload={
+                "submission_id": submission.id,
+                "version_id": latest_version.id,
+                "owner_id": current_user.id,
+            },
+            timeout_seconds=300,
+            dedupe_key=f"check:{submission.id}:{latest_version.id}",
+        )
+        return JSONResponse(status_code=202, content=job)
 
     # Clear old findings for this version before re-checking
     db.query(Finding).filter(Finding.version_id == latest_version.id).delete()

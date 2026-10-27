@@ -5,7 +5,7 @@ Usage:
     python scripts/smoke_test.py [BASE_URL]
 
 Tests:
-1. Health check & cold-start readiness (/healthz and /api/health)
+1. Health check (/healthz and /api/health)
 2. Public runtime mode and admin-only system status
 3. SPA frontend root serving (/)
 4. Authentication for all 4 demo accounts (Creator, Manager, Reviewer, Admin)
@@ -22,16 +22,60 @@ Tests:
 import os
 import sys
 import time
+from pathlib import Path
 import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_BASE_URL = "http://localhost:8000"
+
+
+def run_background_check(client, submission_id: str, headers: dict[str, str]) -> dict:
+    response = client.post(f"/api/submissions/{submission_id}/check?background=true", headers=headers)
+    assert response.status_code == 202, f"Background check was not accepted: {response.text}"
+    job = response.json()
+    deadline = time.monotonic() + 310
+    while time.monotonic() < deadline:
+        state_response = client.get(f"/api/jobs/{job['id']}", headers=headers)
+        assert state_response.status_code == 200, f"Background job status failed: {state_response.text}"
+        state = state_response.json()
+        if state["status"] == "completed":
+            return state["result"]
+        if state["status"] == "failed":
+            raise AssertionError(f"Background review failed: {state['error']}")
+        time.sleep(0.25)
+    raise AssertionError("Background review exceeded the smoke-test timeout")
+
+
+def run_background_upload(client, filename: str, mime_type: str, headers: dict[str, str]) -> tuple[dict, dict]:
+    sample = Path(__file__).resolve().parents[1] / "samples" / filename
+    with sample.open("rb") as handle:
+        response = client.post(
+            "/api/submissions/upload?background=true",
+            headers=headers,
+            data={"title": f"Smoke {filename}", "intent": "Verify format-aware extraction"},
+            files={"file": (filename, handle, mime_type)},
+        )
+    assert response.status_code == 202, f"Background upload was not accepted: {response.text}"
+    job = response.json()
+    deadline = time.monotonic() + 185
+    while time.monotonic() < deadline:
+        state_response = client.get(f"/api/jobs/{job['id']}", headers=headers)
+        assert state_response.status_code == 200, f"Upload job status failed: {state_response.text}"
+        state = state_response.json()
+        if state["status"] == "completed":
+            submission_response = client.get(f"/api/submissions/{job['submission_id']}", headers=headers)
+            assert submission_response.status_code == 200, submission_response.text
+            return submission_response.json(), state
+        if state["status"] == "failed":
+            raise AssertionError(f"Background extraction failed: {state['error']}")
+        time.sleep(0.25)
+    raise AssertionError("Background extraction exceeded the smoke-test timeout")
 
 
 def run_smoke_test(base_url: str):
     print("=" * 65)
-    print(f"BrandGuard Production Smoke Test -> {base_url}")
+    print(f"BrandGuard Local Smoke Test -> {base_url}")
     print("=" * 65)
 
     if base_url in ("inprocess", "--inprocess", "local", "testclient"):
@@ -49,8 +93,8 @@ def run_smoke_test(base_url: str):
     else:
         client = httpx.Client(base_url=base_url, timeout=30.0)
 
-        # 1. Health check & Cold Start Readiness
-        print("\n[Step 1] Checking /api/health with cold-start wait...")
+        # 1. Health check
+        print("\n[Step 1] Checking /api/health...")
         max_wait = 60
         start_time = time.time()
         healthy = False
@@ -139,10 +183,24 @@ def run_smoke_test(base_url: str):
     print(f"  ✓ Created Submission #{sub_id} (Status: {sub['status']})")
 
     # B. Trigger check
-    r = client.post(f"/api/submissions/{sub_id}/check", headers=creator_auth)
-    assert r.status_code == 200, f"Check failed: {r.text}"
-    check_res = r.json()
+    check_res = run_background_check(client, sub_id, creator_auth)
     print(f"  ✓ Review Pipeline Completed: {check_res['findings_count']} findings generated (Status: {check_res['submission_status']})")
+
+    print("\n[Step 5b] Verifying background PDF and image extraction...")
+    pdf_submission, _pdf_job = run_background_upload(client, "campaign-copy.pdf", "application/pdf", creator_auth)
+    pdf_version = pdf_submission["versions"][-1]
+    assert pdf_version["text"].strip() and pdf_version["source_layout"]["pages"], "PDF extraction must save text and page layout"
+    pdf_review = run_background_check(client, pdf_submission["id"], creator_auth)
+    pdf_findings_response = client.get(f"/api/submissions/{pdf_submission['id']}/findings", headers=creator_auth)
+    assert pdf_findings_response.status_code == 200, pdf_findings_response.text
+    pdf_findings = pdf_findings_response.json()
+    assert any(finding.get("location", {}).get("page") for finding in pdf_findings), "PDF findings should have page locations"
+    print(f"  ✓ PDF worker extracted {len(pdf_version['text'])} characters and saved {pdf_review['findings_count']} located findings")
+
+    image_submission, _image_job = run_background_upload(client, "campaign-image.png", "image/png", creator_auth)
+    image_version = image_submission["versions"][-1]
+    assert image_version["text"].strip() and image_version["source_layout"]["regions"], "Image OCR must save text and word boxes"
+    print(f"  ✓ Image OCR extracted {len(image_version['text'])} characters and {len(image_version['source_layout']['regions'])} boxes")
 
     # C. Verify findings & citations
     r = client.get(f"/api/submissions/{sub_id}/findings", headers=creator_auth)
@@ -175,8 +233,7 @@ def run_smoke_test(base_url: str):
     print(f"  ✓ Verified Version 2 generated with diff fix applied to content text")
 
     # Re-run review on the changed content; review status is version-scoped.
-    r = client.post(f"/api/submissions/{sub_id}/check", headers=creator_auth)
-    assert r.status_code == 200, f"Recheck after rewrite failed: {r.text}"
+    run_background_check(client, sub_id, creator_auth)
     r = client.get(f"/api/submissions/{sub_id}/findings", headers=creator_auth)
     findings = r.json()
     claim_finding = next((f for f in findings if "guaranteed" in f["issue"].lower()), None)

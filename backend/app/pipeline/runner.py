@@ -114,6 +114,7 @@ def run_pipeline(
     submission: Submission,
     version: SubmissionVersion,
     db: Session,
+    progress=None,
 ) -> List[Finding]:
     """Execute the full BrandGuard review pipeline on a submission version."""
     settings = get_settings()
@@ -127,6 +128,8 @@ def run_pipeline(
 
     # Ensure Chroma is populated
     reindex_if_empty(db)
+    if progress:
+        progress(20, "Approved-source index is ready.")
 
     # 1. Fetch all approved sources for rules engine and citations
     clauses = [
@@ -150,21 +153,25 @@ def run_pipeline(
 
     # 2. Segment text
     spans = segment_into_spans(text)
+    if progress:
+        progress(30, f"Reviewing {len(spans)} content spans.")
 
     # 3. Retrieve relevant sources per span and globally
     all_retrieved_sources: List[Dict[str, Any]] = []
     seen_source_ids = set()
 
-    for span in spans:
-        span_sources = retrieve_sources(span.text, top_k=3)
+    for span_index, span in enumerate(spans):
+        span_sources = retrieve_sources(span.text, top_k=settings.RETRIEVAL_TOP_K)
         for s in span_sources:
             s_id = str(s["id"])
             if s_id not in seen_source_ids:
                 seen_source_ids.add(s_id)
                 all_retrieved_sources.append(s)
+        if progress and spans:
+            progress(30 + int(25 * (span_index + 1) / len(spans)), "Matching claims to approved sources.")
 
     # Also retrieve for whole text / title
-    global_sources = retrieve_sources(f"{submission.title} {text[:200]}", top_k=5)
+    global_sources = retrieve_sources(f"{submission.title} {text[:200]}", top_k=min(settings.RETRIEVAL_TOP_K + 3, 50))
     for s in global_sources:
         s_id = str(s["id"])
         if s_id not in seen_source_ids:
@@ -184,6 +191,8 @@ def run_pipeline(
                         all_retrieved_sources.append(source)
             except Exception:
                 logger.exception("Image visual inspection failed for submission %s", submission.id)
+    if progress:
+        progress(60, "Applying deterministic rules and media checks.")
 
     # 4. Deterministic rules engine
     rule_results: List[RuleFinding] = run_rules_engine(text, terms, facts, clauses)
@@ -227,7 +236,7 @@ def run_pipeline(
     else:
         # Call LLM on spans with retrieved sources
         source_ids = [str(s["id"]) for s in all_retrieved_sources]
-        for span in spans:
+        for span_index, span in enumerate(spans):
             llm_results = check_content_with_llm(
                 span_text=span.text,
                 intent=intent,
@@ -242,6 +251,8 @@ def run_pipeline(
                 lf["span_end"] = min(end, len(text))
                 lf["is_rule"] = False
                 candidate_findings.append(lf)
+            if progress and spans:
+                progress(60 + int(25 * (span_index + 1) / len(spans)), "Checking claims against cited guidance.")
 
     suppressed_combinations = suppressed_span_combinations(db)
     unsuppressed_candidates = []
@@ -353,6 +364,8 @@ def run_pipeline(
         final_db_findings.append(db_finding)
 
     db.commit()
+    if progress:
+        progress(95, f"Saved {len(final_db_findings)} findings.")
     logger.info(f"Pipeline completed: {len(final_db_findings)} findings saved for submission {submission.id}")
     return final_db_findings
 

@@ -34,8 +34,8 @@ def get_guideline_health(
     """Return persisted clause risk scores and AI revisions for high-friction clauses."""
     check_permission(current_user, Action.GUIDELINE_HEALTH_VIEW)
 
-    # Render free sleeps between requests, so repair missing or old scores on
-    # the next read as well as through the nightly APScheduler job.
+    # Repair missing or old scores on the next read as well as through the
+    # nightly in-process scheduler.
     if dfi_scores_are_stale(db) and run_dfi_worker(db) is None:
         logger.error("Could not refresh stale guideline DFI scores")
         raise HTTPException(status_code=503, detail="Guideline health scores are temporarily unavailable")

@@ -1,217 +1,41 @@
-# BrandGuard - Progress & Phase Checklist
+# Round 3 progress
 
-## Status Summary
-- **Current Step**: Round 3 local-only restart — Phase 0 complete; Phase 1 is next.
-- The completed hosted-deployment work below is historical. The current Round 3 decision is local-only and supersedes it.
-- **Phase Checklist**:
-  - [x] **Phase 1: Fix Existing Bugs First**
-    - [x] Run backend tests (identified missing Alembic migrations on existing SQLite DB; applied to head; 22/22 tests passing)
-    - [x] Test frontend build (`npm run build` succeeds)
-    - [x] Audit all API endpoints, routes, status codes, and error handlers
-    - [x] Fix offline Flesch readability calculation in `preference_model.py` (avoid NLTK cmudict download failures)
-    - [x] Smoke test & E2E verification of all current flows (`smoke_test.py` passes 100%)
-  - [x] **Phase 2: Roles That Are Really Different & An Exciting UI**
-    - [x] Create permission matrix in `backend/app/services/permissions.py`
-    - [x] Enforce permissions and row-level access on submission, workflow, finding, insights, source, guideline, feedback, system and admin APIs; disallow self-approval
-    - [x] Add independent unit assertions for every permission matrix cell and approval/visibility rules
-    - [x] Role-specific frontend navigation, landing pages, and views:
-      - Creator: "My Work", own submissions only, fix findings, personal stats & notifications
-      - Manager: Team command center, approval queue with SLA/age, reviewer assignment, sign-off, org insights, guideline health
-      - Reviewer: Compliance desk, assigned items & escalated findings, side-by-side claim checking, justification, compliance notes
-      - Admin: User management, approved-sources registry, system settings, full audit log with filters and CSV export, feedback model stats/reset
-    - [x] Add role-specific KPIs; manager 7-day trend, category/severity charts, status pipeline and recent activity; skeletons, empty states, toasts and responsive mobile navigation
-  - [x] **Phase 3: Improvement A, Guideline-Gap Insights**
-    - [x] Nightly UTC APScheduler job groups disputed findings by cited guideline clause
-    - [x] TF-IDF cosine similarity dispute clustering
-    - [x] DFI uses distinct disputed findings / distinct findings (%); recomputes reset zero-finding clauses to 0%
-    - [x] `GET /api/guidelines/health` is available to managers and admins and sorts high DFI first
-    - [x] `/dashboard/guideline-health` sortable risk bands and current/proposed wording diff
-    - [x] Proposed clearer wording only when a live LLM provider is configured
-    - [x] `PATCH /api/guidelines/clauses/{clause_id}` applies edits and refreshes the source index
-    - [x] "Recompute now" action, DB-stored compute time, 24-hour stale check, and invalidation on new reviews/disputes/revisions
-  - [x] **Phase 4: Improvement B, Image Review and Spatial PDF Inspection**
-    - [x] Selectable Tesseract (configured default) or RapidOCR/ONNX OCR with word-level boxes; `opencv-python-headless` remains lazy-loaded
-    - [x] Dominant color extraction against approved asset RGB metadata, ±15 per channel
-    - [x] OpenCV template matching for readable approved logo files
-    - [x] Measurable clear-space checks only when a logo file and explicit minimum both exist
-    - [x] WCAG AA contrast calculation for OCR-detected text regions with an approved accessibility clause
-    - [x] Canvas overlays and linked finding selection in the image/PDF review screen
-    - [x] PDF inspection with `pdfminer.six` page coordinates and finding `location` boxes
-    - [x] Semi-transparent PDF page highlights
-    - [x] Lazy-loaded OCR/CV and explicit `IMAGE_REVIEW_ENABLED` memory gate; image review is disabled by default, and the Render demo enables Tesseract explicitly
-  - [x] **Phase 5: Improvement C, Reinforcement Feedback Loop**
-    - [x] Snapshot original span, proposed rewrite, human edit on decisions; compliance dismissals also create dispute decisions
-    - [x] Online SGD logistic regression features: sentence length, Flesch readability, and formality deltas
-    - [x] Persist model state in a database blob
-    - [x] Train accepts (+), edits (chosen +, suggested -), and disputes (-)
-    - [x] Rank rewrite candidates by predicted acceptance probability in the confidence pipeline
-    - [x] Suppress repeated disputed patterns after 3 distinct findings for the same clause and normalized span
-    - [x] `GET /api/feedback/stats` reports acceptance rate, edit rate, and suppression counts by category
-    - [x] Creator/admin feedback views retained; manager command center now displays the category stats bar; admin model reset remains available
-    - [x] Targeted Phase 5 verification: 14 tests passed; frontend production build, Python compile, and `git diff --check` passed
-  - [x] **Phase 6: Real-World Readiness and Deployment**
-    - [x] Local non-Docker setup (uvicorn :8000, Vite :5173 with `/api` proxy, SQLite default, first-admin bootstrap)
-    - [x] Render free deployment stays on the existing Docker runtime because the image workflow needs Tesseract; Docker builds frontend, installs backend, runs Alembic, and serves the SPA on `$PORT`. `build.sh` supports a local/native build when system packages are installed.
-    - [x] Production configuration requires a strong JWT secret and PostgreSQL; bcrypt/password policy, login rate limiting and lockout, JWT expiry, exact CORS allowlist, security headers, 5 MB upload validation/type sniffing, pagination, request IDs, structured logs, `/healthz`, and friendly global error responses are implemented.
-    - [x] `DEMO_MODE` defaults false and gates demo seeding, role switching, demo login, and the four-role login credentials panel.
-  - [x] **Phase 7: Tests and Docs**
-    - [x] Permission matrix tests cover every role/action cell and row-level/self-approval policy
-    - [x] Improvement tests cover guideline health/recompute (A), OCR/PDF/media checks (B), and model training/suppression (C)
-    - [x] Update `docs/FEATURES.md`, `docs/ROUND3_IMPROVEMENTS.md`, `docs/LIMITATIONS.md`, and `README.md`
-  - [x] **Step 5 feature: In-app notifications for assignments and workflow decisions**
-    - [x] Persist user-scoped notifications with read/unread state and submission links
-    - [x] Notify assigned reviewers and creators on approval, changes requested, and rejection
-    - [x] Add authenticated inbox endpoints, UI bell, unread count, mark-read actions, and end-to-end coverage
-  - [x] **Step 5 features, in requested order**
-    - [x] Assignment due dates and SLA/overdue indicators
-    - [x] Saved views (basic creator/manager search and filters already exist)
-    - [x] Approval-report CSV/PDF export (audit-log CSV already exists)
-    - [x] Self-service password change (admin-triggered password reset already exists)
-    - [x] Dark mode
-    - [x] First-login onboarding tips
+## Current state
 
-## Decisions Made
-1. **Migrations & Database**: SQLite default locally, PostgreSQL (Neon) in production. Database migrations must always be executed via `alembic upgrade head`. Added dispute friction, media layout, and preference state migrations.
-2. **OCR runtime**: Tesseract is the configured default lower-memory backend; RapidOCR/ONNX remains optional for larger machines. Render free uses the working Docker runtime to install Tesseract and enables image review. OpenCV and OCR modules are loaded only as needed.
-3. **Offline Flesch Calculation**: Avoid reliance on external NLTK network downloads for cmudict by implementing a deterministic syllable-counter fallback for Flesch reading ease in `preference_model.py`.
-4. **Role policy**: Only creators create submissions and decide findings; managers handle standard-risk workflow and assign active reviewers; reviewers resolve escalations and sign off high-risk assigned items; admins manage the system but cannot approve. High-risk submissions are not manager-approved.
-5. **Manager observability**: Trends and activity come from persisted submissions, findings, and audit records. Creator notifications are derived from actual approvals and review comments; empty accounts show an empty state instead of demo copy.
-6. **Public system metadata**: `/system/mode` exposes only the active LLM mode for the navigation badge; detailed `/system/status` requires the Admin permission.
-7. **Phase 2 verification**: 111 targeted permission/API tests passed, Vite production build passed, full SQLite migration chain applied with the reviewer FK verified, and the isolated end-to-end workflow smoke passed. Browser checks confirmed Creator, Manager, Reviewer, and Admin dashboards/nav; browser console had no errors or warnings. A local Vite proxy target was supplied through `BRANDGUARD_API_PROXY_TARGET` during UI verification; native local defaults are scheduled for Phase 6.
-8. **Phase 3 verification**: DFI session ownership now supports both request Sessions and APScheduler session factories. Newly computed timestamps and source-data invalidation prevent stale scores; a read recomputes stale data. SQLite Alembic upgrade to head and `npm run build` passed; the targeted permission/API suite passed 113 tests. One existing Chroma embedding-function deprecation warning remains.
-9. **Phase 4 verification**: RapidOCR 3.10.0 (packaged ONNX models) processed the real 1020×1320 sample image into 455 characters and 77 word boxes; `pdfminer.six` extracted page/line boxes from the real PDF fixture. Palette, logo clear-space, OCR geometry, PDF location, and image-memory-gate tests passed (17 targeted tests). A RapidOCR/OpenCV run measured 611 MB peak RSS on the development Mac; a later Tesseract run measured 240.4 MB for the app plus a 58.6 MB OCR child (299.0 MB conservative combined). Image review remains opt-in by default; Render explicitly enables the lower-memory Tesseract backend. `pip check`, Python compile, and diff checks passed.
-10. **Feedback training and suppression**: A dispute invalidates clause-health freshness and trains a negative rewrite example; compliance reviewer dismissals now follow the same path. Suppression groups distinct findings across categories for each clause and normalized span. This deployment has one workspace database, so suppression is workspace-wide; it is not yet tenant-isolated.
-11. **Phase 5 verification**: `.venv/bin/pytest -q tests/unit/test_preference_model.py tests/integration/test_round3_endpoints.py` passed 14 tests. Tests cover offline feature extraction, online model persistence/labels, candidate ranking, endpoint snapshots, reviewer dismissal training, cross-category suppression, and DFI invalidation. `npm run build`, targeted `compileall`, and `git diff --check` passed. One existing Chroma embedding-function deprecation warning remains.
+- Phase 0: complete and pushed in commit `2705e51` (`fix: verify role workspaces and theme contrast`).
+- Phase 1: implementation in progress in the current checkout; this checkpoint does not close the phase.
+- Next exact step: run `python scripts/setup_local.py`, `python scripts/run_local.py`, and a browser check from a clean clone on Python 3.11+ with at least 5 GiB free. The committed static bundle matches the successful frontend build; this host cannot complete the clean install because it has Python 3.9 system-wide and about 2 GiB free.
 
-## Exact Next Step
-Assignment due dates, manager-only updates, manager/reviewer overdue indicators, saved views, approval-report exports, self-service password change, dark mode, first-login onboarding tips, and demo password synchronization are implemented. Demo credentials have been verified against the live Render service. Admin password reset, basic search/filter controls, and audit CSV export already exist.
+## Phase 0 — health check and bugs
 
-## Phase 6 Resume Check (2026-10-26)
-- Ran the requested baseline checks before implementation changes: `npm run build` passed. The first backend run had 4 failures because the existing local SQLite database was behind Alembic head; after `alembic upgrade head`, the full suite reported 147 passed and 1 failed.
-- The remaining failure is `test_full_governance_workflow_and_rbac`: accepting a rewrite creates a new draft revision, but the test requests review without checking that revision again. Confirm the intended UI flow and repair the integration coverage/workflow before declaring the full sweep green.
-- Local settings use SQLite and `DEMO_MODE=false`. In a separate migrated SQLite instance with `DEMO_MODE=true`, signed in as Creator and Manager, then switched to Reviewer and Admin. Each showed its role-specific dashboard and navigation; the mobile demo-role switcher worked. Vite on `:5173` reached the backend on `:8000` through its `/api` proxy.
-- The login page still lacks the requested demo-credentials panel; add it in the next implementation step. Keep the role switcher hidden when demo mode is off.
-- Phase 6 changes were already present but uncommitted when this resume began; audit and complete those changes before committing them with the finished phase.
-- Local setup and deployment hardening are now complete. `build.sh` passed end to end with the repository virtualenv, frontend production build, and Alembic migration. A local Docker image build passed; a temporary container applied migrations, served the SPA, returned 200 from `/healthz` and `/api/health`, and completed demo admin login. The temporary container was isolated from the repository database.
-- Image review with Tesseract processed a real 1020×1320 campaign image and the PDF fixture, producing 437 OCR characters/73 boxes and 8 PDF highlights. Peak app RSS was 240.4 MB and the Tesseract child peak was 58.6 MB (299.0 MB conservative combined), below the ~450 MB target. RapidOCR measured above the target, so it is not used by the free Render configuration.
-- `DEMO_MODE=false` is the local/default configuration; demo users are created only for an empty database when demo mode is enabled. `.gitignore` now covers `.env`, SQLite databases, Chroma directories, uploads, and the frontend build output; `.env.example` remains trackable.
-- Final backend suite for Step 1: 151 passed, 1 failed. The remaining existing workflow test still requests review immediately after accepting a revision; the new revision is a draft and needs a fresh check. This is intentionally carried to Step 3, where the full workflow sweep will fix its test and verify the UI behavior. Chroma emits five existing embedding-function deprecation warnings.
+- Backend suite passed: 189 tests. Frontend suite passed: 7 tests. Frontend production build and `scripts/smoke_test.py inprocess` passed.
+- Smoke covered demo login for all four roles, main workflow, permissions, certificates, and audit integrity. Browser pass checked 32 role/navigation/theme combinations with no console errors or server failures.
+- Semantic light/dark tokens were added and the contrast script passed all configured token pairs. Canvas finding overlays respond when the theme changes.
+- Backend tests now use an isolated Alembic-migrated temporary database.
 
-## Step 2: Demo Credentials on the Login Page (2026-10-26)
-- Added a responsive “Demo accounts” panel gated by `/api/system/mode`'s `demo_mode` value. It lists Admin, Manager, Reviewer, and Creator usernames/passwords and provides a **Fill / Sign in** button for each; each button fills the login fields and authenticates through the regular password-login endpoint.
-- In the browser with `DEMO_MODE=true`, verified the four cards and successfully signed in through each button. The resulting pages showed the matching Admin Console, Manager Command Center, Reviewer Compliance Desk, and Creator My Work dashboard.
-- Restarted with `DEMO_MODE=false` and a newly migrated empty SQLite database. The login panel was absent, the database contained zero users, and `/api/auth/demo-login` returned 404.
-- `npm run build --prefix frontend` passed. No real user password is shown or logged; the displayed values are throwaway credentials from the demo seed.
+## Phase 1 — local runtime
 
-## Step 3: Full Bug Sweep (2026-10-26)
-- Fixed the confirmed terminology rewrite regression: approved deterministic term replacements such as `cheap` → `accessible pricing` are no longer dropped by the generic intent-overlap heuristic. Added a focused unit regression test.
-- Fixed the workflow that left a submission in draft after accepting a rewrite: the integration test now asserts that a new version must be checked before review can be requested. Added a creator revision form for `changes_requested` and `rejected` submissions; saving creates a version, reruns the check, and enables resubmission. Added assignment fields to submission responses so the manager/reviewer queue can render its allocation state.
-- Updated the Chroma embedding function to its current typed config interface, eliminating the existing embedding deprecation warnings.
-- Expanded workflow integration coverage for create, check, accept, edit, dispute, submit, assign, changes requested, reject, resubmit, and approve. It verifies that creators cannot approve their own submission, managers cannot approve a high-risk submission, and an assigned reviewer can. Also verifies assignment is returned in the submission response.
-- Browser sweep with the four demo roles confirmed distinct Creator My Work, Manager Team Command Center, Reviewer Compliance Desk, and Admin Console dashboards/nav. Checked manager search/filter queue and reviewer assignment, reviewer high-risk sign-off, Admin user/settings/audit/feedback/source screens, Org Insights, Approved Sources, Limitations, and Guideline Health. `Recompute now` returned “Guideline friction recomputed.” Browser console reported no errors or warnings.
-- End-to-end review checks included an image OCR submission (26 findings), PDF inspection with 8 page-highlighted findings, and reviewer approval recorded in the audit trail. Manager feedback stats displayed persisted decision outcomes; the targeted feedback tests cover suppression after three disputes. The completed PDF sample remained in the isolated local demo database.
-- Verification on a fresh isolated SQLite database: full backend suite **154 passed**; `npm run build --prefix frontend` passed; `git diff --check` passed. Earlier Phase 6 memory measurement for a real image plus PDF was 299 MB conservative combined peak RSS, below the ~450 MB target.
+- Removed the container and hosted-service configuration and the obsolete startup banner.
+- Set local defaults to SQLite, pip-only RapidOCR, 25 MB uploads, 20,000-word checks, 30-megapixel raster images, and retrieval top-k 12.
+- Neural all-MiniLM-L6-v2 retrieval warms in the background; the HashingVectorizer fallback remains available and the navigation reports engine status.
+- Added bounded process-isolated upload and content-review jobs with progress polling and process termination at the job timeout. PDF/DOCX/image extraction and the review/LLM pipeline can run through these jobs.
+- Reworked setup and doctor scripts for the complete Python runtime and committed frontend bundle. README now gives local clone/run/test commands.
+- Removed old hosted deployment and reduced-runtime claims from active feature, limitation, improvement, judge, and sample documentation. Added `docs/PLAN_CHANGES.md`.
+- Verification: full backend suite passed (194 tests), frontend suite passed (7 tests), and production frontend build passed. The in-process smoke test covered all four demo roles, workflow permissions, certificates, PDF extraction/review locations, and image OCR. A separate local API run verified process-backed text, PDF, and image jobs.
+- The current machine has about 2 GiB free disk and its system Python is 3.9, below the project requirement. A clean install/model download could not be run here; it needs Python 3.11+ and at least 5 GiB free.
 
-## Step 4: Tests and Documentation (2026-10-26)
-- Verified the independent permission matrix covers every role/action cell, creator/reviewer row visibility, manager/reviewer approval boundaries, admin denial, and self-approval prevention.
-- Verified the Improvement A/B/C endpoint and unit tests cover DFI calculation/recompute/invalidation, OCR/PDF geometry and image gates, preference-model persistence/training/ranking, and suppression after three distinct disputed findings.
-- Created `docs/FEATURES.md` and `docs/ROUND3_IMPROVEMENTS.md` because README linked those files but they were missing. Rewrote `docs/LIMITATIONS.md` to match the current configuration and measured OCR backends; removed unsupported TLS/at-rest and obsolete OCR claims.
-- Updated README with exact local setup/run/test commands, production environment requirements, Render's retained Docker runtime rationale, and truthful role responsibilities. Removed the unsupported `EMBEDDING_BACKEND` setting from `.env.example`.
-- Updated the in-app Limitations screen so its security, LLM, image, and workspace disclosures match the current code. The Markdown links resolve, `npm run build --prefix frontend` passed, `git diff --check` passed, and the Step 3 full suite remained **154 passed** on its fresh isolated database.
+### Current cuts and limits
 
-## Step 5: Persistent In-App Notifications (2026-10-26)
-- Added an Alembic migration and indexed notification table with per-user read state, authenticated list/read/read-all endpoints, and strict user ownership checks.
-- Reviewer assignment creates an inbox item for the assigned reviewer. Approval, changes-requested, and rejection decisions create inbox items for the creator, including the review note. The navbar bell shows an unread count, polls for updates, supports mark-read/mark-all-read, and opens the related submission.
-- Integration coverage verifies all three workflow decision types, reviewer assignment delivery, inbox isolation between roles, read state, and bulk mark-read behavior.
-- Browser end-to-end check created and checked a standard-risk submission as Creator, requested review, assigned a Reviewer as Manager, confirmed the Reviewer received and opened the assignment notification, approved as Manager, and confirmed the Creator received the approval note and opened the submission. No browser errors/warnings.
-- Verification: fresh SQLite migration to head passed; full backend suite **155 passed**; `npm run build --prefix frontend` passed; `git diff --check` passed. Updated README, feature inventory, and limitations to describe the inbox and its event scope.
-- Quota check: **79% used, 21% remaining**. Stop optional feature work at this committed state.
+- Hosted deployment files were removed for the local-only Round 3 decision.
+- There is no source-code feature cut in Phase 1 so far. The neural model's fresh installation and full local startup still need verification on a machine with adequate free disk.
+- Background-job status is in-process; restarting the app loses progress records. The worker itself is terminated at its configured timeout.
 
-## GitHub Sync (2026-10-26)
-- Reconciled the in-progress `origin/main` merge while preserving the Phase 6 deployment example and limitations documentation; retained the remote PostgreSQL driver dependency update and clarified the JWT environment-variable description.
-- Committed the remaining eligible workspace files in merge commit `23b4bf1` and pushed `main` to `origin`. `.env`, databases, Chroma data, and uploads remain excluded by `.gitignore` and were not committed.
+## Remaining phases
 
-## Assignment Due Dates (2026-10-26)
-- Added an Alembic migration for indexed UTC assignment deadlines. Assigning an in-review submission sets a default deadline 24 hours ahead; managers can update or clear a deadline through a manager-only API.
-- Manager queues show editable deadlines and overdue state; assigned reviewers see their deadline and overdue state in the Compliance Desk. Closed or unassigned submissions are not marked overdue.
-- Added integration coverage for default deadline creation, manager-only updates, role denials, clearing, overdue calculation, and unassigned submissions. A fresh SQLite migration to head passed; the full backend suite passed (**156 tests**); and the frontend production build passed.
-- Verification: **156 backend tests passed**, fresh SQLite migration to head passed, frontend production build passed, and `git diff --check` passed. Committed as `9015376`.
-- Usage check: **87% used (13% remaining)**. Stop optional feature work at this clean, verified step. Next in order: implement saved views for the existing creator/manager search and filter controls, with persistence, role isolation, and tests; then approval-report CSV/PDF export, self-service password change, dark mode, and first-login onboarding tips.
-
-## Login Credential Error Fix (2026-10-26)
-- Public `/auth/login` and `/auth/demo-login` requests no longer send a previously stored bearer token, and their credential 401 responses are shown as authentication errors instead of “Session expired.” Protected API 401 responses still clear the token and redirect to login.
-- Added frontend regression tests for both response paths. `npm test --prefix frontend` passed (2 tests), `npm run build --prefix frontend` passed, and `git diff --check` passed.
-
-## Saved Views (2026-10-27)
-- Added save, apply, overwrite-by-name, and delete controls to Creator My Work and the Manager Approval Queue. Each view stores its search text and status filter in browser local storage, scoped by user ID and role; views do not sync across browsers or devices.
-- Added regression tests for persistence, per-user/per-role isolation, overwrite, deletion, and blank-name validation. `npm test --prefix frontend` passed (**4 tests** total), `npm run build --prefix frontend` passed, and `git diff --check` passed.
-- Quota check: **94% used (6% remaining)**. Stop optional feature work at this clean checkpoint. Next in order: approval-report CSV/PDF export; then self-service password change, dark mode, and first-login onboarding tips.
-
-## Approval Report Export (2026-10-27)
-- Added Manager/Admin-only CSV and PDF exports for approval, changes-requested, and rejection decisions, with optional start/end filters and spreadsheet formula protection in CSV output. Reports include content, creator, assigned reviewer, decision maker, UTC timestamps, current status, due date, and review note.
-- Wired authenticated export actions into Manager and Admin screens. Replaced the Admin audit CSV link with an authenticated download so it sends the required bearer token.
-- Added integration coverage for role permissions, date filtering and invalid ranges, CSV content/disposition/formula protection, and PDF generation/content extraction. The full backend suite passed (**161 tests**); frontend tests passed (**4 tests**); frontend production build and `git diff --check` passed.
-
-## Self-Service Password Change (2026-10-27)
-- Added authenticated current-password verification, new-password policy validation, same-password rejection, bcrypt update, and audit logging. Shared seeded demo accounts cannot change their passwords while demo mode is enabled, preserving the visible one-click demo credentials.
-- Added a Navbar password form with current/new/confirmation fields and success/error states, available to all signed-in account roles.
-- Integration coverage verifies incorrect current password, same password, short and over-byte-limit passwords, changed-password login, and fixed shared demo credentials. The full backend suite passed (**162 tests**); frontend tests passed (**4 tests**); frontend build and `git diff --check` passed.
-
-## Dark Mode (2026-10-27)
-- Added a persistent navigation toggle and dark color treatment for app surfaces, forms, status cards, notification rows, borders, and text. The preference is stored in the current browser.
-- Frontend regression tests cover reading, persisting, and applying both theme states. Frontend tests (**5 passed**) and production build passed; full backend tests are scheduled in the final verification sweep.
-
-## First-Login Onboarding Tips (2026-10-27)
-- Added first-sign-in quick-start dialog content specific to Creator, Manager, Reviewer, and Admin workflows and permissions. A navbar Tips button reopens it.
-- Dismissal is persisted per account and role in this browser. Tests cover account/role isolation and role-specific workflow guidance.
-- Final feature verification: fresh SQLite Alembic migration to head, full backend suite (**162 passed**), frontend tests (**7 passed**), frontend production build, and `git diff --check` all passed.
-
-## Demo Login Password Mismatch (2026-10-27)
-- Reproduced on `brandguard-zxa4.onrender.com`: `/api/health` and `/api/system/mode` returned HTTP 200 with demo mode enabled; all four displayed passwords returned HTTP 401, while all four role-based demo-login endpoints confirmed the accounts existed.
-- Root cause: demo accounts were seeded only when the database had zero users. Existing databases could retain old demo password hashes while the login page displayed current seed passwords.
-- Added a startup synchronizer that repairs or creates only the four reserved throwaway demo accounts when `DEMO_MODE=true`; it does not rerun sample-content seeding on a non-empty database or alter unrelated users. Added unit coverage for stale-password repair, missing accounts, role/active state, idempotency, and unchanged workspace users.
-- Updated README, FEATURES, and LIMITATIONS to describe the startup behavior. A fresh Alembic SQLite database passed the full backend suite (**163 tests**); frontend tests (**7 passed**), frontend production build, and `git diff --check` passed. Fix committed and pushed as `1241f63`.
-- After Render redeployed, Admin, Manager, Reviewer, and Creator password logins each returned HTTP 200; `/api/auth/me` returned the matching role for all four accounts on `brandguard-zxa4.onrender.com`.
-
-## Role-Based User Guide (2026-10-27)
-- Created `output/pdf/BrandGuard_User_Guide.pdf`, an eight-page guide with a shared workflow walkthrough, instructions for each role, feature explanations and importance, safeguards, limitations, and troubleshooting.
-- Rendered all pages for visual QA, fixed a cover-band overlap, and verified the final PDF has eight readable pages with the expected role and feature sections. Linked it from README.
-
-## Final Website and Deployment Check (2026-10-27)
-- Started the frontend and API on isolated local ports with a fresh throwaway SQLite demo database. The Vite app document and `/api/health` both returned HTTP 200. Demo mode reported enabled, and Admin, Manager, Reviewer, and Creator each authenticated and received the matching `/api/auth/me` role.
-- The public `https://brandguard.onrender.com/api/health` endpoint returned HTTP 503 with Render's “This service has been suspended” page. The pushed branch is at `6165598` and the repository blueprint is configured for auto-deploy, but the suspended service does not serve the updated app.
-- No Neon `DATABASE_URL` exists in the local environment files, and this environment has no Render/Neon CLI or account connector. The Render service cannot be restored or supplied with a Neon URL from this workspace. Next: restore the existing service in Render, retrieve the Neon connection string from the authorized Neon project, set Render's `DATABASE_URL`, and redeploy. Keep the existing Docker runtime because it provides Tesseract for image review.
-- Follow-up: the supplied Neon URL parsed with the expected `postgresql` scheme and `sslmode`/`channel_binding` query options. A read-only connection using psycopg2 succeeded with `SELECT 1`. This verifies the Neon endpoint and credentials; Render still requires its dashboard/account to restore the suspended service and set `DATABASE_URL`.
-
-## Judge-Ready Local Run (Part 1 — 2026-10-27)
-- Quick health check: the first test run against a new, unmigrated SQLite file failed on missing tables; after `alembic upgrade head`, the backend suite passed (**163 passed**). The frontend production build passed. API login and `/api/auth/me` succeeded for Creator, Manager, Reviewer, and Admin using an isolated SQLite database.
-- Added cross-platform `scripts/setup_local.py`, `scripts/run_local.py`, and `scripts/doctor.py`. Setup creates `.venv`, generates a local JWT secret, installs exact-pinned lite dependencies by default (or full image/OCR dependencies with `--full`), applies Alembic migrations, and seeds demo data. Run serves the committed production SPA from FastAPI on one port and supports `--port` and `--reset`.
-- Lite mode uses the offline mock LLM and SQLite with `DEMO_MODE=true`; image uploads report that image review is not enabled and explain how to enable full mode. The committed SPA bundle was refreshed. Existing Docker/Render runtime remains on the full requirements file.
-- Added planted text, PNG, and PDF samples; README now leads with the 5-minute macOS/Linux and Windows PowerShell setup, demo accounts, URLs, troubleshooting, and Node 18+ frontend-development requirements. Corrected the smoke test's stale demo passwords and added `/healthz` coverage.
-- Isolated in-process smoke test passed through all four role logins and the complete submission/review/approval flow. Doctor reported Python, dependency, database-write, and prebuilt-frontend checks passing; port 8000 was busy and it printed the alternate-port command.
-- Fresh-clone proof completed in `/private/tmp/brandguard-judge-part1`: `setup_local.py` installed the pinned lite profile, migrated and seeded SQLite, and `doctor.py` passed all five checks. The prebuilt `backend/app/static` bundle served the SPA without Node. Port 8000 was already occupied, so `run_local.py --port 8210` was used; `/healthz` returned 200, all four role logins returned their expected `/auth/me` roles, and the full `scripts/smoke_test.py` workflow passed. The only environment-specific adjustment was the alternate port.
-- Part 1 complete and committed as `d23dffd` (`feat: add offline judge-ready local setup`).
-
-## Tamper-Evident Approval Certificates (Part 2 — 2026-10-27)
-- Added per-submission SHA-256 audit chains over canonical JSON, migration-time backfill for existing events, stored chain heads, and SQLite/PostgreSQL append-only triggers. No API exposes audit-row update or delete operations.
-- Approval stores the exact approved UTF-8 text hash or original PDF/image bytes hash, appends the approval event, and generates a compact certificate PDF. On-demand generation is available for earlier approved submissions. Certificates list version/title/hash, category counts and finding resolutions, reviewer justifications, approver roles/timestamps/comments, AI engine/mode, chain head, and verification URL.
-- Added public `/verify` metadata-only checks for valid, tampered, revoked, and superseded certificates; exact pasted-copy comparison; manager/admin revocation with required chained reason; role-scoped certificate downloads; and admin integrity report/CSV export.
-- Added Certificate Library, public Verify, and Admin Integrity Check screens. Added `scripts/verify_audit_chain.py`, safe-copy-only `scripts/demo_tamper.py`, `docs/JUDGE_GUIDE.md`, and certificate/security entries in README, FEATURES, and LIMITATIONS. The limitations explain the database-only trust boundary and how to externally anchor a certificate chain head.
-- Added 11 integration checks for chain verification/tampering, SQLite triggers, PDF detail/privacy, text and binary content hashes, copy match/diff, role scope, revocation, superseding, on-demand generation, and admin integrity access.
-- Verification: all 11 focused certificate tests passed; frontend production build passed and the committed FastAPI static bundle was refreshed. An older Part 1 SQLite database migrated and backfilled 13 events across two valid chains; post-migration UPDATE/DELETE attempts were blocked. The updated smoke test passed all four role logins, full review/approval, certificate download, public verification/copy match, and admin integrity check. `demo_tamper.py` caught a modified row in a disposable DB copy without changing the original.
-- Part 2 complete and committed as `a13d988` (`feat: add tamper-evident approval certificates`).
-
-## Final Verification (Part 3 — 2026-10-27)
-- Updated the approval notification integration fixture to include a real approved version, which is now required for content hashing and certificate generation.
-- The final backend suite passed: **188 passed** on a fresh temporary SQLite database migrated to Alembic head. The earlier attempt against the ignored workspace `brandguard.db` surfaced its stale pre-existing schema (`assignment_due_at` was missing); that workspace database was left untouched.
-- Frontend tests passed (**7/7**), and `npm run build --prefix frontend` passed. `frontend/dist` matches the committed FastAPI `backend/app/static` bundle.
-- Secret/file scan passed across 162 tracked paths: no `.env`, database files, Chroma/upload directories, private-key files, or key/token markers. `git diff --check` passed.
-- Part 3 complete; final verification and the fixture correction are committed in this checkpoint.
-
-## Round 3 Local-Only Restart (2026-10-28)
-- Phase 0 complete against the canonical source commit `017f48f`: full backend suite **189 passed**, frontend tests **7 passed**, frontend production build passed, and the isolated `scripts/smoke_test.py inprocess` passed all four demo logins, the main workflow, RBAC, certificate download/verification, and admin integrity check.
-- Added `tests/conftest.py` so tests use a temporary SQLite database migrated through Alembic rather than depending on a developer database. Added graceful image-review behavior when optional OpenCV logo matching is unavailable.
-- Replaced the patchwork dark overrides with semantic light/dark tokens and mapped the existing Tailwind palette to them. Updated image/PDF canvas highlights to follow theme changes. `scripts/check_theme_contrast.py` verified all listed text pairs at 4.5:1 or higher and UI pairs at 3:1 or higher.
-- Headless Chrome visited all 32 role/navigation/theme combinations (Creator 3, Manager 5, Reviewer 3, Admin 5, each in light and dark), and exercised notifications, tips, password and transparency dialogs, and logout. **0 browser errors; 0 HTTP 5xx.**
-- Refreshed the committed SPA bundle. `.env.example` no longer contains a database connection string.
-- Exact next step: Phase 1 — remove hosted-service artifacts and references; implement the full local dependency/setup path, neural retrieval with fallback, pip-only OCR, async model warm-up, and the raised input caps.
+- Phase 2: resilience for invalid input, repeat actions, concurrent users, expired sessions, and failure states.
+- Phase 3: end-to-end verification and tests for improvements A, B, and C, including seeded visible history.
+- Phase 4: reviewer workbench and full role matrix.
+- Phase 5: fictional demo content, typo checks, and first-run experience.
+- Phase 6: role journeys, complete docs, and fresh-clone verification.
+- Phase 7: optional extras only after Phases 0–6 pass.
+- Phase 8: full final verification, secret scan, commit, and push.

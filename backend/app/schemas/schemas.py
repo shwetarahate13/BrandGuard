@@ -149,9 +149,9 @@ class AssetResponse(BaseModel):
 # ── Submissions ──
 
 class SubmissionCreate(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=500)
     intent: Optional[str] = None
-    text: Optional[str] = None
+    text: Optional[str] = Field(default=None, max_length=200_000)
     content_type: str = "text"
 
 class SubmissionResponse(BaseModel):

@@ -10,6 +10,7 @@ Evaluates review pipeline on test fixtures:
 import os
 import sys
 import json
+import time
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -20,6 +21,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from backend.app.database import get_session_factory
 from backend.app.models.models import Submission, SubmissionVersion, User, ContentType, SubmissionStatus
 from backend.app.pipeline.runner import run_pipeline
+from backend.app.pipeline.retriever import get_retrieval_status, start_embedding_warmup
 from backend.app.seed import run_seed
 from backend.app.pipeline.citation_validator import get_dropped_findings_count, reset_dropped_count
 
@@ -29,7 +31,18 @@ def run_evaluation() -> Dict[str, Any]:
     print("BrandGuard Pipeline Evaluation Engine")
     print("=" * 60)
 
-    db = get_session_factory()()
+    session_factory = get_session_factory()
+    start_embedding_warmup(session_factory)
+    deadline = time.monotonic() + 180
+    while get_retrieval_status()["state"] in {"warming_up", "reindexing", "not_started"}:
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Retrieval engine did not finish warming up within 180 seconds")
+        time.sleep(0.2)
+    retrieval = get_retrieval_status()
+    retrieval_engine = retrieval["engine"]
+    print(f"Retrieval engine used: {retrieval_engine} ({retrieval['state']})")
+
+    db = session_factory()
     run_seed(db)
 
     fixtures_path = REPO_ROOT / "tests" / "fixtures" / "expected_findings.json"
@@ -139,7 +152,7 @@ def run_evaluation() -> Dict[str, Any]:
     print(f"Precision: {precision:.2%}")
     print(f"Recall: {recall:.2%}")
     print(f"F1 Score: {f1:.2%}")
-    print(f"Clean Sample Over-flagging Rate: {clean_fp_rate:.1f} per sample")
+    print(f"Clean Sample Over-flagging Rate: {clean_fp_rate:.2f} per sample")
     print(f"Citation Validator Dropped Count: {dropped_count}")
 
     # Write EVALUATION.md
@@ -156,39 +169,36 @@ The BrandGuard review engine was evaluated across structured test fixtures conta
 - **F1 Score**: {f1:.2%}
 - **Clean Sample Over-flagging**: {clean_sample_flags} flags across {clean_samples_tested} clean control(s)
 - **Citation Validator Dropped Count**: {dropped_count} invalid candidate findings dropped
+- **Retrieval engine**: {retrieval_engine} ({retrieval['state']})
 
 ---
 
-## Detailed Metric Breakdown
+## Observed Metrics
 
-| Metric | Score | Benchmark Target | Status |
-| :--- | :--- | :--- | :--- |
-| **Precision** | **{precision:.1%}** | >= 85% | Pass |
-| **Recall** | **{recall:.1%}** | >= 85% | Pass |
-| **F1 Score** | **{f1:.1%}** | >= 85% | Pass |
-| **Clean Specificity** | **{1.0 - clean_fp_rate:.1%}** | >= 90% | Pass |
-| **Citation Verification** | **100% Grounded** | 100% | Pass |
+| Metric | Observed |
+| :--- | :--- |
+| Precision | {precision:.1%} |
+| Recall | {recall:.1%} |
+| F1 score | {f1:.1%} |
+| Clean-control flags | {clean_sample_flags} across {clean_samples_tested} clean control(s) |
+| Invalid candidate findings dropped by citation validation | {dropped_count} |
 
 ---
 
 ## Fixture Test Results
 
-| Fixture ID | Planted Issues | Detected Findings | Status |
-| :--- | :--- | :--- | :--- |
+| Fixture ID | Planted Issues | Detected Findings |
+| :--- | :--- | :--- |
 """)
         for r in results_table:
-            f.write(f"| `{r['fixture']}` | {r['expected_count']} | {r['detected_count']} | {'Pass' if r['detected_count'] >= r['expected_count'] or r['expected_count'] == 0 else 'Review'} |\n")
+            f.write(f"| `{r['fixture']}` | {r['expected_count']} | {r['detected_count']} |\n")
 
         f.write(f"""
 ---
 
-## Grounded or Silent Verification
+## Interpretation
 
-The citation validator enforces that every finding cites a verified `source_id` present in the retrieved set and matches an exact quote from the source text. During evaluation runs on candidate variations, {dropped_count} candidate assertions lacking strict source quotes were dropped, preventing ungrounded hallucinated flags.
-
-## Intent Preservation Verification
-
-Rewrites for accepted findings were evaluated against the creator's stated intent. Suggestions that diverged from intent anchors were automatically withheld, providing raw findings rather than flawed automatic suggestions.
+These scores describe this finite synthetic fixture set, not production accuracy. The script counts a planted issue as found when its expected phrase appears in a finding span or issue. Clean-control flags are reported as a count and rate; they are not a calibrated specificity estimate. Citation validation drops candidates without supported sources, but this script does not calculate an overall citation-accuracy percentage. Intent preservation is covered by separate tests and is not measured here.
 """)
 
     print(f"\nWritten evaluation report to: {eval_doc_path}")
@@ -198,6 +208,8 @@ Rewrites for accepted findings were evaluated against the creator's stated inten
         "recall": recall,
         "f1": f1,
         "dropped_count": dropped_count,
+        "retrieval_engine": retrieval_engine,
+        "retrieval_state": retrieval["state"],
     }
 
 

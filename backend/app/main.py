@@ -1,5 +1,4 @@
 """BrandGuard main FastAPI application."""
-import os
 import logging
 import json
 import time
@@ -29,8 +28,9 @@ from backend.app.api.feedback import router as feedback_router
 from backend.app.api.notifications import router as notifications_router
 from backend.app.api.reports import router as reports_router
 from backend.app.api.certificates import router as certificates_router, admin_router as integrity_router
+from backend.app.api.jobs import router as jobs_router
 from backend.app.services.rate_limit import endpoint_rate_limiter
-from backend.app.pipeline.retriever import reindex_if_empty
+from backend.app.pipeline.retriever import start_embedding_warmup
 from backend.app.workers.dfi_worker import run_dfi_worker
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -63,11 +63,9 @@ async def lifespan(app: FastAPI):
                 ensure_demo_users(db)
                 db.commit()
 
-        # 3. Chroma index check
-        try:
-            reindex_if_empty(db)
-        except Exception as e:
-            logger.warning(f"Chroma reindex on boot encountered: {e}")
+    # Keep startup responsive; source indexing and the neural encoder warm in
+    # a daemon worker while requests continue using the local hash fallback.
+    start_embedding_warmup(session_factory)
 
     scheduler = BackgroundScheduler(timezone=timezone.utc)
     scheduler.add_job(
@@ -111,7 +109,7 @@ def security_headers(request_id: str) -> dict[str, str]:
             "script-src 'self'; connect-src 'self'; worker-src 'self' blob:"
         ),
     }
-    if settings.ENVIRONMENT.casefold() == "production" or os.getenv("RENDER", "").casefold() == "true":
+    if settings.ENVIRONMENT.casefold() == "production":
         headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return headers
 
@@ -180,6 +178,7 @@ app.include_router(notifications_router, prefix=api_prefix)
 app.include_router(reports_router, prefix=api_prefix)
 app.include_router(certificates_router, prefix=api_prefix)
 app.include_router(integrity_router, prefix=api_prefix)
+app.include_router(jobs_router, prefix=api_prefix)
 
 
 @app.get("/healthz")

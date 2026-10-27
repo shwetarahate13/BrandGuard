@@ -329,11 +329,7 @@ def test_get_submission_source_returns_authorized_uploaded_bytes(api_client):
     assert response.headers["cache-control"] == "private, no-store"
 
 
-@pytest.mark.parametrize(
-    ("lite_mode", "expected_message"),
-    [(False, "IMAGE_REVIEW_ENABLED"), (True, "not enabled in lite mode")],
-)
-def test_image_upload_requires_explicit_memory_budget_opt_in(api_client, monkeypatch, lite_mode, expected_message):
+def test_image_upload_requires_image_review_to_be_enabled(api_client, monkeypatch):
     client, session_factory, _manager = api_client
     creator = User(
         id="image-upload-creator",
@@ -349,7 +345,7 @@ def test_image_upload_requires_explicit_memory_budget_opt_in(api_client, monkeyp
     monkeypatch.setattr(
         submissions_api,
         "get_settings",
-        lambda: SimpleNamespace(IMAGE_REVIEW_ENABLED=False, BRANDGUARD_LITE=lite_mode),
+        lambda: SimpleNamespace(IMAGE_REVIEW_ENABLED=False),
     )
 
     response = client.post(
@@ -359,7 +355,7 @@ def test_image_upload_requires_explicit_memory_budget_opt_in(api_client, monkeyp
     )
 
     assert response.status_code == 503
-    assert expected_message in response.json()["detail"]
+    assert "IMAGE_REVIEW_ENABLED=true" in response.json()["detail"]
 
 
 def test_post_decisions_snapshots_pair_and_updates_model(api_client, monkeypatch):

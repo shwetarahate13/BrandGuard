@@ -98,7 +98,7 @@ def main() -> int:
     env["PYTHONUNBUFFERED"] = "1"
     subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=ROOT, env=env, check=True)
 
-    url = f"http://127.0.0.1:{args.port}"
+    url = f"http://localhost:{args.port}"
     print(f"BrandGuard is starting at {url}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     return subprocess.call(

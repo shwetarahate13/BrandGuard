@@ -7,7 +7,7 @@ from backend.app.config import get_settings
 from backend.app.database import get_db
 from backend.app.schemas.schemas import HealthResponse, SystemStatus
 from backend.app.llm.client import get_llm_mode
-from backend.app.pipeline.retriever import get_collection
+from backend.app.pipeline.retriever import get_collection, get_retrieval_status
 from backend.app.models.models import GuidelineClause, ApprovedFact, Term, Asset
 from backend.app.models.models import User
 from backend.app.services.auth import get_current_user
@@ -18,13 +18,17 @@ router = APIRouter(tags=["system"])
 
 @router.get("/system/mode")
 def system_mode():
-    """Expose only the non-sensitive active generation mode used by the UI."""
-    return {"llm_mode": get_llm_mode(), "demo_mode": get_settings().DEMO_MODE}
+    """Expose non-sensitive engine state used by the navigation badges."""
+    return {
+        "llm_mode": get_llm_mode(),
+        "demo_mode": get_settings().DEMO_MODE,
+        "retrieval": get_retrieval_status(),
+    }
 
 
 @router.get("/health", response_model=HealthResponse)
 def health_check():
-    """Liveness probe for Render and load balancers."""
+    """Lightweight application liveness probe."""
     settings = get_settings()
     return HealthResponse(status="ok", version=settings.APP_VERSION)
 

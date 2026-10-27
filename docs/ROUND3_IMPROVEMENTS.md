@@ -1,27 +1,21 @@
-# Round 3 Improvements
+# Round 3 improvements
 
-## A. Guideline-gap insights
+These are the three committed Round 2 improvements, with their current local implementation.
 
-BrandGuard records dispute feedback against the cited guideline clause and computes a dispute-friction index from distinct disputed findings divided by distinct findings. A nightly UTC job refreshes the values; managers and admins can also use **Recompute now**. The health screen sorts clauses by risk and shows friction percentage, dispute clusters, and the current clause text.
+## A. Guideline-Gap Insights
 
-For clauses above the high-friction threshold, an Anthropic-backed deployment can request a proposed clarity rewrite. The proposal is a draft: a manager or admin must review and apply it. Applying an edit updates the approved clause and refreshes the retrieval index. Mock/offline mode does not generate a proposal.
+BrandGuard groups disputed findings by cited guideline clause, clusters similar dispute reasons with TF-IDF cosine similarity, and calculates the Dispute Friction Index from distinct disputed findings divided by distinct findings. Managers and admins can view sortable risk bands and use **Recompute now**; stale health data is refreshed on read. Clauses above the configured threshold can show an explicitly labelled proposed wording. A manager or admin reviews and applies a revision, which refreshes retrieval data.
 
-Verification lives in `tests/integration/test_round3_endpoints.py`: health ordering/values, recompute, stale-score invalidation, and clause-edit behavior are covered. The browser sweep also ran the manager's recompute action successfully.
+## B. Image Review and Format-Aware PDF Inspection
 
-## B. Image review and spatial PDF inspection
+PDF extraction stores page and line coordinates; the review screen displays page highlights for located findings. PNG, JPEG, and sanitized SVG uploads use pip-installed RapidOCR by default and retain OCR text boxes. Image checks compare dominant colors against approved palette metadata, match readable approved logo files, enforce measurable clear-space rules when supplied, and evaluate detected text contrast when an accessibility clause exists. Finding selection links to the corresponding canvas box. Raster images are limited to 30 megapixels.
 
-PDF text extraction keeps page and line coordinates with findings. The review screen renders the uploaded PDF and overlays highlights for findings with coordinates. The real PDF fixture produced eight located findings in the Phase 6 browser/API check.
+The embedding and OCR models load on demand. The navigation badge shows model warm-up and the active retrieval engine. If the neural model cannot load, a labelled HashingVectorizer fallback keeps retrieval available.
 
-When `IMAGE_REVIEW_ENABLED=true`, PNG, JPEG, and sanitized SVG files are rasterized for OCR and visual checks. OCR text and word boxes connect findings to regions in the review screen. Visual checks compare detected colors with approved asset metadata, match readable approved logo files, evaluate explicit clear-space rules, and compute contrast for detected text when the corresponding guideline exists. SVG scripts, active elements, and external references are rejected. The image size ceiling is 12 megapixels.
+## C. Reinforcement Feedback Loop
 
-Tesseract is the default OCR backend and the Render Docker configuration selects it. RapidOCR/ONNX remains configurable for larger instances. Image review is disabled by default in application settings; Render's demo configuration explicitly enables it. A real image/PDF fixture run with Tesseract measured about 299 MB combined app and OCR-child peak RSS. A separate RapidOCR/OpenCV measurement reached about 611 MB on the development Mac, so it is not selected for the Render free deployment.
+Accepted rewrites, human edits, creator disputes, and reviewer dismissals train a persisted online logistic-regression model. The model uses sentence-length, readability, and formality changes to rank suggested rewrites. Dashboards show acceptance/edit statistics. The same normalized span and clause is suppressed after disputes on three distinct findings. Statistics and suppression are workspace-wide because the current database has no tenant boundary.
 
-Verification is in `tests/unit/test_content_handlers.py` and `tests/integration/test_round3_endpoints.py`; the full workflow suite passed after a fresh SQLite migration. The manual browser pass confirmed OCR-linked image findings and PDF page highlights.
+## Verification
 
-## C. Reinforcement feedback loop
-
-Accepted and edited rewrites, creator disputes, and compliance dismissals update a persisted online logistic-regression model. Its features include sentence length, readability, and formality changes. The confidence pipeline uses its estimated acceptance probability to rank rewrite candidates. The feedback endpoint and dashboard report acceptance rate, edit rate, and suppression totals by category; the admin screen can reset the learned model.
-
-Repeated disputes are grouped by guideline clause and normalized text span. After three distinct findings match a pair, later matching findings are suppressed across categories. This is workspace-wide because the current database has no team or tenant boundary.
-
-Verification is in `tests/integration/test_round3_endpoints.py` and the preference-model unit tests. Coverage includes training labels and persistence, candidate ranking, reviewer-dismissal feedback, category statistics, cross-category suppression, and invalidation of guideline-health values after new feedback.
+Tests are maintained in `tests/unit/` and `tests/integration/`. The main workflow and role-specific browser path are documented in [JUDGE_GUIDE.md](JUDGE_GUIDE.md). The local setup and current limits are described in the [README](../README.md) and [LIMITATIONS.md](LIMITATIONS.md).

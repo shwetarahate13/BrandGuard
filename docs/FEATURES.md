@@ -1,69 +1,34 @@
-# Implemented Features
+# Features
 
-This inventory reflects behavior present in the current application. It does not describe planned work.
+This inventory describes behavior in the current local application.
 
 ## Content review
 
-- Create a text submission or upload supported TXT, DOCX, PDF, PNG, JPEG, or SVG content within the 5 MB upload limit.
-- Check content against approved guideline clauses, facts, and terminology. Findings include their cited source and quote, status/severity, and a suggested rewrite when one is available.
-- Accept, edit, or dispute a finding. Accepting or editing a fix creates a new revision; revisions must be checked before a creator can request review.
-- Inspect PDF page highlights and OCR-linked image findings when image review is enabled.
-- Managers can request changes or reject a submission. Creators can revise, recheck, and resubmit. A manager can approve standard-risk copy; high-risk approval requires an assigned reviewer. No user can approve their own submission, and admins cannot approve submissions.
+- Create text submissions or upload TXT, Markdown, HTML, DOCX, PDF, PNG, JPEG, or sanitized SVG files. Uploads support up to 25 MB; text checks support up to 20,000 words.
+- Review copy against approved guideline clauses, facts, terminology, accessibility rules, and optional configured language-model checks. Findings link to their cited source and quote.
+- Accept, edit, or dispute findings; creators can revise, recheck, and resubmit. Managers can request changes, reject, or approve standard-risk work. High-risk work needs reviewer sign-off before manager approval. Self-approval is blocked.
+- PDF findings include extracted page coordinates and visible highlights. Images use OCR-linked text boxes and visual checks against configured approved assets and guidelines.
+- Slow document extraction and review run as bounded local background jobs with progress and a time limit. A retrieval-engine badge shows model warm-up or the active neural/hash engine.
 
-## Role-specific workspaces
+## Round 3 improvements
 
-- **Creator:** My Work dashboard, own submissions, title/intent search, saved search/status views scoped to the account in this browser, review findings, revision workflow, feedback metrics, and persistent notifications for workflow decisions.
-- **Manager:** Team Command Center, organization trends and feedback statistics, status/search filters and saved views scoped to the account in this browser, submission age against the four-hour SLA target, reviewer assignment with a default 24-hour due date, manager-editable deadlines and overdue state, standard-risk approval, changes requested/rejected, and guideline health.
-- **Reviewer:** Compliance Desk, assigned submissions and escalated findings, assignment deadlines and overdue state, source lookup, compliance notes, and high-risk sign-off for assigned submissions.
-- **Admin:** User and role management, account activation and password reset, approved-source management, runtime settings, system status, audit log and CSV export, feedback statistics/reset, and organization insights.
+- **A — Guideline-Gap Insights:** dispute-friction index by cited clause, similar-reason clusters, risk bands, recompute action, and clause revision.
+- **B — Image Review and Format-Aware PDF Inspection:** pip-only OCR, image palette/logo/clear-space/contrast checks, PDF page and line coordinates, and linked review overlays.
+- **C — Reinforcement Feedback Loop:** persisted online preference model trained from reviewer decisions, acceptance statistics, and suppression after three distinct disputes for the same normalized clause/span.
 
-Managers and admins can export the full workflow approval/changes/rejection history as CSV or PDF. Both formats include decision, submission, creator, reviewer, timestamp, status, deadline, and review note; optional ISO date filters are available on the authenticated API.
+See [ROUND3_IMPROVEMENTS.md](ROUND3_IMPROVEMENTS.md) for implementation detail and [LIMITATIONS.md](LIMITATIONS.md) for boundaries.
 
-Signed-in users can change their own password after verifying the current password. Shared seed demo-account passwords stay fixed while demo mode is enabled so the published one-click credentials keep working.
+## Role workspaces
 
-Dark mode can be toggled from the navigation bar and its preference is saved in the current browser.
+- **Creator:** own submissions, checks, finding decisions, revision and resubmission, activity and feedback statistics, notifications, and onboarding tips.
+- **Manager:** team queue, assignment and due dates, approval decisions, organization metrics, guideline health, and approval-report export.
+- **Reviewer:** assigned compliance work, escalated findings, evidence notes, required sign-off checklist, and reviewer metrics.
+- **Admin:** account and approved-source management, runtime status, audit and integrity tools, feedback reset, and organization insights.
 
-On first sign-in in a browser, users see a quick-start dialog for their role: Creators, Managers, Reviewers, and Admins receive different workflow and permission tips. The Tips button reopens the dialog.
+Other implemented capabilities include saved browser-local views, CSV/PDF approval reports, password change/reset, dark mode, first-run role tips, tamper-evident audit records, approval certificates, and public certificate verification.
 
-The notification bell is available to signed-in roles. Reviewer assignment events go to the assigned reviewer; approval, changes-requested, and rejection decisions go to the creator. Notifications have read/unread state and open the related submission.
+## Local operations
 
-## Guideline health (Improvement A)
-
-- A nightly UTC job and manager/admin **Recompute now** action calculate dispute friction by clause and show risk bands, repeated dispute themes, and clause wording.
-- Managers and admins can review and edit approved clauses. A proposed rewrite appears only when the Anthropic provider and API key are configured; applying a clause edit refreshes the source index.
-
-## Image and PDF inspection (Improvement B)
-
-- PDF extraction stores page/line coordinates and highlights located findings in the review screen.
-- With `IMAGE_REVIEW_ENABLED=true`, PNG, JPEG, and sanitized SVG uploads receive OCR text/word locations, approved-palette checks, readable approved-logo matching, configured clear-space checks, and text contrast checks.
-- Tesseract is the configured default OCR backend. RapidOCR/ONNX is an optional backend. The Render Docker configuration selects Tesseract.
-
-## Reviewer feedback loop (Improvement C)
-
-- Accept, edit, and dispute decisions train an online logistic-regression preference model persisted in the database. Compliance reviewer dismissals add negative feedback.
-- Rewrite candidates can be ranked by predicted acceptance. Feedback statistics show acceptance rate, edit rate, and suppression counts by category.
-- A clause and normalized text span is suppressed after disputes on three distinct findings. This count spans categories in the single-workspace database.
-
-## Security and operations
-
-- bcrypt password hashing, 12-character minimum password policy, expiring JWT authentication, login lockout and endpoint rate limits, role and row-level access checks, and explicit CORS origin allowlisting.
-- Upload MIME/type validation and size limits, request IDs, structured HTTP request logs, security headers, and friendly unexpected-error responses with a reference ID.
-- Alembic-managed schema changes; SQLite local default and PostgreSQL required in production; liveness routes at `/healthz`, `/api/health`, and `/api/healthz`.
-- `DEMO_MODE=false` by default. When enabled, the four throwaway demo accounts are created or synchronized on startup, including on an existing database. Sample demo content is added only when the database is empty.
-
-## Tamper-evident approvals
-
-- Every audit event belongs to a per-submission chain (or a workspace chain). Canonical JSON fields are hashed with SHA-256; each entry stores its previous hash, sequence, entry hash, and chained-at time. The migration backfills existing events and creates each stored chain head.
-- SQLite and PostgreSQL triggers reject updates and deletes on `audit_log`. Application APIs append audit events and expose no edit/delete action.
-- Approval records store the exact approved UTF-8 text hash, or original file-byte hash for PDF/image uploads. Approval creates a certificate PDF with version, title, hash, finding category counts and resolutions, reviewer justifications, approver details, AI engine/mode, chain head, and verification link.
-- Creators can download certificates for their submissions; managers/reviewers for submissions they handled; admins for all. Managers and admins can revoke certificates with a required reason recorded in the audit chain. A later approved version marks older certificates superseded.
-- Public `/verify` recomputes the chain and content hash and returns Valid, Tampered, Revoked, or Superseded with approval metadata only. It never returns approved copy. Pasted-copy checking reports an exact Match/Differs result; for PDF/image approvals, the pasted text is compared with extracted text while the file-byte hash is checked separately.
-- Admins can run and export an integrity report. `scripts/verify_audit_chain.py` checks the configured database offline; `scripts/demo_tamper.py` changes only a temporary SQLite copy to demonstrate detection.
-- See [LIMITATIONS.md](LIMITATIONS.md) for the trust boundary: the chain is internal to this database and is not an external timestamp.
-
-## Current product boundaries
-
-- The Creator dashboard's activity summary remains derived from decisions and comments. Persistent in-app notifications cover reviewer assignments and workflow decisions, but not finding-level decisions, comments, or email delivery.
-- Saved views store the current search and status filter in browser local storage, isolated by user and role; they do not sync across browsers or devices.
-- Admins can reset another user's password. Onboarding dismissal is saved per account and role in browser storage.
-- See [LIMITATIONS.md](LIMITATIONS.md) for image-processing, data-scope, rate-limit, audit-chain, and hosting constraints.
+- SQLite is the local default; PostgreSQL is supported through `DATABASE_URL`. Schema changes use Alembic.
+- `python scripts/setup_local.py` installs pinned Python dependencies, downloads the neural retrieval model, creates `.env`, migrates the database, and seeds demo data when enabled. `python scripts/run_local.py` serves the prebuilt app on one port; Node.js is not needed at runtime.
+- `python scripts/doctor.py` checks Python, dependencies, storage, database access, model files, and the committed frontend bundle.
