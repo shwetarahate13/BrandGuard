@@ -44,11 +44,16 @@ class Settings(BaseSettings):
     # Demo users/data and demo-role switching are opt-in.
     DEMO_MODE: bool = False
 
+    # Lightweight local mode deliberately omits image/OCR dependencies.
+    BRANDGUARD_LITE: bool = False
+
     # Set this only when the frontend is hosted on a separate origin.
     CORS_ORIGINS: str = ""
 
     @model_validator(mode="after")
     def validate_runtime_configuration(self):
+        if self.BRANDGUARD_LITE:
+            self.IMAGE_REVIEW_ENABLED = False
         production = self.ENVIRONMENT.casefold() == "production" or os.getenv("RENDER", "").casefold() == "true"
         if production:
             if len(self.JWT_SECRET.encode("utf-8")) < 32:

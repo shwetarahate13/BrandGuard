@@ -3,6 +3,67 @@
 > **Pre-publication brand governance with explainable AI checks and humans in control.**
 > Built by Team **Nexora** (Shweta Rahate, Janvi Thakre) for the Inkloom AI Hackathon.
 
+## Run it locally in 5 minutes
+
+Judges can run BrandGuard with Python 3.11+ on macOS, Linux, or Windows. The default lite install uses SQLite, seeded demo data, and the offline mock review engine. It needs no Docker, Node.js, hosted database, OCR package, or API key to run. FastAPI serves the committed production frontend bundle on the same port as the API.
+
+### macOS / Linux
+
+From a fresh clone, in the repository folder:
+
+```bash
+python scripts/setup_local.py
+python scripts/doctor.py
+python scripts/run_local.py
+```
+
+Use `python3` in place of `python` if that is how Python 3.11+ is installed on your computer. Setup creates `.venv`, installs pinned lite dependencies, writes a local `.env` with a generated `JWT_SECRET`, applies Alembic migrations, and seeds demo data. It does not overwrite a non-SQLite database with migrations.
+
+### Windows PowerShell
+
+```powershell
+py -3.11 scripts/setup_local.py
+py -3.11 scripts/doctor.py
+py -3.11 scripts/run_local.py
+```
+
+The scripts use `.venv` automatically after setup; virtual-environment activation is not required. Use Python 3.11 or newer. Node.js 18+ is only needed for frontend development.
+
+Expected startup output includes:
+
+```text
+Setup complete.
+Start BrandGuard with: python scripts/run_local.py
+Open: http://127.0.0.1:8000
+Mode: lite; offline mock LLM; DEMO_MODE=true; SQLite
+```
+
+`run_local.py` prints `BrandGuard is starting at http://127.0.0.1:8000`. Open [http://127.0.0.1:8000](http://127.0.0.1:8000) to use the app. The health check is [http://127.0.0.1:8000/healthz](http://127.0.0.1:8000/healthz); API docs are at [http://127.0.0.1:8000/api/docs](http://127.0.0.1:8000/api/docs). Stop the server with Ctrl+C. To change ports, run `python scripts/run_local.py --port 8001`. To clear local SQLite, vector-index, and asset data before startup, run `python scripts/run_local.py --reset`.
+
+The lite install does not include OCR/OpenCV. Uploading an image returns a clear message explaining that image review is not enabled. PDF text and spatial review remain available. For image review, run `python scripts/setup_local.py --full`; the full install enables the bundled RapidOCR backend. The local app and its mock review engine work offline after dependencies have been installed.
+
+The seeded demo logins are:
+
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| Creator | `creator@nexora.dev` | `CreatorDemo2026!` |
+| Brand Manager | `manager@nexora.dev` | `ManagerDemo2026!` |
+| Reviewer | `reviewer@nexora.dev` | `ReviewerDemo2026!` |
+| Admin | `admin@nexora.dev` | `AdminDemo2026!` |
+
+### Troubleshooting
+
+| Problem | Fix |
+| :--- | :--- |
+| Python is older than 3.11 | Install Python 3.11+ and run setup with `python` (macOS/Linux) or `py -3.11` (PowerShell). |
+| `doctor.py` reports missing packages | Run `python scripts/setup_local.py` again; use `--full` only if you need image review. |
+| Port 8000 is busy | Stop the other process or use `python scripts/run_local.py --port 8001`. |
+| Image review says it is not enabled | Run `python scripts/setup_local.py --full`, then restart the local server. |
+| Demo credentials are not shown | Check that `.env` has `DEMO_MODE=true`, then restart the server. |
+| Alembic cannot write the database | Keep `DATABASE_URL=sqlite:///./brandguard.db` and make the project folder writable. |
+
+---
+
 BrandGuard sits between content drafting and publishing to review text, DOCX, PDF, PNG, JPEG, and SVG content against **approved brand sources only**. It detects tone deviations, banned terminology, unapproved messaging, factual discrepancies, outdated statistics, and text accessibility issues.
 
 Every finding is **grounded in a cited source with an exact quote**, and suggested fixes are rendered as **word-level diffs** that preserve the creator's stated purpose.
@@ -71,62 +132,26 @@ flowchart TD
 
 ---
 
-## Demo Accounts for Judges
+## Development and Deployment
 
-When `DEMO_MODE=true`, the four throwaway accounts are created or synchronized on startup, and the login screen shows their credentials with a one-click **Fill / Sign in** button. Sample demo content is seeded only when the database is empty. With the default `DEMO_MODE=false`, the login page shows no demo credentials and no demo accounts are created. Create a real first admin with `python scripts/create_admin.py` instead. Never reuse the throwaway passwords for real accounts.
-
-| Role | Email | Password | Responsibilities |
-| :--- | :--- | :--- | :--- |
-| **Creator** | `creator@nexora.dev` | `CreatorDemo2026!` | Submits copy, declares intent, accepts/edits/disputes diff fixes |
-| **Brand Manager** | `manager@nexora.dev` | `ManagerDemo2026!` | Company-wide visibility, reviewer assignment, standard-risk sign-off, and guideline health |
-| **Reviewer** | `reviewer@nexora.dev` | `ReviewerDemo2026!` | Assigned high-risk and escalated compliance review |
-| **Admin** | `admin@nexora.dev` | `AdminDemo2026!` | Manages guidelines, users, settings, audit logs, and feedback model |
-
----
-
-## Local Setup (No Docker)
-
-Requires Python 3.12, Node.js 18+, and npm. Tesseract is needed only when enabling local image review (`brew install tesseract` on macOS; `sudo apt-get install tesseract-ocr` on Debian or Ubuntu). Image review is disabled by default. The backend defaults to a local SQLite database; Vite proxies `/api` requests to FastAPI, so local development needs no CORS configuration.
+Node.js 18+ and npm are needed only when changing the React frontend. For Vite development, install frontend dependencies and start the dev server while `run_local.py` serves the API:
 
 ```bash
-git clone https://github.com/shwetarahate13/BrandGuard.git
-cd BrandGuard
-cp .env.example .env
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r backend/requirements.txt
 npm ci --prefix frontend
-alembic upgrade head
-```
-
-With the default `DEMO_MODE=false`, create the first real administrator once. The password is entered through a hidden prompt and must be at least 12 characters. The command refuses to run if any user already exists:
-
-```bash
-python scripts/create_admin.py
-```
-
-Start the backend in one terminal from the repository root:
-
-```bash
-source .venv/bin/activate
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
-```
-
-Start the frontend in another terminal from the repository root:
-
-```bash
 npm run dev --prefix frontend -- --host 127.0.0.1 --port 5173
 ```
 
-Open `http://127.0.0.1:5173`. To use demo data instead of creating a real admin, set `DEMO_MODE=true` in `.env` before running the backend. Run `npm run build --prefix frontend` to create a production SPA bundle.
+Open `http://127.0.0.1:5173`. Vite proxies API calls to the local FastAPI server. Build the committed production frontend with `npm run build --prefix frontend`, then copy `frontend/dist` to `backend/app/static` when updating the no-Node local bundle.
 
-### Render Free Runtime
+Docker Compose remains an optional alternative: copy `.env.example` to `.env`, set `POSTGRES_PASSWORD`, then run `docker compose up --build`. The judge path above does not use Docker.
+
+### Render Runtime
 
 `render.yaml` keeps the working Docker deployment for Render because image review uses the Tesseract system package, which is not installed by the native build. The Dockerfile builds the SPA, installs backend dependencies and Tesseract, then FastAPI serves the SPA on `$PORT`; `entrypoint.sh` runs `alembic upgrade head` before starting the server. `./build.sh` is available for a local or separately configured native environment with Node.js 18+: it installs backend requirements, builds the frontend, and applies Alembic migrations. Set `DATABASE_URL` to PostgreSQL and use the generated strong `JWT_SECRET`. The hackathon Render environment sets `DEMO_MODE=true`, `IMAGE_REVIEW_ENABLED=true`, and `OCR_BACKEND=tesseract`.
 
 The optional RapidOCR backend is available with `OCR_BACKEND=rapidocr` for larger machines. Tesseract is the configured default and the Render deployment choice; its sample combined app/OCR memory measurement was about 299 MB. RapidOCR with OpenCV measured about 611 MB on the development Mac, so it is not selected for Render free.
 
-Docker files remain available for container-based deployment and are not needed for local setup.
+Render continues to use the existing Docker runtime; it installs Tesseract and builds the frontend in its Node stage. Local judge setup does not change this deployment path.
 
 ---
 
@@ -143,7 +168,8 @@ Docker files remain available for container-based deployment and are not needed 
 | `LLM_API_KEY` | `None` | Anthropic Claude API Key (optional) |
 | `CHROMA_PERSIST_DIR` | `./data/chroma` | Persistent vector directory (`/tmp/chroma` on Render) |
 | `ASSET_STORAGE_DIR` | `./data/assets` | Allowed local root for approved logo files referenced by asset records |
-| `DEMO_MODE` | `false` | Seed throwaway accounts and expose demo sign-in controls |
+| `DEMO_MODE` | `true` in local setup | Seed throwaway accounts and expose demo sign-in controls |
+| `BRANDGUARD_LITE` | `true` in local setup | Skip OCR/OpenCV dependencies and disable image review |
 | `IMAGE_REVIEW_ENABLED` | `false` | Enable image OCR and visual checks |
 | `OCR_BACKEND` | `tesseract` | `tesseract` (lower-memory system package) or `rapidocr` (pip-only ONNX runtime) |
 | `MAX_UPLOAD_SIZE_MB` | `5` | Maximum uploaded file size |
@@ -157,21 +183,23 @@ Production requires `ENVIRONMENT=production` (or Render's production environment
 
 ## Running Tests and Evaluations
 
-```bash
-source .venv/bin/activate
+Run these commands from the repository root after installing the dependencies above. Activate `.venv` first, or use `.venv\Scripts\python.exe` in PowerShell when the environment is not activated.
 
-# Run full unit and integration test suite
+```bash
+# Backend unit and integration tests
 python -m pytest -v
 
-# Run frontend API-client and saved-view regression tests
+# Frontend API-client, saved-view, theme, and onboarding tests
 npm test --prefix frontend
 
-# Run automated evaluation script against ground-truth fixtures
+# Optional: run the evaluation script against its ground-truth fixtures
 python scripts/eval.py
 
-# Run production smoke test against running server or live URL
+# Optional: run the smoke test against a running local server or URL
 python scripts/smoke_test.py http://127.0.0.1:8000
 ```
+
+The smoke test requires the backend to be running in another terminal. The evaluation script and smoke test supplement the automated test suites; they do not replace them.
 
 ---
 

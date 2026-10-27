@@ -5,7 +5,7 @@ Usage:
     python scripts/smoke_test.py [BASE_URL]
 
 Tests:
-1. Health check & cold-start readiness (/api/health)
+1. Health check & cold-start readiness (/healthz and /api/health)
 2. Public runtime mode and admin-only system status
 3. SPA frontend root serving (/)
 4. Authentication for all 4 demo accounts (Creator, Manager, Reviewer, Admin)
@@ -40,6 +40,9 @@ def run_smoke_test(base_url: str):
         client = TestClient(app)
         client.__enter__()
         healthy = True
+        r_healthz = client.get("/healthz")
+        assert r_healthz.status_code == 200 and r_healthz.json().get("status") == "ok", f"/healthz returned {r_healthz.status_code}: {r_healthz.text}"
+        print(f"  ✓ /healthz returned 200 OK: {r_healthz.json()} (in-process)")
         r = client.get("/api/health")
         assert r.status_code == 200, f"/api/health returned {r.status_code}: {r.text}"
         print(f"  ✓ /api/health returned 200 OK: {r.json()} (in-process)")
@@ -54,7 +57,11 @@ def run_smoke_test(base_url: str):
 
         while time.time() - start_time < max_wait:
             try:
-                r = client.get("/api/health")
+                r = client.get("/healthz")
+                if r.status_code == 200:
+                    assert r.json().get("status") == "ok", f"/healthz returned unexpected body: {r.text}"
+                    print(f"  ✓ /healthz returned 200 OK: {r.json()}")
+                    r = client.get("/api/health")
                 if r.status_code == 200:
                     print(f"  ✓ /api/health returned 200 OK: {r.json()} (waited {time.time()-start_time:.1f}s)")
                     healthy = True
@@ -82,10 +89,10 @@ def run_smoke_test(base_url: str):
     # 4. Authentication with all 4 demo accounts
     print("\n[Step 4] Authenticating demo user accounts...")
     demo_creds = [
-        ("Creator", "creator@nexora.dev", "Creator123!"),
-        ("Manager", "manager@nexora.dev", "Manager123!"),
-        ("Reviewer", "reviewer@nexora.dev", "Reviewer123!"),
-        ("Admin", "admin@nexora.dev", "Admin123!"),
+        ("Creator", "creator@nexora.dev", "CreatorDemo2026!"),
+        ("Manager", "manager@nexora.dev", "ManagerDemo2026!"),
+        ("Reviewer", "reviewer@nexora.dev", "ReviewerDemo2026!"),
+        ("Admin", "admin@nexora.dev", "AdminDemo2026!"),
     ]
     tokens = {}
     user_ids = {}

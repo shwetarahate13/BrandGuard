@@ -305,7 +305,10 @@ class ImageContentHandler:
 
     def extract_content(self, contents: bytes) -> tuple[str, dict[str, Any]]:
         try:
-            if not get_settings().IMAGE_REVIEW_ENABLED:
+            settings = get_settings()
+            if not settings.IMAGE_REVIEW_ENABLED:
+                if getattr(settings, "BRANDGUARD_LITE", False):
+                    raise ValueError("Image review is not enabled in lite mode. Run 'python scripts/setup_local.py --full' to install image-processing dependencies.")
                 raise ValueError("Image review is disabled on this instance; enable IMAGE_REVIEW_ENABLED on a larger-memory instance")
             image = _open_image(contents, self.mime_type)
             text, regions = _ocr(image)

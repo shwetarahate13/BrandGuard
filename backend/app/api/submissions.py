@@ -109,10 +109,17 @@ async def upload_submission(
         declared_mime_type = get_upload_mime_type(filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if declared_mime_type.startswith("image/") and not get_settings().IMAGE_REVIEW_ENABLED:
+    settings = get_settings()
+    if declared_mime_type.startswith("image/") and not settings.IMAGE_REVIEW_ENABLED:
+        detail = (
+            "Image review is not enabled in lite mode. Run 'python scripts/setup_local.py --full' "
+            "to install image-processing dependencies."
+            if getattr(settings, "BRANDGUARD_LITE", False)
+            else "Image review is disabled on this instance. Enable IMAGE_REVIEW_ENABLED on a larger-memory instance."
+        )
         raise HTTPException(
             status_code=503,
-            detail="Image review is disabled on this instance. Enable IMAGE_REVIEW_ENABLED on a larger-memory instance.",
+            detail=detail,
         )
     try:
         mime_type = sniff_upload_mime_type(contents, filename)

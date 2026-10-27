@@ -16,6 +16,13 @@ def test_postgres_legacy_scheme_normalizes_to_postgresql():
     assert settings.database_url_sync == "postgresql://user:pass@db.example.test/brandguard"
 
 
+def test_lite_mode_always_disables_image_review():
+    settings = Settings(_env_file=None, BRANDGUARD_LITE=True, IMAGE_REVIEW_ENABLED=True)
+
+    assert settings.BRANDGUARD_LITE is True
+    assert settings.IMAGE_REVIEW_ENABLED is False
+
+
 def test_cors_configuration_requires_exact_origins_and_positive_jwt_expiry():
     settings = Settings(_env_file=None, CORS_ORIGINS="https://brandguard.example.test")
     assert settings.CORS_ORIGINS == "https://brandguard.example.test"
