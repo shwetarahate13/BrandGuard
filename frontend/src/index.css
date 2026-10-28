@@ -326,6 +326,22 @@ html.dark .hover\:bg-rose-50:hover { background-color: var(--surface-danger-hove
   .sample-picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 1.2fr); align-items: center; gap: 16px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); padding: 16px; background: var(--surface-subtle); }
   .submission-upload { color: var(--text-secondary); }
   .submission-upload__label { min-height: 44px; }
+  .insights-page__hero { display: grid; gap: 5px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); padding: 24px; background: linear-gradient(120deg, var(--surface-card), var(--surface-subtle)); }
+  .insights-page__kpis > div { min-width: 0; border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
+  .insights-page [role="progressbar"] { min-width: 44px; }
+  .guideline-health-page button { min-height: 44px; }
+  .guideline-health__metrics > div { box-shadow: var(--shadow-card); }
+  .guideline-health__clause { max-width: 100%; overflow-wrap: anywhere; background: transparent; border: 0; padding: 0; text-decoration: underline transparent; text-underline-offset: 3px; }
+  .guideline-health__clause:hover { text-decoration-color: currentColor; }
+  .sources-page button { min-height: 44px; }
+  .sources-page .ui-tabs { overscroll-behavior-inline: contain; }
+  .sources-page > header { border-color: var(--border-subtle); }
+  .sources-page .bg-white.border { box-shadow: var(--shadow-card); }
+  .diff-viewer { border: 1px solid var(--border-subtle); background: var(--surface-subtle); color: var(--text-body); }
+  .diff-viewer__heading { color: var(--text-secondary); }
+  .diff-viewer__added { border-color: var(--status-success-text); background: var(--status-success-surface); color: var(--status-success-text); }
+  .diff-viewer__removed { background: var(--status-danger-surface); color: var(--status-danger-text); text-decoration-color: currentColor; }
+  .diff-viewer__unchanged { color: var(--text-body); }
 }
 
 @media (max-width: 640px) {
@@ -342,6 +358,9 @@ html.dark .hover\:bg-rose-50:hover { background-color: var(--surface-danger-hove
   .login-card { padding: 20px; }
   .login-demo { padding: 16px; }
   .login-demo__account > div:first-child { align-items: flex-start; flex-direction: column; }
+  .insights-page__hero { padding: 18px; }
+  .sources-page { padding-inline: 16px; }
+  .sources-page .ui-tabs { margin-inline: -4px; padding-inline: 4px; }
   .ui-table--responsive thead { display: none; }
   .ui-table--responsive tr { display: grid; grid-template-columns: 1fr auto; padding: 10px 0; }
   .ui-table--responsive td { padding: 4px 8px; border: 0; }

@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { GuidelineDoc, ApprovedFact, Term, Asset } from "../types";
+import { EmptyState } from "../components/ui";
+import { useToast } from "../components/Toast";
 
 interface AdminSourcesProps { canManage?: boolean; }
 
@@ -27,6 +29,8 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reindexing, setReindexing] = useState(false);
   const [reindexMsg, setReindexMsg] = useState<string | null>(null);
+  const [savingSource, setSavingSource] = useState(false);
+  const { showToast } = useToast();
 
   // New guideline form
   const [showAddGuideline, setShowAddGuideline] = useState(false);
@@ -80,10 +84,10 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
     setReindexMsg(null);
     try {
       const res = await api.reindexSources();
-      setReindexMsg(`Successfully indexed ${res.indexed_count} sources into ChromaDB vector store.`);
+      setReindexMsg(`Indexed ${res.indexed_count} approved sources for retrieval.`);
       setTimeout(() => setReindexMsg(null), 5000);
     } catch (err: any) {
-      setReindexMsg(`Reindex failed: ${err.message}`);
+      setReindexMsg(`Index refresh failed: ${err.message}`);
     } finally {
       setReindexing(false);
     }
@@ -92,20 +96,25 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
   const handleCreateGuideline = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newText.trim()) return;
+    setSavingSource(true);
     try {
       await api.createGuideline(newTitle.trim(), newText.trim());
       setShowAddGuideline(false);
       setNewTitle("");
       setNewText("");
       await loadAll();
+      showToast("Guideline document added.", "success");
     } catch (err: any) {
-      alert(`Error creating guideline: ${err.message}`);
+      showToast(`Could not save the guideline. ${err.message}`, "error");
+    } finally {
+      setSavingSource(false);
     }
   };
 
   const handleCreateFact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStatement.trim()) return;
+    setSavingSource(true);
     try {
       await api.createFact({
         statement: newStatement.trim(),
@@ -117,14 +126,18 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       setNewNote("");
       setNewValidTo("");
       await loadAll();
+      showToast("Approved fact added.", "success");
     } catch (err: any) {
-      alert(`Error creating fact: ${err.message}`);
+      showToast(`Could not save the approved fact. ${err.message}`, "error");
+    } finally {
+      setSavingSource(false);
     }
   };
 
   const handleCreateTerm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPreferred.trim()) return;
+    setSavingSource(true);
     try {
       const avoidList = newAvoid.split(",").map((s) => s.trim()).filter(Boolean);
       await api.createTerm({
@@ -137,13 +150,17 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       setNewAvoid("");
       setNewTermNote("");
       await loadAll();
+      showToast("Terminology rule added.", "success");
     } catch (err: any) {
-      alert(`Error creating term: ${err.message}`);
+      showToast(`Could not save the terminology rule. ${err.message}`, "error");
+    } finally {
+      setSavingSource(false);
     }
   };
 
   const saveBrandWords = async () => {
     const words = Array.from(new Set(brandWordsInput.split(/[,\n]/).map((word) => word.trim()).filter(Boolean)));
+    setSavingSource(true);
     try {
       const saved = await api.updateSystemSettings({ brand_words: words });
       setBrandWords(saved.brand_words || words);
@@ -152,15 +169,20 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       window.setTimeout(() => setBrandWordsSaved(null), 3000);
     } catch (err) {
       setBrandWordsSaved(err instanceof Error ? err.message : "Unable to save brand words.");
+    } finally {
+      setSavingSource(false);
     }
   };
 
   const resetWritingRuleDisputes = async () => {
+    setSavingSource(true);
     try {
       await api.resetWritingRuleDisputes();
       setRuleDisputes({ threshold: 3, rules: {}, suppressed: [] });
     } catch (err) {
       setBrandWordsSaved(err instanceof Error ? err.message : "Unable to reset grammar-rule disputes.");
+    } finally {
+      setSavingSource(false);
     }
   };
 
@@ -170,12 +192,12 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="sources-page max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Header & Reindex Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-200">
         <div>
           <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Approved Brand Sources</h1>
-          <p className="text-xs text-stone-500 mt-1">
+          <p className="text-sm text-stone-500 mt-1">
             Ground-truth repository of voice guidelines, certified facts, terminology, and assets.
           </p>
         </div>
@@ -183,15 +205,15 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
         {canManage && <button
           onClick={handleReindex}
           disabled={reindexing}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+          className="ui-button ui-button--primary"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${reindexing ? "animate-spin" : ""}`} />
-          {reindexing ? "Indexing ChromaDB..." : "Re-index Chroma Vector Store"}
+          {reindexing ? "Refreshing search index…" : "Refresh search index"}
         </button>}
       </div>
 
       {reindexMsg && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-medium">
+        <div role="status" className={`p-3 rounded-xl text-sm font-medium ${reindexMsg.includes("failed") ? "bg-rose-50 border border-rose-200 text-rose-800" : "bg-emerald-50 border border-emerald-200 text-emerald-800"}`}>
           {reindexMsg}
         </div>
       )}
@@ -209,7 +231,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-stone-200 gap-2">
+      <div role="tablist" aria-label="Approved source categories" className="ui-tabs">
         {[
           { id: "guidelines", label: `Guidelines (${guidelines.length})`, icon: BookOpen },
           { id: "facts", label: `Approved Facts (${facts.length})`, icon: CheckCircle },
@@ -223,7 +245,12 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id as any)}
-              className={`flex items-center gap-1.5 py-3 px-4 text-xs font-semibold border-b-2 transition-colors ${
+              type="button"
+              role="tab"
+              aria-selected={active}
+              aria-controls={`source-panel-${t.id}`}
+              id={`source-tab-${t.id}`}
+              className={`ui-tab flex items-center gap-1.5 py-3 px-4 text-xs font-semibold border-b-2 transition-colors ${
                 active
                   ? "border-stone-900 text-stone-900"
                   : "border-transparent text-stone-500 hover:text-stone-800"
@@ -237,8 +264,8 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       </div>
 
       {/* Tab 1: Guidelines */}
-      {activeTab === "guidelines" && (
-        <div className="space-y-4">
+      {activeTab === "guidelines" && !loading && !loadError && (
+        <div id="source-panel-guidelines" role="tabpanel" aria-labelledby="source-tab-guidelines" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-bold text-stone-800">Brand Voice & Claims Policy Docs</h2>
             {canManage && <button
@@ -246,7 +273,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-medium"
             >
               <Plus className="w-3.5 h-3.5 text-amber-400" />
-              Add Guideline Document
+              New guideline
             </button>}
           </div>
 
@@ -257,25 +284,27 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                 Paste markdown or text with headers (e.g. <code>## Tone and Voice</code>). The system will automatically split it into reviewable clauses for citation.
               </p>
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">Document Title</label>
+                <label htmlFor="source-guideline-title" className="block text-sm font-semibold text-stone-700 mb-1">Document title</label>
                 <input
+                  id="source-guideline-title"
                   type="text"
                   placeholder="e.g. Aurelia Foods Brand Guidelines"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   required
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full px-3 py-3 text-base border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">Document Content</label>
+                <label htmlFor="source-guideline-content" className="block text-sm font-semibold text-stone-700 mb-1">Document content</label>
                 <textarea
+                  id="source-guideline-content"
                   rows={6}
                   placeholder="Paste guideline text..."
                   value={newText}
                   onChange={(e) => setNewText(e.target.value)}
                   required
-                  className="w-full p-3 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full p-3 text-base border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
               <div className="flex justify-end gap-2">
@@ -288,16 +317,17 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold"
+                  disabled={savingSource}
+                  className="ui-button ui-button--primary"
                 >
-                  Save & Auto-Split Clauses
+                  {savingSource ? "Saving…" : "Save and split clauses"}
                 </button>
               </div>
             </form>
           )}
 
           <div className="space-y-4">
-            {guidelines.map((doc) => (
+            {guidelines.length === 0 ? <EmptyState title="No guideline documents yet" description={canManage ? "Add the approved voice, claims, and accessibility rules your team should follow." : "Ask an administrator to add the approved brand guidelines."} action={canManage ? <button type="button" className="ui-button ui-button--primary" onClick={() => setShowAddGuideline(true)}>Add guideline document</button> : undefined} /> : guidelines.map((doc) => (
               <div key={doc.id} className="bg-white border border-stone-200 rounded-xl p-6 shadow-sm space-y-4">
                 <div className="flex justify-between items-start">
                   <div>
@@ -330,8 +360,8 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
         </div>
       )}
 
-      {activeTab === "brand_words" && canManage && (
-        <section className="max-w-3xl bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+      {activeTab === "brand_words" && canManage && !loading && !loadError && (
+        <section id="source-panel-brand_words" role="tabpanel" aria-labelledby="source-tab-brand_words" className="max-w-3xl bg-white border border-stone-200 rounded-xl p-5 space-y-4">
           <div>
             <h2 className="text-sm font-bold text-stone-800">Brand words</h2>
             <p className="text-xs text-stone-500 mt-1">Add approved names and spellings that the writing assistant should leave unchanged.</p>
@@ -339,16 +369,16 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
           <div className="flex flex-wrap gap-2">
             {brandWords.length ? brandWords.map((word) => <span key={word} className="rounded-full bg-stone-100 border border-stone-200 px-3 py-1 text-xs text-stone-700">{word}</span>) : <span className="text-xs text-stone-500">No extra brand words yet.</span>}
           </div>
-          <label className="block text-xs font-semibold text-stone-700">Add or replace list <span className="font-normal text-stone-500">(comma or line separated)</span></label>
-          <textarea rows={3} value={brandWordsInput} onChange={(event) => setBrandWordsInput(event.target.value)} placeholder="Aurelia, Golden Oat Elixir" className="w-full rounded-lg border border-stone-300 p-3 text-sm" />
+          <label htmlFor="source-brand-words" className="block text-sm font-semibold text-stone-700">Add or replace list <span className="font-normal text-stone-500">(comma or line separated)</span></label>
+          <textarea id="source-brand-words" rows={3} value={brandWordsInput} onChange={(event) => setBrandWordsInput(event.target.value)} placeholder="Aurelia, Golden Oat Elixir" className="w-full rounded-lg border border-stone-300 p-3 text-base" />
           <div className="flex items-center justify-between">
             <span role="status" className="text-xs text-stone-600">{brandWordsSaved}</span>
-            <button type="button" onClick={saveBrandWords} disabled={!brandWordsInput.trim()} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">Save brand words</button>
+            <button type="button" onClick={saveBrandWords} disabled={savingSource || !brandWordsInput.trim()} className="ui-button ui-button--primary">{savingSource ? "Saving…" : "Save brand words"}</button>
           </div>
           <div className="border-t border-stone-200 pt-4">
             <div className="flex items-center justify-between gap-3">
               <div><h3 className="text-xs font-bold text-stone-800">Disputed grammar rules</h3><p className="mt-1 text-[11px] text-stone-500">A rule is suppressed after {ruleDisputes?.threshold || 3} distinct disputes. Reset clears these rule counters.</p></div>
-              <button type="button" onClick={resetWritingRuleDisputes} disabled={!ruleDisputes?.rules || Object.keys(ruleDisputes.rules).length === 0} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 disabled:opacity-50">Reset rule disputes</button>
+              <button type="button" onClick={resetWritingRuleDisputes} disabled={savingSource || !ruleDisputes?.rules || Object.keys(ruleDisputes.rules).length === 0} className="ui-button ui-button--quiet">{savingSource ? "Resetting…" : "Reset rule disputes"}</button>
             </div>
             {ruleDisputes && <div className="mt-3 flex flex-wrap gap-2">{Object.entries(ruleDisputes.rules).length ? Object.entries(ruleDisputes.rules).map(([rule, count]) => <span key={rule} className={`rounded-full border px-3 py-1 text-xs ${ruleDisputes.suppressed.includes(rule) ? "border-rose-200 bg-rose-50 text-rose-800" : "border-stone-200 bg-stone-50 text-stone-700"}`}>{rule}: {count} disputes{ruleDisputes.suppressed.includes(rule) ? " · suppressed" : ""}</span>) : <span className="text-xs text-stone-500">No grammar rule disputes recorded.</span>}</div>}
           </div>
@@ -356,8 +386,8 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       )}
 
       {/* Tab 2: Approved Facts */}
-      {activeTab === "facts" && (
-        <div className="space-y-4">
+      {activeTab === "facts" && !loading && !loadError && (
+        <div id="source-panel-facts" role="tabpanel" aria-labelledby="source-tab-facts" className="space-y-4">
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-sm font-bold text-stone-800">Approved Truth Ledger ({facts.length} Facts)</h2>
@@ -368,7 +398,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-medium"
             >
               <Plus className="w-3.5 h-3.5 text-amber-400" />
-              Add Fact
+              New fact
             </button>}
           </div>
 
@@ -376,20 +406,22 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
             <form onSubmit={handleCreateFact} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="font-bold text-xs uppercase tracking-wider text-stone-700">Add Approved Fact</h3>
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">Statement</label>
+                <label htmlFor="source-fact-statement" className="block text-sm font-semibold text-stone-700 mb-1">Statement</label>
                 <input
+                  id="source-fact-statement"
                   type="text"
                   placeholder="e.g. As of 2024, our Portland kitchen operates on 85% certified solar energy."
                   value={newStatement}
                   onChange={(e) => setNewStatement(e.target.value)}
                   required
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full px-3 py-3 text-base border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">Source Note / Certificate #</label>
+                  <label htmlFor="source-fact-note" className="block text-sm font-semibold text-stone-700 mb-1">Source note or certificate number</label>
                   <input
+                    id="source-fact-note"
                     type="text"
                     placeholder="e.g. 2024 Green Energy Audit"
                     value={newNote}
@@ -398,8 +430,9 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">Valid To Date (Optional Expiry)</label>
+                  <label htmlFor="source-fact-valid-to" className="block text-sm font-semibold text-stone-700 mb-1">Valid through (optional expiry)</label>
                   <input
+                    id="source-fact-valid-to"
                     type="date"
                     value={newValidTo}
                     onChange={(e) => setNewValidTo(e.target.value)}
@@ -417,16 +450,17 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold"
+                  disabled={savingSource}
+                  className="ui-button ui-button--primary"
                 >
-                  Add Fact
+                  {savingSource ? "Saving…" : "Add fact"}
                 </button>
               </div>
             </form>
           )}
 
           <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100 shadow-sm overflow-hidden">
-            {facts.map((fact) => {
+            {facts.length === 0 ? <EmptyState title="No approved facts yet" description={canManage ? "Add current product or company facts with a source and expiry date." : "Ask an administrator to add approved facts for this workspace."} action={canManage ? <button type="button" className="ui-button ui-button--primary" onClick={() => setShowAddFact(true)}>Add approved fact</button> : undefined} /> : facts.map((fact) => {
               const expired = isExpired(fact.valid_to);
               return (
                 <div key={fact.id} className="p-4 flex items-start justify-between gap-4 hover:bg-stone-50/50">
@@ -460,8 +494,8 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       )}
 
       {/* Tab 3: Terms */}
-      {activeTab === "terms" && (
-        <div className="space-y-4">
+      {activeTab === "terms" && !loading && !loadError && (
+        <div id="source-panel-terms" role="tabpanel" aria-labelledby="source-tab-terms" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-bold text-stone-800">Approved Terminology Registry</h2>
             {canManage && <button
@@ -469,7 +503,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-medium"
             >
               <Plus className="w-3.5 h-3.5 text-amber-400" />
-              Add Term
+              New term
             </button>}
           </div>
 
@@ -478,8 +512,9 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
               <h3 className="font-bold text-xs uppercase tracking-wider text-stone-700">Add Terminology Rule</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">Preferred Term</label>
+                  <label htmlFor="source-term-preferred" className="block text-sm font-semibold text-stone-700 mb-1">Preferred term</label>
                   <input
+                    id="source-term-preferred"
                     type="text"
                     placeholder="e.g. patrons"
                     value={newPreferred}
@@ -489,8 +524,9 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">Avoided Terms (Comma-separated)</label>
+                  <label htmlFor="source-term-avoid" className="block text-sm font-semibold text-stone-700 mb-1">Terms to avoid (comma-separated)</label>
                   <input
+                    id="source-term-avoid"
                     type="text"
                     placeholder="e.g. users, consumers, buyers"
                     value={newAvoid}
@@ -510,16 +546,17 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold"
+                  disabled={savingSource}
+                  className="ui-button ui-button--primary"
                 >
-                  Save Term
+                  {savingSource ? "Saving…" : "Save term"}
                 </button>
               </div>
             </form>
           )}
 
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {terms.map((t) => (
+            {terms.length === 0 ? <EmptyState title="No terminology rules yet" description={canManage ? "Add preferred terms and wording to avoid in reviews." : "Ask an administrator to add the approved terminology list."} action={canManage ? <button type="button" className="ui-button ui-button--primary" onClick={() => setShowAddTerm(true)}>Add terminology rule</button> : undefined} /> : terms.map((t) => (
               <div key={t.id} className="bg-white border border-stone-200 rounded-xl p-4 shadow-sm space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-xs">
@@ -538,11 +575,11 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       )}
 
       {/* Tab 4: Assets */}
-      {activeTab === "assets" && (
-        <div className="space-y-4">
+      {activeTab === "assets" && !loading && !loadError && (
+        <div id="source-panel-assets" role="tabpanel" aria-labelledby="source-tab-assets" className="space-y-4">
           <h2 className="text-sm font-bold text-stone-800">Approved Brand Assets ({assets.length})</h2>
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {assets.map((asset) => (
+            {assets.length === 0 ? <EmptyState title="No approved assets yet" description="Brand assets added by an administrator will appear here." /> : assets.map((asset) => (
               <div key={asset.id} className="bg-white border border-stone-200 rounded-xl p-4 shadow-sm space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-stone-900 text-xs">{asset.name}</span>

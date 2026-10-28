@@ -3,6 +3,7 @@ import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, RefreshCw } from "lucide-
 import { api } from "../api";
 import { GuidelineHealthClause } from "../types";
 import { DiffViewer } from "../components/DiffViewer";
+import { EmptyState } from "../components/ui";
 
 type SortKey = "dfi" | "title";
 
@@ -54,6 +55,11 @@ export const GuidelineHealth: React.FC = () => {
   }), [clauses, sortKey, descending]);
 
   const selectedClause = clauses.find((clause) => clause.id === selectedId) || null;
+  const riskCounts = clauses.reduce((counts, clause) => {
+    const band = riskBand(clause.dispute_friction_index).label.toLowerCase() as "low" | "moderate" | "high";
+    counts[band] += 1;
+    return counts;
+  }, { low: 0, moderate: 0, high: 0 });
 
   const recomputeHealth = async () => {
     try {
@@ -110,7 +116,7 @@ export const GuidelineHealth: React.FC = () => {
   const selectedRisk = selectedClause ? riskBand(selectedClause.dispute_friction_index) : null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="guideline-health-page max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Guideline Health</h1>
@@ -121,7 +127,8 @@ export const GuidelineHealth: React.FC = () => {
         <button
           onClick={recomputeHealth}
           disabled={loading || recomputing}
-          className="inline-flex items-center gap-2 px-3 py-2 border border-stone-300 bg-white rounded-lg text-xs font-semibold text-stone-700 disabled:opacity-50"
+          className="ui-button ui-button--secondary"
+          aria-live="polite"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${recomputing ? "animate-spin" : ""}`} />
           {recomputing ? "Recomputing…" : "Recompute now"}
@@ -137,25 +144,29 @@ export const GuidelineHealth: React.FC = () => {
       )}
       {notice && <p role="status" className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">{notice}</p>}
 
+      {!loading && !error && <div className="guideline-health__metrics grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {([ ["Low friction", riskCounts.low, "Below 10% DFI"], ["Moderate friction", riskCounts.moderate, "10–30% DFI"], ["High friction", riskCounts.high, "Above 30% DFI"] ] as const).map(([label, count, detail]) => <div key={label} className="ui-card p-4"><p className="text-xs font-semibold text-secondary">{label}</p><p className="mt-1 text-2xl font-bold text-primary">{count}</p><p className="text-xs text-muted">{detail}</p></div>)}
+      </div>}
+
       <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
         {loading ? (
           <div role="status" className="text-center py-16 text-xs text-stone-400 animate-pulse">Loading clause health data…</div>
         ) : sortedClauses.length === 0 ? (
-          <div className="text-center py-16 text-xs text-stone-500">No guideline clauses are available yet.</div>
+          <EmptyState title="No guideline clauses yet" description="Add an approved guideline document to start tracking dispute friction by clause." action={<a className="ui-button ui-button--primary" href="/sources">Open approved sources</a>} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-stone-50 border-b border-stone-200 text-[10px] uppercase tracking-wider text-stone-500">
                 <tr>
                   <th className="px-5 py-3">
-                    <button onClick={() => changeSort("title")} className="inline-flex items-center gap-1.5 font-bold hover:text-stone-900">
+                    <button type="button" aria-label={`Sort clauses by title${sortKey === "title" ? (descending ? ", descending" : ", ascending") : ""}`} onClick={() => changeSort("title")} className="inline-flex min-h-11 items-center gap-1.5 font-bold hover:text-stone-900">
                       Clause
                       {sortKey === "title" ? (descending ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3" />}
                     </button>
                   </th>
                   <th className="px-5 py-3">Guideline</th>
                   <th className="px-5 py-3">
-                    <button onClick={() => changeSort("dfi")} className="inline-flex items-center gap-1.5 font-bold hover:text-stone-900">
+                    <button type="button" aria-label={`Sort by dispute friction${sortKey === "dfi" ? (descending ? ", descending" : ", ascending") : ""}`} onClick={() => changeSort("dfi")} className="inline-flex min-h-11 items-center gap-1.5 font-bold hover:text-stone-900">
                       Dispute Friction
                       {sortKey === "dfi" ? (descending ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />) : <ArrowUpDown className="w-3 h-3" />}
                     </button>
@@ -170,11 +181,10 @@ export const GuidelineHealth: React.FC = () => {
                   return (
                     <tr
                       key={clause.id}
-                      onClick={() => { setSelectedId(clause.id); setEditing(false); setError(null); setNotice(null); }}
-                      className={`cursor-pointer transition-colors ${active ? "bg-amber-50/70" : "hover:bg-stone-50"}`}
+                      className={`transition-colors ${active ? "bg-amber-50/70" : "hover:bg-stone-50"}`}
                     >
                       <td className="px-5 py-4 min-w-64">
-                        <p className="font-semibold text-stone-900">{clause.code ? `${clause.code} · ` : ""}{clause.title || "Untitled clause"}</p>
+                        <button type="button" aria-pressed={active} onClick={() => { setSelectedId(clause.id); setEditing(false); setError(null); setNotice(null); }} className="guideline-health__clause text-left font-semibold text-stone-900">{clause.code ? `${clause.code} · ` : ""}{clause.title || "Untitled clause"}</button>
                         <p className="mt-1 text-[11px] text-stone-500 line-clamp-2">{clause.text}</p>
                       </td>
                       <td className="px-5 py-4 text-stone-600">{clause.doc_title}</td>
@@ -203,7 +213,7 @@ export const GuidelineHealth: React.FC = () => {
           </div>
 
           {selectedClause.dispute_clusters.length > 0 && (
-            <div className="rounded-xl bg-stone-50 border border-stone-200 p-4 space-y-2">
+          <div className="rounded-xl bg-stone-50 border border-stone-200 p-4 space-y-2">
               <h3 className="text-[10px] uppercase tracking-wider font-bold text-stone-600">Recurring dispute themes</h3>
               {selectedClause.dispute_clusters.slice(0, 3).map((cluster, index) => (
                 <div key={`${index}-${cluster.examples[0] || "theme"}`} className="text-xs text-stone-700">
