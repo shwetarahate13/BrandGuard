@@ -13,7 +13,9 @@
 - Added shared `Button`, `Card`, `Badge`, `Input`, `Select`, `Tabs`, `Table`, `Modal`/`Drawer`, `EmptyState`, `Stat`, `Stepper`, `Tooltip`, and `Toast` primitives. Existing `Skeleton` and toast provider now use the shared theme, reduced motion, and larger dismiss targets.
 - Added the BrandGuard application mapping, token table, component rules, and accessibility contract to `DESIGN.md`.
 - Verification: semantic contrast script passed all checked token pairs in light/dark; frontend tests 7 passed; TypeScript + Vite build passed. No lint script or Playwright tests exist in the repository.
-- Next exact step: refactor the app shell and role navigation to use the shared tokens/primitives, add a responsive user/theme menu and breadcrumbs without changing routes or permissions, then run the frontend checks and visual QA again.
+- Step 2 — app shell and dark mode: replaced the horizontal header with a role-aware sidebar and sticky top bar, semantic breadcrumbs, engine badges, account popover, mobile navigation sheet, skip link, and themed footer. Preserved existing role link sets, notification actions, password change, demo-role switch, transparency modal, and theme storage. Removed a duplicated user name in the old header.
+- Verification: frontend tests 7 passed; TypeScript/Vite build passed; contrast script passed. Temporary Playwright+Chrome smoke (API mode mocked because no backend environment is configured) captured desktop light/dark and mobile dark login views, verified theme persistence across reload, no horizontal overflow, visible mobile brand, and zero console/page errors. Screenshots are under `/private/tmp/brandguard-qa/` and are not committed. Browser plugin remains unavailable and this repo has no Playwright suite or lint script.
+- Next exact step: rebuild the four role dashboards as distinct, compact workspaces using the new shell and design tokens, then run tests/build, contrast checks, and mocked role-specific Playwright visual checks.
 
 ## Writing Assistant progress (additional capability)
 

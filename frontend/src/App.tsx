@@ -193,7 +193,6 @@ export const App: React.FC = () => {
 
   return (
     <ToastProvider>
-      <div className="min-h-screen flex flex-col bg-stone-50 text-stone-900 font-sans">
         <Navbar
           user={user}
           llmMode={llmMode}
@@ -208,35 +207,22 @@ export const App: React.FC = () => {
           onShowOnboarding={() => setOnboardingOpen(true)}
           currentPath={currentPath}
           navigate={navigate}
-        />
+        >
+          <a className="app-skip-link" href="#main-content">Skip to main content</a>
+          {demoSwitchError && <div role="alert" className="app-global-error">{demoSwitchError}</div>}
+          <main id="main-content" className="app-main" tabIndex={-1}>{content}</main>
 
-        {demoSwitchError && <div role="alert" className="mx-auto mt-3 w-[min(96%,48rem)] rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-900">{demoSwitchError}</div>}
-        <main className="flex-1">{content}</main>
+          {user && onboardingOpen && <OnboardingTips role={user.role} onClose={closeOnboarding} />}
 
-        {user && onboardingOpen && <OnboardingTips role={user.role} onClose={closeOnboarding} />}
-
-        {/* Footer */}
-        <footer className="bg-white border-t border-stone-200 py-6 mt-12 text-xs text-stone-500">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-stone-900">BrandGuard</span>
-              <span>•</span>
-              <span>Team Nexora (Shweta Rahate, Janvi Thakre)</span>
+          <footer className="app-footer">
+            <a href="/" onClick={(event) => { event.preventDefault(); navigate("/"); }} className="app-footer__brand">BrandGuard</a>
+            <div className="app-footer__links">
+              <a href="/limitations" onClick={(event) => { event.preventDefault(); navigate("/limitations"); }}>Known limitations</a>
+              <a href="/verify" onClick={(event) => { event.preventDefault(); navigate("/verify"); }}>Verify certificate</a>
+              <span>AI suggests. People decide.</span>
             </div>
-
-            <div className="flex items-center gap-6">
-              <button
-                onClick={() => navigate("/limitations")}
-                className="hover:text-stone-900 underline underline-offset-4"
-              >
-                Known Limitations & Disclosures
-              </button>
-              <button onClick={() => navigate("/verify")} className="hover:text-stone-900 underline underline-offset-4">Verify Certificate</button>
-              <span>Pre-publication governance • AI suggests, humans decide</span>
-            </div>
-          </div>
-        </footer>
-      </div>
+          </footer>
+        </Navbar>
     </ToastProvider>
   );
 };
