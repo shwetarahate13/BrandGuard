@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { Finding } from "../types";
+import { Badge, Button, EmptyState } from "./ui";
 
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -125,26 +126,73 @@ export const SourceMediaViewer: React.FC<SourceMediaViewerProps> = ({
     height: sourceLayout?.height || 0,
   });
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [renderAttempt, setRenderAttempt] = useState(0);
+  const [pdfPageCount, setPdfPageCount] = useState(0);
+  const [pdfPageWidth, setPdfPageWidth] = useState(680);
+  const pdfCanvasRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDocumentError(null);
+    setPdfPageCount(0);
+    setImageDimensions({ width: sourceLayout?.width || 0, height: sourceLayout?.height || 0 });
+  }, [mimeType, sourceUrl, sourceLayout?.width, sourceLayout?.height]);
+
+  useEffect(() => {
+    const container = pdfCanvasRef.current;
+    if (!container || mimeType !== "application/pdf") return;
+    const resize = () => setPdfPageWidth(Math.max(220, Math.min(680, container.clientWidth - 24)));
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
+    resize();
+    return () => observer.disconnect();
+  }, [mimeType, sourceUrl]);
+
+  const retryRender = () => {
+    setDocumentError(null);
+    setRenderAttempt((attempt) => attempt + 1);
+  };
+
+  const locatedFindings = findings.filter((finding) => boxFor(finding));
+  const findingIndex = locatedFindings.length > 0 ? (
+    <div className="source-media-viewer__finding-index" aria-label="Located findings">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-primary">Located findings</h3>
+        <Badge tone="info">{locatedFindings.length}</Badge>
+      </div>
+      <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+        {locatedFindings.map((finding, index) => <li key={finding.id}>
+          <Button type="button" variant={finding.id === selectedFindingId ? "primary" : "quiet"} aria-pressed={finding.id === selectedFindingId} className="source-media-viewer__finding w-full justify-start text-left" onClick={() => onSelectFinding(finding.id)}>
+            <span className="source-media-viewer__finding-number">{index + 1}</span>
+            <span className="min-w-0"><strong className="block truncate">{finding.issue}</strong><span className="block text-xs opacity-80">{finding.category}{finding.location?.page ? ` · Page ${finding.location.page}` : ""}</span></span>
+          </Button>
+        </li>)}
+      </ul>
+    </div>
+  ) : <EmptyState className="py-5" title="No located findings" description="Review findings are still available in the findings panel." />;
 
   if (mimeType === "application/pdf") {
-    const pages = sourceLayout?.pages || [];
+    const pages = sourceLayout?.pages?.length ? sourceLayout.pages : Array.from({ length: pdfPageCount }, (_, index) => ({ page: index + 1, width: sourceLayout?.width || 0, height: sourceLayout?.height || 0 }));
     return (
-      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-3 bg-stone-50 border-b border-stone-200 text-xs font-semibold text-stone-700">
-          PDF page review
-        </div>
-        <div className="p-4 max-h-[75vh] overflow-auto bg-stone-100 space-y-5">
-          {documentError && <p role="alert" className="text-xs text-rose-700">{documentError}</p>}
+      <section className="source-media-viewer ui-card overflow-hidden" aria-label="PDF page review">
+        <header className="source-media-viewer__header">
+          <div><h2>PDF page review</h2><p>Highlight overlays are linked to the findings list.</p></div>
+          <Badge tone="info">{locatedFindings.length} located</Badge>
+        </header>
+        <div ref={pdfCanvasRef} className="source-media-viewer__canvas source-media-viewer__canvas--pdf">
+          {documentError && <div role="alert" className="source-media-viewer__error"><span>{documentError}</span><Button variant="secondary" onClick={retryRender}>Retry preview</Button></div>}
           <Document
+            key={`${sourceUrl}-${renderAttempt}`}
             file={sourceUrl}
+            onLoadSuccess={(pdf) => { setPdfPageCount(pdf.numPages); setDocumentError(null); }}
             onLoadError={(error) => setDocumentError(error.message || "Unable to render this PDF.")}
-            loading={<p className="text-xs text-stone-500">Rendering PDF pages…</p>}
+            loading={<p role="status" className="source-media-viewer__loading">Rendering PDF pages…</p>}
           >
+            {pages.length === 0 && <p className="source-media-viewer__loading">Waiting for PDF page details…</p>}
             {pages.map((page) => {
               const pageFindings = findings.filter((finding) => finding.location?.page === page.page && boxFor(finding));
               return (
-                <div key={page.page} className="relative w-fit mx-auto shadow-md bg-white">
-                  <Page pageNumber={page.page} width={680} renderTextLayer={false} renderAnnotationLayer={false} />
+                <div key={page.page} className="source-media-viewer__pdf-page">
+                  <Page pageNumber={page.page} width={pdfPageWidth} renderTextLayer={false} renderAnnotationLayer={false} onRenderError={(error) => setDocumentError(error.message || `Unable to render PDF page ${page.page}.`)} />
                   {pageFindings.length > 0 && (
                     <FindingCanvasOverlay
                       findings={pageFindings}
@@ -159,8 +207,13 @@ export const SourceMediaViewer: React.FC<SourceMediaViewerProps> = ({
               );
             })}
           </Document>
+          {documentError && <p className="sr-only" role="status">PDF preview unavailable. The extracted document text remains available for review.</p>}
         </div>
-      </div>
+        <div className="source-media-viewer__footer">
+          {locatedFindings.length > 0 && <p className="source-media-viewer__hint">Select a finding to focus its highlight. You can also select a finding below.</p>}
+          {findingIndex}
+        </div>
+      </section>
     );
   }
 
@@ -169,18 +222,20 @@ export const SourceMediaViewer: React.FC<SourceMediaViewerProps> = ({
     const height = imageDimensions.height || 1;
     const imageFindings = findings.filter((finding) => boxFor(finding));
     return (
-      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-3 bg-stone-50 border-b border-stone-200 text-xs font-semibold text-stone-700">
-          Image review · {imageFindings.length} located finding{imageFindings.length === 1 ? "" : "s"}
-        </div>
-        <div className="p-4 max-h-[75vh] overflow-auto bg-stone-100">
-          <div className="relative inline-block max-w-full mx-auto">
+      <section className="source-media-viewer ui-card overflow-hidden" aria-label="Image review">
+        <header className="source-media-viewer__header">
+          <div><h2>Image review</h2><p>Boxes show where a finding was detected in the image.</p></div>
+          <Badge tone="info">{imageFindings.length} located</Badge>
+        </header>
+        <div className="source-media-viewer__canvas source-media-viewer__canvas--image">
+          <div className="source-media-viewer__image-frame">
             <img
+              key={`${sourceUrl}-${renderAttempt}`}
               src={sourceUrl}
               alt="Uploaded creative under review"
-              className="block max-w-full max-h-[68vh] w-auto h-auto"
+              className="source-media-viewer__image"
               onLoad={(event) => setImageDimensions({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
-              onError={() => setDocumentError("Unable to render this image.")}
+              onError={() => setDocumentError("Unable to render this image. The file may be corrupt or unavailable.")}
             />
             {imageFindings.length > 0 && (
               <FindingCanvasOverlay
@@ -192,9 +247,13 @@ export const SourceMediaViewer: React.FC<SourceMediaViewerProps> = ({
               />
             )}
           </div>
-          {documentError && <p role="alert" className="mt-3 text-xs text-rose-700">{documentError}</p>}
+          {documentError && <div role="alert" className="source-media-viewer__error"><span>{documentError}</span><Button variant="secondary" onClick={retryRender}>Retry preview</Button></div>}
         </div>
-      </div>
+        <div className="source-media-viewer__footer">
+          {imageFindings.length > 0 && <p className="source-media-viewer__hint">Select a finding to focus its highlight. You can also select a finding below.</p>}
+          {findingIndex}
+        </div>
+      </section>
     );
   }
 

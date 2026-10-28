@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
   BarChart3,
@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  RotateCcw,
   ShieldCheck,
   Sun,
   X,
@@ -63,6 +64,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [modalOpen, setModalOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationActionId, setNotificationActionId] = useState<string | null>(null);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -78,32 +82,39 @@ export const Navbar: React.FC<NavbarProps> = ({
   const notificationButtonRef = useRef<HTMLButtonElement>(null);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const wasMobileOpen = useRef(false);
+  const notificationRequest = useRef(0);
+
+  const refreshNotifications = useCallback(async (showLoading = true) => {
+    if (!user) return;
+    const requestId = ++notificationRequest.current;
+    if (showLoading) setNotificationsLoading(true);
+    try {
+      const items = await api.getNotifications({ limit: 100 });
+      if (requestId === notificationRequest.current) {
+        setNotifications(items);
+        setNotificationError(null);
+      }
+    } catch (error) {
+      if (requestId === notificationRequest.current) setNotificationError(error instanceof Error ? error.message : "Unable to load notifications.");
+    } finally {
+      if (showLoading && requestId === notificationRequest.current) setNotificationsLoading(false);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) {
       setNotifications([]);
       setNotificationsOpen(false);
+      setNotificationsLoading(false);
       return;
     }
-    let active = true;
-    const loadNotifications = async () => {
-      try {
-        const items = await api.getNotifications({ limit: 100 });
-        if (active) {
-          setNotifications(items);
-          setNotificationError(null);
-        }
-      } catch (error) {
-        if (active) setNotificationError(error instanceof Error ? error.message : "Unable to load notifications.");
-      }
-    };
-    void loadNotifications();
-    const refresh = window.setInterval(loadNotifications, 45000);
+    void refreshNotifications();
+    const refresh = window.setInterval(() => void refreshNotifications(false), 45000);
     return () => {
-      active = false;
+      notificationRequest.current += 1;
       window.clearInterval(refresh);
     };
-  }, [user?.id]);
+  }, [user?.id, refreshNotifications]);
 
   useEffect(() => {
     if (mobileOpen && !wasMobileOpen.current) {
@@ -135,22 +146,29 @@ export const Navbar: React.FC<NavbarProps> = ({
   const unreadCount = notifications.filter((item) => !item.is_read).length;
 
   const markAllRead = async () => {
+    if (markingAllRead || unreadCount === 0) return;
+    setMarkingAllRead(true);
     try {
       await api.markAllNotificationsRead();
       setNotifications((items) => items.map((item) => ({ ...item, is_read: true })));
       setNotificationError(null);
     } catch (error) {
       setNotificationError(error instanceof Error ? error.message : "Unable to update notifications.");
+    } finally {
+      setMarkingAllRead(false);
     }
   };
 
   const openNotification = async (notification: Notification) => {
+    if (notificationActionId) return;
+    setNotificationActionId(notification.id);
     if (!notification.is_read) {
       try {
         await api.markNotificationRead(notification.id);
         setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, is_read: true } : item));
       } catch (error) {
         setNotificationError(error instanceof Error ? error.message : "Unable to update notification.");
+        setNotificationActionId(null);
         return;
       }
     }
@@ -160,6 +178,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         ? `/approval/${notification.submission_id}`
         : `/review/${notification.submission_id}`);
     }
+    setNotificationActionId(null);
   };
 
   const closePasswordModal = () => {
@@ -329,14 +348,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               {notificationsOpen && <section className="app-popover app-notifications" role="region" aria-label="Notifications">
                 <div className="app-popover__heading">
                   <div><h2>Notifications</h2><p>Assignments and workflow decisions</p></div>
-                  {unreadCount > 0 && <Button variant="quiet" className="app-small-button" onClick={() => void markAllRead()}><CheckCheck size={14} />Mark all read</Button>}
+                  <div className="app-notifications__actions">
+                    <Button variant="quiet" className="app-small-button" onClick={() => void refreshNotifications()} loading={notificationsLoading} aria-label="Refresh notifications"><RotateCcw size={14} />Refresh</Button>
+                    {unreadCount > 0 && <Button variant="quiet" className="app-small-button" onClick={() => void markAllRead()} loading={markingAllRead}> <CheckCheck size={14} />Mark all read</Button>}
+                  </div>
                 </div>
-                {notificationError && <p role="alert" className="app-inline-error">{notificationError}</p>}
+                {notificationError && <p role="alert" className="app-inline-error">{notificationError} <button type="button" onClick={() => void refreshNotifications()} disabled={notificationsLoading}>Try again</button></p>}
                 <div className="app-notifications__list">
-                  {notifications.length === 0 ? <p className="app-notifications__empty">No notifications yet.</p> : notifications.map((notification) => (
-                    <button type="button" key={notification.id} onClick={() => void openNotification(notification)} className={`app-notification ${notification.is_read ? "" : "is-unread"}`}>
+                  {notificationsLoading && notifications.length === 0 ? <p className="app-notifications__empty" role="status">Loading notifications…</p> : notifications.length === 0 ? <p className="app-notifications__empty">No notifications yet. New assignments and decisions will appear here.</p> : notifications.map((notification) => (
+                    <button type="button" key={notification.id} onClick={() => void openNotification(notification)} className={`app-notification ${notification.is_read ? "" : "is-unread"}`} disabled={!!notificationActionId} aria-busy={notificationActionId === notification.id || undefined}>
                       <span className="app-notification__dot" aria-hidden="true" />
-                      <span className="app-notification__copy"><strong>{notification.title}</strong><span>{notification.message}</span><small>{new Date(notification.created_at).toLocaleString()}</small></span>
+                      <span className="app-notification__copy"><strong>{notification.title}</strong><span>{notification.message}</span><time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time></span>
                     </button>
                   ))}
                 </div>
