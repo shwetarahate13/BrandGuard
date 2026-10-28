@@ -159,11 +159,9 @@ def main() -> int:
     seed = (
         "from backend.app.config import get_settings; "
         "from backend.app.database import get_session_factory; "
-        "from backend.app.models.models import User; "
-        "from backend.app.seed import ensure_demo_users, run_seed; "
+        "from backend.app.seed import run_seed; "
         "settings=get_settings(); db=get_session_factory()(); "
-        "(run_seed(db) if settings.DEMO_MODE and db.query(User.id).first() is None else None); "
-        "(ensure_demo_users(db) if settings.DEMO_MODE else None); db.commit(); db.close()"
+        "(run_seed(db) if settings.DEMO_MODE else None); db.commit(); db.close()"
     )
     run([str(python), "-c", seed], env)
 

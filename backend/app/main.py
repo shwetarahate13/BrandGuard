@@ -46,22 +46,14 @@ async def lifespan(app: FastAPI):
     # Production and local schema changes are applied only through Alembic.
     get_engine()
 
-    # Demo sample content is created only on an empty DB. With demo mode on,
-    # keep the four public throwaway login accounts aligned on existing DBs too.
+    # Demo content is seeded idempotently so existing local demo databases gain
+    # new fictional examples after an update without changing user submissions.
     session_factory = get_session_factory()
     with session_factory() as db:
-        from backend.app.models.models import User
-        user_count = db.query(User).count()
         if settings.DEMO_MODE:
-            if user_count == 0:
-                logger.info("Demo mode enabled on an empty database; seeding judge accounts and sample content")
-                from backend.app.seed import run_seed
-                run_seed(db)
-            else:
-                logger.info("Demo mode enabled; synchronizing throwaway demo login accounts")
-                from backend.app.seed import ensure_demo_users
-                ensure_demo_users(db)
-                db.commit()
+            logger.info("Demo mode enabled; ensuring fictional sample data and throwaway login accounts")
+            from backend.app.seed import run_seed
+            run_seed(db)
 
     # Keep startup responsive; source indexing and the neural encoder warm in
     # a daemon worker while requests continue using the local hash fallback.

@@ -143,6 +143,7 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
           <p className="text-xs text-stone-500 mt-1">
             Submission: <span className="font-semibold text-stone-800">{submission.title}</span> • Creator: {submission.creator?.name}
           </p>
+          {submission.is_demo && <span className="inline-flex mt-2 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">Fictional demo submission</span>}
         </div>
 
         {/* Manager/Reviewer Action Buttons */}

@@ -167,7 +167,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
             <label className="ui-field text-sm font-medium" htmlFor="sample-submission">
               Choose a sample
               <select id="sample-submission" value="" onChange={(event) => applySample(event.target.value)} disabled={loading}>
-                <option value="" disabled>Select one of six examples…</option>
+                <option value="" disabled>Select a sample…</option>
                 {SAMPLE_SUBMISSIONS.map((sample) => <option key={sample.id} value={sample.id}>{sample.title}</option>)}
               </select>
             </label>

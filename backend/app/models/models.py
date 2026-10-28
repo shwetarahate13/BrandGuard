@@ -205,6 +205,7 @@ class Submission(Base):
     intent = Column(Text, nullable=True)
     status = Column(SAEnum(SubmissionStatus), default=SubmissionStatus.draft, nullable=False)
     content_type = Column(SAEnum(ContentType), default=ContentType.text, nullable=False)
+    is_demo = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

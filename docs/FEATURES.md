@@ -38,6 +38,10 @@ The deterministic writing checker works offline. The optional configured model i
 
 Other implemented capabilities include saved browser-local views, CSV/PDF approval reports, password change/reset, dark mode, first-run role tips, tamper-evident audit records, approval certificates, and public certificate verification.
 
+## Demo workspace
+
+With `DEMO_MODE=true`, the local setup creates four throwaway role accounts and at least 15 fictional, explicitly flagged submissions across draft, checked, in-review, changes-requested, approved, and rejected states. The seed includes planted claim, pricing, expired-fact, typo, tone, accessibility, PDF, and image examples. Re-running the seed adds missing examples without duplicating or resetting submissions. The login page exposes one-click demo sign-in only while demo mode is enabled. The New Submission picker has six core review examples plus two writing-assistant examples.
+
 ## Local operations
 
 - SQLite is the local default; PostgreSQL is supported through `DATABASE_URL`. Schema changes use Alembic.

@@ -174,7 +174,7 @@ def run_smoke_test(base_url: str):
         "title": "Smoke Test Campaign Announcement",
         "intent": "Announce seasonal artisan sourdough and highlight fairly priced pantry boxes",
         "content_type": "text",
-        "text": "Our cheap sourdough loaves are guaranteed to boost health. Visit [click here] for more."
+        "text": "Teh bakery accomodate our patrons."
     }
     r = client.post("/api/submissions", json=submission_payload, headers=creator_auth)
     assert r.status_code == 200, f"Submission creation failed: {r.text}"
@@ -208,51 +208,39 @@ def run_smoke_test(base_url: str):
     findings = r.json()
     assert len(findings) >= 2, f"Expected at least 2 findings, got {len(findings)}"
 
-    term_finding = next((f for f in findings if "cheap" in f["issue"].lower()), None)
-    claim_finding = next((f for f in findings if "guaranteed" in f["issue"].lower()), None)
+    fix_finding = next((f for f in findings if f.get("suggested_rewrite") and not f.get("needs_human")), None)
 
-    assert term_finding is not None, "Missing terminology finding"
-    assert claim_finding is not None, "Missing promotional claim finding"
-    assert claim_finding["source_quote"], "Missing verified source quote on claim finding"
-    print(f"  ✓ Verified Finding Grounding: Cited source quote: '{claim_finding['source_quote'][:45]}...'")
+    assert fix_finding is not None, "Expected a safe, suggested writing fix for the creator journey"
+    assert fix_finding["source_quote"], "Missing verified source quote on the cited writing guideline"
+    print(f"  ✓ Verified Finding Grounding: Cited source quote: '{fix_finding['source_quote'][:45]}...'")
 
     # D. Accept Terminology Rewrite
     r = client.post(
-        f"/api/findings/{term_finding['id']}/decision",
+        f"/api/findings/{fix_finding['id']}/decision",
         json={"action": "accept"},
         headers=creator_auth,
     )
     assert r.status_code == 200
-    print(f"  ✓ Accepted Fix for Finding #{term_finding['id']}: '{term_finding['suggested_rewrite']}' applied")
+    print(f"  ✓ Accepted Fix for Finding #{fix_finding['id']}: '{fix_finding['suggested_rewrite']}' applied")
 
     # Verify version 2 created
     r = client.get(f"/api/submissions/{sub_id}", headers=creator_auth)
     versions = r.json()["versions"]
     assert len(versions) == 2, f"Expected 2 versions after accept, got {len(versions)}"
-    assert term_finding["suggested_rewrite"] in versions[1]["text"]
+    assert fix_finding["suggested_rewrite"] in versions[1]["text"]
     print(f"  ✓ Verified Version 2 generated with diff fix applied to content text")
 
     # Re-run review on the changed content; review status is version-scoped.
     run_background_check(client, sub_id, creator_auth)
     r = client.get(f"/api/submissions/{sub_id}/findings", headers=creator_auth)
     findings = r.json()
-    claim_finding = next((f for f in findings if "guaranteed" in f["issue"].lower()), None)
-    assert claim_finding is not None, "Expected the current version to retain the unsupported claim finding"
-    assert claim_finding["needs_human"] or claim_finding["severity"] in ("critical", "major") or claim_finding["category"] == "unsupported_claim"
+    assert findings, "Expected the writing assistant to re-evaluate the revised version"
 
     # E. Request Review
     r = client.post(f"/api/submissions/{sub_id}/request-review", headers=creator_auth)
     assert r.status_code == 200
     assert r.json()["submission_status"] == "in_review"
     print("  ✓ Creator successfully requested review -> status: in_review")
-
-    # Manager assigns escalated content to the reviewer.
-    r = client.post(
-        f"/api/submissions/{sub_id}/assign",
-        json={"reviewer_id": user_ids["Reviewer"]},
-        headers=manager_auth,
-    )
-    assert r.status_code == 200, f"Reviewer assignment failed: {r.text}"
 
     # F. Verify RBAC Guard
     r = client.post(
@@ -263,40 +251,53 @@ def run_smoke_test(base_url: str):
     assert r.status_code == 403, "Creator must NOT be allowed to approve"
     print("  ✓ Verified Server-Side RBAC Guard: Creator blocked with 403 Forbidden on approval endpoint")
 
-    # G. Manager adds a note; a manager cannot approve high-risk copy.
+    # G. Manager can approve this standard-risk writing submission.
     r = client.post(
         f"/api/submissions/{sub_id}/comments",
-        json={"body": "Verified wording against approved terms. Approved for launch."},
+        json={"body": "The writing fix was rechecked and the revised copy is ready."},
         headers=manager_auth,
     )
     assert r.status_code == 200
 
-    r = client.post(
-        f"/api/submissions/{sub_id}/approve",
-        json={"decision": "approved", "note": "Certified by Brand Manager"},
-        headers=manager_auth,
-    )
-    assert r.status_code == 403, "Managers must not approve high-risk content"
-
     reviewer_auth = {"Authorization": f"Bearer {tokens['Reviewer']}"}
-    r = client.post(
-        f"/api/findings/{claim_finding['id']}/escalate-review",
-        json={"action": "confirm", "justification": "The cited approved source does not substantiate this health claim."},
-        headers=reviewer_auth,
-    )
+    # High-risk work goes through reviewer sign-off, then a different manager.
+    high_risk = client.post("/api/submissions", json={
+        "title": "Smoke Test Compliance Escalation",
+        "intent": "Describe a fictional botanical food product without making medical claims.",
+        "content_type": "text",
+        "text": "Our botanical blend cures digestive illness.",
+    }, headers=creator_auth)
+    assert high_risk.status_code == 200, high_risk.text
+    high_risk_id = high_risk.json()["id"]
+    assert client.post(f"/api/submissions/{high_risk_id}/check", headers=creator_auth).status_code == 200
+    escalations = client.get(f"/api/submissions/{high_risk_id}/findings", headers=creator_auth).json()
+    claim_finding = next((f for f in escalations if f["needs_human"] or f["severity"] in ("critical", "major")), None)
+    assert claim_finding is not None, "The unsupported health claim should be escalated"
+    assert claim_finding["source_quote"], "The escalation must cite its approved guideline source"
+    assert client.post(f"/api/submissions/{high_risk_id}/request-review", headers=creator_auth).status_code == 200
+    assigned = client.post(f"/api/submissions/{high_risk_id}/assign", json={"reviewer_id": user_ids["Reviewer"]}, headers=manager_auth)
+    assert assigned.status_code == 200, assigned.text
+    assert client.post(f"/api/submissions/{high_risk_id}/approve", json={"decision": "approved", "note": "Gate check"}, headers=manager_auth).status_code == 403
+    r = client.post(f"/api/findings/{claim_finding['id']}/escalate-review", json={
+        "action": "confirm",
+        "justification": "The cited approved guidance prohibits unsupported medical claims.",
+    }, headers=reviewer_auth)
     assert r.status_code == 200, f"Reviewer escalation decision failed: {r.text}"
-    r = client.post(
-        f"/api/submissions/{sub_id}/approve",
-        json={"decision": "approved", "note": "Compliance sign-off recorded"},
-        headers=reviewer_auth,
-    )
-    assert r.status_code == 200, f"Reviewer high-risk sign-off failed: {r.text}"
-    assert r.json()["decision"] == "approved"
+    r = client.post(f"/api/submissions/{high_risk_id}/reviewer-signoff", json={
+        "checklist": {"claims_verified": True, "facts_current": True, "accessibility_reviewed": True, "legal_wording_reviewed": True},
+        "evidence_notes": "Checked the claim against the cited approved health-claims clause.",
+        "justification": "Compliance review is complete and the unsupported claim was confirmed.",
+    }, headers=reviewer_auth)
+    assert r.status_code == 200, f"Reviewer sign-off failed: {r.text}"
+    assert client.post(f"/api/submissions/{high_risk_id}/approve", json={"decision": "approved", "note": "Reviewer cannot finally approve."}, headers=reviewer_auth).status_code == 403
+    r = client.post(f"/api/submissions/{high_risk_id}/approve", json={"decision": "approved", "note": "Compliance sign-off recorded; manager final decision."}, headers=manager_auth)
+    assert r.status_code == 200, f"Manager final approval failed after reviewer sign-off: {r.text}"
 
-    # Verify final approved status
-    r = client.get(f"/api/submissions/{sub_id}", headers=manager_auth)
-    assert r.json()["status"] == "approved"
-    print("  ✓ Assigned reviewer signed off high-risk submission -> status: approved")
+    r = client.post(f"/api/submissions/{sub_id}/approve", json={"decision": "approved", "note": "Rechecked writing fix approved."}, headers=manager_auth)
+    assert r.status_code == 200, r.text
+    assert client.get(f"/api/submissions/{sub_id}", headers=manager_auth).json()["status"] == "approved"
+    assert client.get(f"/api/submissions/{high_risk_id}", headers=manager_auth).json()["status"] == "approved"
+    print("  ✓ Assigned reviewer signed off escalated content; manager made the final approval")
 
     # 6. Audit History & Insights
     print("\n[Step 6] Verifying Audit History & Insights...")

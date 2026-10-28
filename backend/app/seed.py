@@ -10,6 +10,7 @@ Seeds fictional brand 'Aurelia Foods':
 """
 from datetime import datetime, timezone, timedelta
 import logging
+from pathlib import Path
 from sqlalchemy.orm import Session
 
 from backend.app.models.models import (
@@ -194,7 +195,7 @@ def run_seed(db: Session):
         db.flush()
 
     # 6. Sample Submissions with Planted Errors
-    if db.query(Submission).count() == 0 and creator_u:
+    if creator_u:
         samples = [
             # 1. Unsupported promotional claims + forbidden superlatives
             {
@@ -251,6 +252,14 @@ def run_seed(db: Session):
                 "content_type": ContentType.text,
                 "status": SubmissionStatus.in_review,
                 "text": "Our new Wildflower Honey Infusion is crafted with all-natural botanical botanicals harvested from Willamette Valley apiaries. Experience pure botanical tranquility in every cup.",
+                "review_finding": {
+                    "id": "demo-finding-botanical-claim",
+                    "clause": "CLAIM-1",
+                    "match": "pure botanical tranquility",
+                    "issue": "This wellness benefit needs a supporting approved fact and reviewer verification.",
+                    "category": FindingCategory.unsupported_claim,
+                    "location": None,
+                },
             },
             # 8. Finished workflow: Changes requested and resolved
             {
@@ -260,27 +269,162 @@ def run_seed(db: Session):
                 "status": SubmissionStatus.changes_requested,
                 "text": "The Aurelia Artisan Pantry gift collection is available now. Experience the finest artisan pantry foods crafted with netarts bay sea salt.",
             },
+            {
+                "id": "demo-submission-draft-weekend-market",
+                "title": "DEMO · Weekend Farm Market Invitation",
+                "intent": "Invite patrons to a seasonal tasting at the Portland artisan kitchen.",
+                "content_type": ContentType.text,
+                "status": SubmissionStatus.draft,
+                "text": "Hey guys, we're gonna have the best tasting ever!!! Come hang with us this Saturday.",
+            },
+            {
+                "id": "demo-submission-checked-health-claim",
+                "title": "DEMO · Golden Oat Elixir Product Banner",
+                "intent": "Introduce the oat drink with a concise product benefit.",
+                "content_type": ContentType.text,
+                "status": SubmissionStatus.checked,
+                "text": "Clinically proven to cure fatigue. This drink is 100% safe for everyone and is number one in America.",
+            },
+            {
+                "id": "demo-submission-review-sustainability",
+                "title": "DEMO · Spring Sustainability Newsletter",
+                "intent": "Share a current energy and packaging update with the community.",
+                "content_type": ContentType.text,
+                "status": SubmissionStatus.in_review,
+                "text": "Our artisan kitchens now use 50% solar energy, and 96% of patrons choose our new packaging.",
+                "review_finding": {
+                    "id": "demo-finding-sustainability-stat",
+                    "clause": "CLAIM-1",
+                    "match": "50% solar energy",
+                    "issue": "This energy figure is expired; verify the current approved fact before sign-off.",
+                    "category": FindingCategory.factual_accuracy,
+                    "location": None,
+                },
+            },
+            {
+                "id": "demo-submission-rejected-guarantee",
+                "title": "DEMO · Guaranteed Wellness Display Ad",
+                "intent": "Promote a pantry product at a weekend market.",
+                "content_type": ContentType.text,
+                "status": SubmissionStatus.rejected,
+                "text": "Our miracle blend is guaranteed to cure digestion problems and is 100% safe for every patron.",
+            },
+            {
+                "id": "demo-submission-image-review",
+                "title": "DEMO · Harvest Pantry Image Proof",
+                "intent": "Review the promotional image for unsupported copy and accessible contrast.",
+                "content_type": ContentType.image,
+                "status": SubmissionStatus.checked,
+                "text": "Guaranteed to cure fatigue. 100% safe for everyone! The world's best loaf. CLICK HERE",
+                "source_filename": "campaign-image.png",
+                "source_mime_type": "image/png",
+                "source_path": "samples/campaign-image.png",
+                "source_layout": {"media": "image", "width": 1200, "height": 675, "regions": []},
+                "review_finding": {
+                    "id": "demo-finding-image-claim",
+                    "clause": "CLAIM-1",
+                    "match": "Guaranteed to cure fatigue",
+                    "issue": "Absolute safety claim in the promotional image requires substantiation.",
+                    "category": FindingCategory.unsupported_claim,
+                    "location": {"page": 1, "bbox": [112, 316, 522, 362], "media": "image"},
+                },
+            },
+            {
+                "id": "demo-submission-pdf-review",
+                "title": "DEMO · Spring Campaign PDF Proof",
+                "intent": "Inspect the campaign proof and confirm each cited claim against current facts.",
+                "content_type": ContentType.pdf,
+                "status": SubmissionStatus.in_review,
+                "text": "Aurelia Foods seasonal campaign draft. Our cheap Heritage Sourdough is guaranteed to cure fatigue. It is 100% safe for everyone and the world's best loaf.",
+                "source_filename": "campaign-copy.pdf",
+                "source_mime_type": "application/pdf",
+                "source_path": "samples/campaign-copy.pdf",
+                "source_layout": {"pages": [{"page": 1, "width": 612, "height": 792}], "regions": []},
+                "review_finding": {
+                    "id": "demo-finding-pdf-claim",
+                    "clause": "CLAIM-1",
+                    "match": "guaranteed to cure fatigue",
+                    "issue": "This superlative is not supported by an approved source.",
+                    "category": FindingCategory.unsupported_claim,
+                    "location": {"page": 1, "bbox": [70, 590, 400, 615], "media": "pdf"},
+                },
+            },
+            {
+                "id": "demo-submission-typo-resubmission",
+                "title": "DEMO · Pantry Product Page Copy",
+                "intent": "Describe the pantry box in clear, accurate language.",
+                "content_type": ContentType.text,
+                "status": SubmissionStatus.changes_requested,
+                "text": "Our artisan pantry box is only $28 and is the best choise for every famly.",
+            },
         ]
 
         for s_data in samples:
-            sub = Submission(
-                creator_id=creator_u.id,
-                title=s_data["title"],
-                intent=s_data["intent"],
-                content_type=s_data["content_type"],
-                status=s_data["status"],
-            )
-            db.add(sub)
-            db.flush()
+            existing = db.query(Submission).filter(Submission.title == s_data["title"]).first()
+            if existing is not None:
+                existing.is_demo = True
+                if existing.status == SubmissionStatus.in_review and reviewer_u and not existing.assigned_to_id:
+                    existing.assigned_to_id = reviewer_u.id
+                sub = existing
+                ver = db.query(SubmissionVersion).filter_by(submission_id=sub.id, version_no=1).first()
+            else:
+                sub = Submission(
+                    id=s_data.get("id"),
+                    creator_id=creator_u.id,
+                    assigned_to_id=(reviewer_u.id if reviewer_u and s_data["status"] == SubmissionStatus.in_review else None),
+                    title=s_data["title"],
+                    intent=s_data["intent"],
+                    content_type=s_data["content_type"],
+                    status=s_data["status"],
+                    is_demo=True,
+                )
+                db.add(sub)
+                db.flush()
 
-            ver = SubmissionVersion(
-                submission_id=sub.id,
-                version_no=1,
-                text=s_data["text"],
-                created_by=creator_u.id,
-            )
-            db.add(ver)
-            db.flush()
+                source_file = None
+                if s_data.get("source_path"):
+                    source_file = (Path(__file__).resolve().parents[2] / s_data["source_path"]).read_bytes()
+                ver = SubmissionVersion(
+                    submission_id=sub.id,
+                    version_no=1,
+                    text=s_data["text"],
+                    source_file=source_file,
+                    source_mime_type=s_data.get("source_mime_type"),
+                    source_filename=s_data.get("source_filename"),
+                    source_layout=s_data.get("source_layout"),
+                    created_by=creator_u.id,
+                )
+                db.add(ver)
+                db.flush()
+
+            if ver is None:
+                continue
+
+            review_finding = s_data.get("review_finding")
+            if review_finding and db.get(Finding, review_finding["id"]) is None:
+                clause = clause_objs.get(review_finding["clause"])
+                if clause:
+                    span_start = max(0, ver.text.find(review_finding["match"]))
+                    db.add(Finding(
+                        id=review_finding["id"],
+                        submission_id=sub.id,
+                        version_id=ver.id,
+                        span_start=span_start,
+                        span_end=span_start + len(review_finding["match"]),
+                        category=review_finding["category"],
+                        issue=review_finding["issue"],
+                        source_type=SourceType.guideline_clause,
+                        source_id=clause.id,
+                        source_quote=clause.text,
+                        severity=FindingSeverity.major,
+                        confidence=FindingConfidence.high,
+                        needs_human=True,
+                        status=FindingStatus.open,
+                        location=review_finding["location"],
+                    ))
+
+            if existing is not None:
+                continue
 
             # Add comments and approvals for realism
             if s_data["status"] == SubmissionStatus.approved:
@@ -307,6 +451,14 @@ def run_seed(db: Session):
                     body="Reviewer flagged: Check regional distribution claims before final approval.",
                 )
                 db.add(comm)
+            elif s_data["status"] == SubmissionStatus.rejected:
+                db.add(Approval(
+                    submission_id=sub.id,
+                    version_id=ver.id,
+                    user_id=manager_u.id if manager_u else creator_u.id,
+                    decision=ApprovalDecision.rejected,
+                    note="The unsupported health and safety claims need evidence before this can proceed.",
+                ))
 
     # Keep one visible, reproducible feedback pattern in the local demo data:
     # three distinct disputed findings on one clause produce a high DFI and a

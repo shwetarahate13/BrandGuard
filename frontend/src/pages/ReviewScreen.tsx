@@ -482,6 +482,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 border border-stone-300">
               {submission.status}
             </span>
+            {submission.is_demo && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">Demo data</span>}
             <span className="text-xs text-stone-400">
               Version {latestVersion?.version_no || 1}
             </span>

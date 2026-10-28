@@ -171,6 +171,7 @@ export interface Submission {
   intent?: string;
   status: SubmissionStatus;
   content_type: string;
+  is_demo?: boolean;
   created_at: string;
   updated_at: string;
   creator?: User;

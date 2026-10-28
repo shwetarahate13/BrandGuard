@@ -172,6 +172,7 @@ class SubmissionResponse(BaseModel):
     intent: Optional[str] = None
     status: str
     content_type: str
+    is_demo: bool = False
     created_at: datetime
     updated_at: datetime
     creator: Optional[UserResponse] = None
@@ -195,6 +196,7 @@ class SubmissionListResponse(BaseModel):
     intent: Optional[str] = None
     status: str
     content_type: str
+    is_demo: bool = False
     created_at: datetime
     updated_at: datetime
     creator: Optional[UserResponse] = None

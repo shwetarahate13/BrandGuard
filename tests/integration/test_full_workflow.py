@@ -32,7 +32,7 @@ def test_full_governance_workflow_and_rbac():
         "title": "E2E Campaign Draft",
         "intent": "Introduce our fairly priced artisan sourdough bread to regional community",
         "content_type": "text",
-        "text": "Our cheap sourdough loaves bring warmth to your table. Visit our website [click here] for more."
+        "text": "Teh bakery accomodate our patrons. Our cheap sourdough loaves bring warmth to your table. Visit our website [click here] for more."
     }
     res_sub = client.post("/api/submissions", json=submit_payload, headers=h_creator)
     assert res_sub.status_code == 200
@@ -56,17 +56,18 @@ def test_full_governance_workflow_and_rbac():
     # Find the terminology finding for 'cheap'
     term_finding = next((f for f in findings if "cheap" in f["issue"].lower()), None)
     assert term_finding is not None
-    assert term_finding["suggested_rewrite"] is not None
+    fix_finding = next((f for f in findings if f.get("suggested_rewrite") and not f.get("needs_human")), None)
+    assert fix_finding is not None
 
     # 5. Creator accepts the rewrite (diff applied, new version created)
     res_decide = client.post(
-        f"/api/findings/{term_finding['id']}/decision",
+        f"/api/findings/{fix_finding['id']}/decision",
         json={"action": "accept"},
         headers=h_creator,
     )
     assert res_decide.status_code == 200
     duplicate_accept = client.post(
-        f"/api/findings/{term_finding['id']}/decision",
+        f"/api/findings/{fix_finding['id']}/decision",
         json={"action": "accept"},
         headers=h_creator,
     )
@@ -77,7 +78,7 @@ def test_full_governance_workflow_and_rbac():
     assert res_sub_updated.status_code == 200
     versions = res_sub_updated.json()["versions"]
     assert len(versions) >= 2
-    assert term_finding["suggested_rewrite"] in versions[-1]["text"]
+    assert fix_finding["suggested_rewrite"] in versions[-1]["text"]
 
     # A rewrite creates a new draft version; it must be checked before resubmission.
     res_req_early = client.post(f"/api/submissions/{sub_id}/request-review", headers=h_creator)
