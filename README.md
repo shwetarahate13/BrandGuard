@@ -1,6 +1,6 @@
 # BrandGuard
 
-BrandGuard is a local-first brand and compliance review workspace. It checks copy and uploaded documents against approved guidance, records human decisions, and supports reviewer sign-off and manager approval. click for step-by-step guide output/pdf/BrandGuard_User_Guide.pdf.
+BrandGuard is a local-first brand and compliance review workspace. It checks copy and uploaded documents against approved guidance, records human decisions, and supports reviewer sign-off and manager approval. click for step-by-step guide [`output/pdf/`](BrandGuard_User_Guide.pdf/)
 
 ## Architecture
 
