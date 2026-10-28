@@ -283,6 +283,7 @@ class SystemSettingsResponse(BaseModel):
     llm_enabled: bool
     min_confidence: str
     similarity_threshold: float
+    brand_words: list[str] = []
     updated_at: datetime
     model_config = {"from_attributes": True}
 
@@ -291,6 +292,7 @@ class SystemSettingsUpdate(BaseModel):
     llm_enabled: Optional[bool] = None
     min_confidence: Optional[str] = None
     similarity_threshold: Optional[float] = None
+    brand_words: Optional[list[str]] = None
 
 
 # ── Creator Personal Stats ──

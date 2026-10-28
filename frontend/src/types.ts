@@ -23,7 +23,9 @@ export type FindingCategory =
   | "messaging"
   | "factual_accuracy"
   | "unsupported_claim"
-  | "accessibility";
+  | "accessibility"
+  | "spelling"
+  | "grammar";
 
 export type FindingSeverity = "critical" | "major" | "minor" | "info";
 export type FindingConfidence = "high" | "medium" | "low";
@@ -191,6 +193,7 @@ export interface SystemSettings {
   llm_enabled: boolean;
   min_confidence: string;
   similarity_threshold: number;
+  brand_words: string[];
   updated_at: string;
 }
 

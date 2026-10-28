@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Layers,
   Image as ImageIcon,
+  SpellCheck,
 } from "lucide-react";
 import { api } from "../api";
 import { GuidelineDoc, ApprovedFact, Term, Asset } from "../types";
@@ -13,11 +14,14 @@ import { GuidelineDoc, ApprovedFact, Term, Asset } from "../types";
 interface AdminSourcesProps { canManage?: boolean; }
 
 export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false }) => {
-  const [activeTab, setActiveTab] = useState<"guidelines" | "facts" | "terms" | "assets">("guidelines");
+  const [activeTab, setActiveTab] = useState<"guidelines" | "facts" | "terms" | "assets" | "brand_words">("guidelines");
   const [guidelines, setGuidelines] = useState<GuidelineDoc[]>([]);
   const [facts, setFacts] = useState<ApprovedFact[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [brandWords, setBrandWords] = useState<string[]>([]);
+  const [brandWordsInput, setBrandWordsInput] = useState("");
+  const [brandWordsSaved, setBrandWordsSaved] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reindexing, setReindexing] = useState(false);
@@ -44,16 +48,18 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
     try {
       setLoading(true);
       setLoadError(null);
-      const [g, f, t, a] = await Promise.all([
+      const [g, f, t, a, settings] = await Promise.all([
         api.getGuidelines(),
         api.getFacts(),
         api.getTerms(),
         api.getAssets(),
+        canManage ? api.getSystemSettings() : Promise.resolve(null),
       ]);
       setGuidelines(g);
       setFacts(f);
       setTerms(t);
       setAssets(a);
+      if (settings) setBrandWords(settings.brand_words || []);
     } catch (err) {
       console.error("Failed to load sources:", err);
       setLoadError(err instanceof Error ? err.message : "Unable to load approved sources.");
@@ -133,6 +139,19 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
     }
   };
 
+  const saveBrandWords = async () => {
+    const words = Array.from(new Set(brandWordsInput.split(/[,\n]/).map((word) => word.trim()).filter(Boolean)));
+    try {
+      const saved = await api.updateSystemSettings({ brand_words: words });
+      setBrandWords(saved.brand_words || words);
+      setBrandWordsInput("");
+      setBrandWordsSaved("Brand words saved.");
+      window.setTimeout(() => setBrandWordsSaved(null), 3000);
+    } catch (err) {
+      setBrandWordsSaved(err instanceof Error ? err.message : "Unable to save brand words.");
+    }
+  };
+
   const isExpired = (validTo?: string) => {
     if (!validTo) return false;
     return new Date(validTo) < new Date();
@@ -184,6 +203,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
           { id: "facts", label: `Approved Facts (${facts.length})`, icon: CheckCircle },
           { id: "terms", label: `Terminology (${terms.length})`, icon: Layers },
           { id: "assets", label: `Brand Assets (${assets.length})`, icon: ImageIcon },
+          ...(canManage ? [{ id: "brand_words", label: `Brand words (${brandWords.length})`, icon: SpellCheck }] : []),
         ].map((t) => {
           const Icon = t.icon;
           const active = activeTab === t.id;
@@ -296,6 +316,24 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
             ))}
           </div>
         </div>
+      )}
+
+      {activeTab === "brand_words" && canManage && (
+        <section className="max-w-3xl bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-bold text-stone-800">Brand words</h2>
+            <p className="text-xs text-stone-500 mt-1">Add approved names and spellings that the writing assistant should leave unchanged.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {brandWords.length ? brandWords.map((word) => <span key={word} className="rounded-full bg-stone-100 border border-stone-200 px-3 py-1 text-xs text-stone-700">{word}</span>) : <span className="text-xs text-stone-500">No extra brand words yet.</span>}
+          </div>
+          <label className="block text-xs font-semibold text-stone-700">Add or replace list <span className="font-normal text-stone-500">(comma or line separated)</span></label>
+          <textarea rows={3} value={brandWordsInput} onChange={(event) => setBrandWordsInput(event.target.value)} placeholder="Aurelia, Golden Oat Elixir" className="w-full rounded-lg border border-stone-300 p-3 text-sm" />
+          <div className="flex items-center justify-between">
+            <span role="status" className="text-xs text-stone-600">{brandWordsSaved}</span>
+            <button type="button" onClick={saveBrandWords} disabled={!brandWordsInput.trim()} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">Save brand words</button>
+          </div>
+        </section>
       )}
 
       {/* Tab 2: Approved Facts */}

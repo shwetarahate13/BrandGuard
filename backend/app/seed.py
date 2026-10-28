@@ -90,6 +90,8 @@ def run_seed(db: Session):
              "All promotional text must be accessible. Provide descriptive link text instead of vague phrases like 'click here' or 'read more'. Avoid long all-caps text blocks. Keep sentence structure concise, aiming for an average reading level below Grade 12."),
             ("LEGAL-1", "Required Health Disclaimers",
              "Any copy discussing wellness benefits, adaptogens, or digestive wellness must include the standard FDA disclaimer: 'These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.'"),
+            ("STYLE-1", "Spelling & Grammar",
+             "Content must be free of spelling and grammar errors. Use clear, correct English while preserving the creator's stated intent."),
         ]
 
         clause_objs = {}
@@ -106,6 +108,17 @@ def run_seed(db: Session):
             clause_objs[code] = c
     else:
         clause_objs = {c.code: c for c in existing_doc.clauses}
+        if "STYLE-1" not in clause_objs:
+            style_clause = GuidelineClause(
+                doc_id=existing_doc.id,
+                code="STYLE-1",
+                title="Spelling & Grammar",
+                text="Content must be free of spelling and grammar errors. Use clear, correct English while preserving the creator's stated intent.",
+                order_index=len(clause_objs),
+            )
+            db.add(style_clause)
+            db.flush()
+            clause_objs["STYLE-1"] = style_clause
 
     # 3. Approved Facts (25+ facts, including expired ones)
     now = datetime.now(timezone.utc)

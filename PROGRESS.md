@@ -1,5 +1,11 @@
 # Round 3 progress
 
+## Writing Assistant progress (additional capability)
+
+- Phase 1: deterministic offline spelling and conservative grammar findings are integrated with the existing cited-finding pipeline. Findings use the seeded `STYLE-1` clause, retain exact source-text offsets, and include stable rule IDs and confidence. Admins can manage an allowlist of brand words. The bundled spelling correction list is deliberately conservative; unknown words are not flagged.
+- Verification: focused backend tests passed (4); frontend production build passed and the committed static bundle was rebuilt. Alembic now includes the admin brand-word setting. Secret/artifact scan found no tracked environment files, databases, Chroma folders, uploads, or key files.
+- Current writing-assistant phase: Phase 2, guideline-grounded suggested edits.
+
 ## Current state
 
 - Phase 0: complete and pushed in commit `2705e51` (`fix: verify role workspaces and theme contrast`).

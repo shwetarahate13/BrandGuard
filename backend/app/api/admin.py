@@ -469,7 +469,7 @@ def get_system_settings(
     check_permission(current_user, Action.SETTINGS_MANAGE)
     setting = db.query(SystemSetting).filter(SystemSetting.id == "default").first()
     if not setting:
-        setting = SystemSetting(id="default", llm_enabled=True, min_confidence="medium", similarity_threshold=0.75)
+        setting = SystemSetting(id="default", llm_enabled=True, min_confidence="medium", similarity_threshold=0.75, brand_words=[])
         db.add(setting)
         db.commit()
         db.refresh(setting)
@@ -494,11 +494,14 @@ def update_system_settings(
         setting.min_confidence = payload.min_confidence
     if payload.similarity_threshold is not None:
         setting.similarity_threshold = payload.similarity_threshold
+    if payload.brand_words is not None:
+        setting.brand_words = list(dict.fromkeys(word.strip() for word in payload.brand_words if word.strip()))
 
     log_action(db, current_user.id, "update_settings", "system_settings", "default", {
         "llm_enabled": setting.llm_enabled,
         "min_confidence": setting.min_confidence,
         "similarity_threshold": setting.similarity_threshold,
+        "brand_words_count": len(setting.brand_words or []),
     })
     db.commit()
     db.refresh(setting)

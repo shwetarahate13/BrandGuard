@@ -43,6 +43,8 @@ class FindingCategory(str, enum.Enum):
     factual_accuracy = "factual_accuracy"
     unsupported_claim = "unsupported_claim"
     accessibility = "accessibility"
+    spelling = "spelling"
+    grammar = "grammar"
 
 
 class FindingSeverity(str, enum.Enum):
@@ -323,6 +325,7 @@ class SystemSetting(Base):
     llm_enabled = Column(Boolean, nullable=False, default=True)
     min_confidence = Column(String(20), nullable=False, default="medium")
     similarity_threshold = Column(Float, nullable=False, default=0.75)
+    brand_words = Column(JSON, nullable=False, default=list)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 

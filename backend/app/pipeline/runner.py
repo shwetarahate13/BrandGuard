@@ -10,6 +10,7 @@
 8. Persist findings to database for the given version
 """
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
@@ -17,7 +18,7 @@ from backend.app.config import get_settings
 from backend.app.models.models import (
     Submission, SubmissionVersion, Finding,
     FindingCategory, FindingSeverity, FindingConfidence, FindingStatus, SourceType,
-    GuidelineClause, ApprovedFact, Term
+    GuidelineClause, ApprovedFact, Term, SystemSetting
 )
 from backend.app.pipeline.segmenter import segment_into_spans
 from backend.app.pipeline.rules_engine import run_rules_engine, RuleFinding
@@ -144,6 +145,12 @@ def run_pipeline(
         {"id": str(t.id), "preferred": t.preferred, "avoid": t.avoid or [], "note": t.note}
         for t in db.query(Term).all()
     ]
+    system_settings = db.query(SystemSetting).filter(SystemSetting.id == "default").first()
+    brand_words = list((system_settings.brand_words or []) if system_settings else [])
+    brand_words.extend(term["preferred"] for term in terms if term.get("preferred"))
+    brand_words.extend(
+        word for fact in facts for word in re.findall(r"[A-Za-z]+(?:['’][A-Za-z]+)?", fact.get("statement", ""))
+    )
 
     # If accessibility rules exist in guidelines, attach source to accessibility findings
     access_clause = next(
@@ -195,7 +202,7 @@ def run_pipeline(
         progress(60, "Applying deterministic rules and media checks.")
 
     # 4. Deterministic rules engine
-    rule_results: List[RuleFinding] = run_rules_engine(text, terms, facts, clauses)
+    rule_results: List[RuleFinding] = run_rules_engine(text, terms, facts, clauses, brand_words=brand_words)
 
     # Convert rule findings to dicts
     candidate_findings: List[Dict[str, Any]] = []

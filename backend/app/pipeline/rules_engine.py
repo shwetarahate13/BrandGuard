@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 from dataclasses import dataclass, field, asdict
+from backend.app.pipeline.writing_assistant import analyze_writing
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +93,16 @@ def run_rules_engine(
     terms: list[dict],
     facts: list[dict],
     clauses: list[dict],
+    brand_words: list[str] | None = None,
 ) -> list[RuleFinding]:
     """Run all deterministic rules. Returns findings with source citations."""
     findings: list[RuleFinding] = []
+
+    style_clause = next(
+        (c for c in clauses if c.get("code") == "STYLE-1"),
+        next((c for c in clauses if "free of spelling and grammar errors" in c.get("text", "").lower()), None),
+    )
+    findings.extend(RuleFinding(**finding.__dict__) for finding in analyze_writing(text, style_clause, brand_words))
 
     # 1. Terminology checks
     for term in terms:
