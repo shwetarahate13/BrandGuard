@@ -132,6 +132,10 @@ def _ocr(image: Any) -> tuple[str, list[dict[str, Any]]]:
         result = raw_result[0] if isinstance(raw_result, tuple) else raw_result
     except Exception as exc:
         logger.exception("Image OCR failed")
+        if isinstance(exc, ImportError):
+            raise ValueError(
+                "Image OCR is unavailable because RapidOCR is not installed. Run scripts/setup_local.py and retry the upload."
+            ) from exc
         raise ValueError("Unable to read text from image; the RapidOCR runtime could not process it") from exc
 
     pieces: list[str] = []

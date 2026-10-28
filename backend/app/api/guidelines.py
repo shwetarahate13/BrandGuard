@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/guidelines", tags=["guidelines"])
 
 
+def _offline_revision_template(clause_text: str) -> str:
+    """Offer a clearly marked, non-policy template when no live LLM is available."""
+    return (
+        f"{clause_text.rstrip()}\n\n"
+        "[ADD: Define the ambiguous term without changing the existing policy.]\n"
+        "[ADD: Include one in-scope example and one boundary case.]"
+    )
+
+
 @router.get("/health", response_model=list[GuidelineHealthClause])
 def get_guideline_health(
     db: Session = Depends(get_db),
@@ -57,8 +66,14 @@ def get_guideline_health(
         clause_metrics = metrics.get(clause.id, {})
         clusters = clause_metrics.get("dispute_clusters", [])
         proposed_revision = None
+        proposal_source = None
         if (clause.dispute_friction_index or 0.0) > 30:
             proposed_revision = draft_guideline_revision(clause.text, clusters)
+            if proposed_revision:
+                proposal_source = "llm"
+            else:
+                proposed_revision = _offline_revision_template(clause.text)
+                proposal_source = "offline_template"
         results.append(GuidelineHealthClause(
             id=clause.id,
             doc_id=clause.doc_id,
@@ -69,6 +84,7 @@ def get_guideline_health(
             dispute_friction_index=clause.dispute_friction_index or 0.0,
             dispute_clusters=clusters,
             proposed_revision=proposed_revision,
+            proposal_source=proposal_source,
         ))
     return results
 
@@ -104,6 +120,8 @@ def apply_clause_revision(
     revision_text = payload.text.strip()
     if not revision_text:
         raise HTTPException(status_code=422, detail="Revision text cannot be blank")
+    if "[ADD:" in revision_text:
+        raise HTTPException(status_code=422, detail="Replace offline clarification prompts before applying a revision")
 
     previous_text = clause.text
     clause.text = revision_text

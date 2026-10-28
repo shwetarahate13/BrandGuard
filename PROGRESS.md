@@ -44,7 +44,10 @@
 
 ## Remaining phases
 
-- Phase 3: end-to-end verification and tests for improvements A, B, and C, including seeded visible history.
+- Phase 3: Improvements A, B, and C are implemented and verified. Guideline Health includes DFI recompute-on-read, clustered dispute reasons, recompute, LLM proposals or a clearly labelled offline template, and a guarded revision flow. Image review defaults on; default settings produce a boxed image finding, and missing RapidOCR gives a setup instruction. Feedback learning and suppression stats appear on dashboards; demo seed history shows a >30% DFI and one suppressed pattern. The manager UI showed the seeded clause, recomputed it, and applied edited wording; the dashboard showed the suppressed count. The sample image upload returned the actionable OCR dependency error in this environment.
+  - Verification: backend suite 203 passed, 1 skipped; targeted Phase 3 tests 36 passed, 1 skipped; frontend TypeScript and production build passed; committed static bundle rebuilt.
+  - Phase 3 limits: offline wording is an editing template and cannot be applied until its prompts are replaced. This environment does not have RapidOCR installed, so the real OCR engine could not be exercised here; the default-enabled image finding/box path is covered with the handler test, and the upload error path was exercised with the sample image.
+  - Next exact step: Phase 4, implement the reviewer workbench and verify the full role permission matrix.
 - Phase 4: reviewer workbench and full role matrix.
 - Phase 5: fictional demo content, typo checks, and first-run experience.
 - Phase 6: role journeys, complete docs, and fresh-clone verification.

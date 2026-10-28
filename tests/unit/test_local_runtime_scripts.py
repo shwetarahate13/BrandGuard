@@ -1,3 +1,5 @@
+import os
+
 from scripts import setup_local
 
 
@@ -18,7 +20,8 @@ def test_setup_fills_empty_values_but_preserves_explicit_local_choices(tmp_path,
     assert values["DEMO_MODE"] == "false"
     assert values["LLM_PROVIDER"] == "anthropic"
     assert values["EMBEDDING_MODEL_PATH"] == "./data/models/all-MiniLM-L6-v2"
-    assert (tmp_path / ".env").stat().st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert (tmp_path / ".env").stat().st_mode & 0o077 == 0
 
 
 def test_setup_replaces_blank_defaults_without_overwriting_nonempty_values():

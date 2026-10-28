@@ -295,5 +295,60 @@ def run_seed(db: Session):
                 )
                 db.add(comm)
 
+    # Keep one visible, reproducible feedback pattern in the local demo data:
+    # three distinct disputed findings on one clause produce a high DFI and a
+    # suppressed normalized span. Fixed IDs make this safe to run repeatedly.
+    feedback_clause = clause_objs.get("VOICE-1")
+    if creator_u and manager_u and feedback_clause:
+        demo_submission_id = "demo-feedback-pattern"
+        demo_version_id = "demo-feedback-pattern-v1"
+        if db.get(Submission, demo_submission_id) is None:
+            demo_submission = Submission(
+                id=demo_submission_id,
+                creator_id=creator_u.id,
+                title="DEMO · Disputed wording feedback",
+                intent="Fictional history used to demonstrate guideline insights.",
+                content_type=ContentType.text,
+                status=SubmissionStatus.checked,
+            )
+            db.add(demo_submission)
+            db.flush()
+            db.add(SubmissionVersion(
+                id=demo_version_id,
+                submission_id=demo_submission_id,
+                version_no=1,
+                text="Our wording is unclear.",
+                created_by=creator_u.id,
+            ))
+            db.flush()
+            for index in range(3):
+                finding_id = f"demo-feedback-finding-{index + 1}"
+                db.add(Finding(
+                    id=finding_id,
+                    submission_id=demo_submission_id,
+                    version_id=demo_version_id,
+                    span_start=0,
+                    span_end=23,
+                    category=FindingCategory.tone,
+                    issue="The voice guidance needs clarification.",
+                    source_type=SourceType.guideline_clause,
+                    source_id=feedback_clause.id,
+                    severity=FindingSeverity.minor,
+                    confidence=FindingConfidence.high,
+                    status=FindingStatus.disputed,
+                ))
+                db.add(Decision(
+                    id=f"demo-feedback-decision-{index + 1}",
+                    finding_id=finding_id,
+                    user_id=manager_u.id,
+                    action=DecisionAction.dispute,
+                    original_span="Our wording is unclear.",
+                    reason=(
+                        "The voice wording is not clear enough."
+                        if index == 0
+                        else "The voice guidance is unclear to our team."
+                    ),
+                ))
+
     db.commit()
     logger.info("BrandGuard database seed completed successfully.")

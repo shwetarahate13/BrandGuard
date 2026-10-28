@@ -86,6 +86,7 @@ class GuidelineHealthClause(BaseModel):
     dispute_friction_index: float
     dispute_clusters: list[GuidelineDisputeCluster] = Field(default_factory=list)
     proposed_revision: Optional[str] = None
+    proposal_source: Optional[str] = None
     model_config = {"from_attributes": True}
 
 class GuidelineClauseCreate(BaseModel):

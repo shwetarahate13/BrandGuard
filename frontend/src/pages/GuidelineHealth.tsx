@@ -86,12 +86,16 @@ export const GuidelineHealth: React.FC = () => {
 
   const applyRevision = async (text: string) => {
     if (!selectedClause) return;
+    if (text.includes("[ADD:")) {
+      setError("Replace both offline template prompts before applying a guideline revision.");
+      return;
+    }
     try {
       setApplying(true);
       setError(null);
       await api.applyGuidelineRevision(selectedClause.id, text);
       setClauses((current) => current.map((clause) => clause.id === selectedClause.id
-        ? { ...clause, text, proposed_revision: null }
+        ? { ...clause, text, proposed_revision: null, proposal_source: null }
         : clause));
       setEditing(false);
       setDismissedIds((current) => new Set(current).add(selectedClause.id));
@@ -111,7 +115,7 @@ export const GuidelineHealth: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Guideline Health</h1>
           <p className="text-xs text-stone-500 mt-1 max-w-2xl">
-            Dispute friction shows how often findings tied to each clause are disputed. High-friction clauses receive an AI-drafted clarity suggestion when an LLM provider is configured.
+            Dispute friction shows how often findings tied to each clause are disputed. High-friction clauses receive a live LLM suggestion when configured, or a clearly labelled offline clarification template.
           </p>
         </div>
         <button
@@ -215,8 +219,14 @@ export const GuidelineHealth: React.FC = () => {
           ) : selectedClause.proposed_revision ? (
             <div className="rounded-xl border border-stone-200 p-4 space-y-4">
               <div>
-                <h3 className="text-xs font-bold text-stone-800">Suggested wording</h3>
-                <p className="text-[11px] text-stone-500 mt-1">Review the proposed change before applying it to the approved clause.</p>
+                <h3 className="text-xs font-bold text-stone-800">
+                  {selectedClause.proposal_source === "offline_template" ? "Offline clarification template" : "Suggested wording"}
+                </h3>
+                <p className="text-[11px] text-stone-500 mt-1">
+                  {selectedClause.proposal_source === "offline_template"
+                    ? "This template preserves the approved rule and is not ready to apply. Replace both [ADD: ...] prompts, then review the wording."
+                    : "Review the proposed change before applying it to the approved clause."}
+                </p>
               </div>
               {editing ? (
                 <textarea
@@ -239,13 +249,15 @@ export const GuidelineHealth: React.FC = () => {
                   <>
                     <button onClick={() => setDismissedIds((current) => new Set(current).add(selectedClause.id))} className="px-3 py-1.5 border border-stone-300 rounded-lg text-xs font-semibold text-stone-700">Dismiss</button>
                     <button onClick={startEditing} className="px-3 py-1.5 border border-stone-300 rounded-lg text-xs font-semibold text-stone-700">Edit</button>
-                    <button onClick={() => applyRevision(selectedClause.proposed_revision || "")} disabled={applying} className="px-3 py-1.5 bg-stone-900 rounded-lg text-xs font-semibold text-white disabled:opacity-50">{applying ? "Applying…" : "Accept revision"}</button>
+                    {selectedClause.proposal_source !== "offline_template" && (
+                      <button onClick={() => applyRevision(selectedClause.proposed_revision || "")} disabled={applying} className="px-3 py-1.5 bg-stone-900 rounded-lg text-xs font-semibold text-white disabled:opacity-50">{applying ? "Applying…" : "Accept revision"}</button>
+                    )}
                   </>
                 )}
               </div>
             </div>
           ) : (
-            <p className="text-xs text-stone-500">A proposed revision is unavailable. Configure an active LLM provider to draft wording from these dispute themes.</p>
+            <p className="text-xs text-stone-500">A wording proposal is unavailable for this clause.</p>
           )}
         </section>
       )}

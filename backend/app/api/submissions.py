@@ -229,15 +229,15 @@ async def upload_submission(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     settings = get_settings()
+    try:
+        mime_type = sniff_upload_mime_type(contents, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if declared_mime_type.startswith("image/") and not settings.IMAGE_REVIEW_ENABLED:
         raise HTTPException(
             status_code=503,
             detail="Image review is disabled in this configuration; set IMAGE_REVIEW_ENABLED=true to enable it.",
         )
-    try:
-        mime_type = sniff_upload_mime_type(contents, filename)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     request_hash = request_fingerprint({
         "title": title.strip() or filename,

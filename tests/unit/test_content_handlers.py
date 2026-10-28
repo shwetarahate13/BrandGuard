@@ -51,6 +51,9 @@ def test_tesseract_word_output_maps_offsets_confidence_and_boxes(monkeypatch):
         image_to_data=lambda *_args, **_kwargs: output,
     )
     monkeypatch.setitem(sys.modules, "pytesseract", fake_tesseract)
+    # The test exercises the Tesseract adapter, not whether Tesseract is
+    # installed on the machine running the test suite.
+    monkeypatch.setattr(content_handlers.shutil, "which", lambda _name: "tesseract")
     monkeypatch.setattr(
         content_handlers,
         "get_settings",
@@ -67,15 +70,20 @@ def test_tesseract_word_output_maps_offsets_confidence_and_boxes(monkeypatch):
 
 
 def test_palette_check_uses_approved_asset_rgb_metadata(monkeypatch):
+    from backend.app.config import Settings
+
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
     image = Image.new("RGB", (80, 60), (180, 20, 20))
     encoded = BytesIO()
     image.save(encoded, format="PNG")
+    monkeypatch.delenv("IMAGE_REVIEW_ENABLED", raising=False)
+    default_settings = Settings(_env_file=None)
+    assert default_settings.IMAGE_REVIEW_ENABLED is True
     monkeypatch.setattr(
         content_handlers,
         "get_settings",
-        lambda: SimpleNamespace(IMAGE_REVIEW_ENABLED=True, ASSET_STORAGE_DIR="/tmp/brandguard-assets"),
+        lambda: default_settings,
     )
 
     with Session(engine) as db:
@@ -103,6 +111,21 @@ def test_image_handler_returns_actionable_message_when_disabled(monkeypatch):
         assert "IMAGE_REVIEW_ENABLED" in str(exc)
     else:
         raise AssertionError("disabled image review should fail before decoding the upload")
+
+
+def test_missing_rapidocr_dependency_has_actionable_error(monkeypatch):
+    monkeypatch.setattr(
+        content_handlers,
+        "get_settings",
+        lambda: SimpleNamespace(OCR_BACKEND="rapidocr"),
+    )
+
+    def missing_engine():
+        raise ModuleNotFoundError("rapidocr is unavailable")
+
+    monkeypatch.setattr(content_handlers, "_get_ocr_engine", missing_engine)
+    with pytest.raises(ValueError, match="RapidOCR is not installed.*scripts/setup_local.py"):
+        content_handlers._ocr(object())
 
 
 def test_logo_clear_space_requires_readable_logo_and_measurable_guideline(monkeypatch, tmp_path):

@@ -15,6 +15,7 @@ os.environ.update({
     "DATABASE_URL": f"sqlite:///{_TEST_DATABASE}",
     "DEMO_MODE": "true",
     "LLM_PROVIDER": "mock",
+    "IMAGE_REVIEW_ENABLED": "true",
     "CHROMA_PERSIST_DIR": str(_TEST_DATA / "chroma"),
     "ASSET_STORAGE_DIR": str(_TEST_DATA / "uploads"),
 })

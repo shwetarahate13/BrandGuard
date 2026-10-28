@@ -237,6 +237,7 @@ export interface GuidelineHealthClause {
   dispute_friction_index: number;
   dispute_clusters: GuidelineDisputeCluster[];
   proposed_revision?: string | null;
+  proposal_source?: "llm" | "offline_template" | null;
 }
 
 export interface ApprovedFact {

@@ -407,7 +407,8 @@ def test_get_guideline_health_returns_real_clause_rows(api_client):
     clauses = response.json()
     assert [clause["id"] for clause in clauses] == ["clause-high", "clause-low"]
     assert clauses[0]["dispute_friction_index"] == 42.0
-    assert clauses[0]["proposed_revision"] is None
+    assert clauses[0]["proposal_source"] == "offline_template"
+    assert "[ADD:" in clauses[0]["proposed_revision"]
 
 
 def test_guideline_health_recomputes_distinct_disputed_findings_and_clusters_reasons(api_client):
@@ -500,6 +501,11 @@ def test_patch_guideline_clause_applies_revision(api_client, monkeypatch):
     assert response.json()["text"] == "Use concise, approved wording."
     invalid = client.patch("/api/guidelines/clauses/clause-test", json={"text": "  "})
     assert invalid.status_code == 422
+    placeholder = client.patch(
+        "/api/guidelines/clauses/clause-test",
+        json={"text": "Keep the rule. [ADD: clarify the term.]"},
+    )
+    assert placeholder.status_code == 422
 
 
 def test_get_submission_source_returns_authorized_uploaded_bytes(api_client):
@@ -534,6 +540,8 @@ def test_get_submission_source_returns_authorized_uploaded_bytes(api_client):
 
 
 def test_image_upload_requires_image_review_to_be_enabled(api_client, monkeypatch):
+    from PIL import Image
+
     client, session_factory, _manager = api_client
     creator = User(
         id="image-upload-creator",
@@ -551,11 +559,13 @@ def test_image_upload_requires_image_review_to_be_enabled(api_client, monkeypatc
         "get_settings",
         lambda: SimpleNamespace(IMAGE_REVIEW_ENABLED=False),
     )
+    valid_image = io.BytesIO()
+    Image.new("RGB", (2, 2), "white").save(valid_image, format="PNG")
 
     response = client.post(
         "/api/submissions/upload",
         data={"title": "Image campaign"},
-        files={"file": ("campaign.png", b"image bytes", "image/png")},
+        files={"file": ("campaign.png", valid_image.getvalue(), "image/png")},
     )
 
     assert response.status_code == 503
