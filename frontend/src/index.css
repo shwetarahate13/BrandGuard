@@ -292,6 +292,7 @@ html.dark .hover\:bg-rose-50:hover { background-color: var(--surface-danger-hove
   .ui-stepper__step[data-complete="true"] .ui-stepper__dot { background: var(--action-primary-surface); box-shadow: 0 0 0 1px var(--action-primary-surface); }
   .ui-stepper__step[data-current="true"] { color: var(--text-primary); font-weight: 700; }
   .ui-dialog { width: min(100% - 24px, 640px); max-height: min(90dvh, 900px); overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); padding: 24px; background: var(--surface-card); color: var(--text-body); box-shadow: var(--shadow-floating); }
+  .ui-dialog--wide { width: min(100% - 24px, 1100px); }
   .ui-dialog::backdrop { background: rgb(17 34 29 / 56%); }
   .ui-drawer { width: min(100% - 24px, 420px); height: min(100dvh - 24px, 900px); max-height: none; margin: 12px 0 12px auto; border-radius: var(--radius-card) 0 0 var(--radius-card); }
   .ui-tooltip { position: relative; display: inline-flex; }
@@ -301,6 +302,19 @@ html.dark .hover\:bg-rose-50:hover { background-color: var(--surface-danger-hove
   .ui-toast--error { border-inline-start: 4px solid var(--status-danger-text); }
   .ui-toast--info { border-inline-start: 4px solid var(--brand-600); }
   .ui-skeleton { border-radius: var(--radius-control); background: var(--surface-raised); }
+  .review-page { color: var(--text-body); }
+  .review-page button { min-height: 44px; }
+  .review-page__header { border-color: var(--border-subtle); }
+  .review-page__title-row { min-width: 0; flex-wrap: wrap; }
+  .review-page__title-row h1 { overflow-wrap: anywhere; }
+  .review-page__layout > *, .approval-page > * { min-width: 0; }
+  .review-checklist { border-color: var(--status-info-text); }
+  .review-checklist__item { min-height: 44px; background: var(--surface-subtle); color: var(--text-primary); cursor: pointer; }
+  .review-checklist__item input { width: 18px; height: 18px; accent-color: var(--action-primary-surface); }
+  .review-gate { display: grid; gap: 4px; border: 1px solid var(--status-warning-text); border-radius: var(--radius-card); padding: 16px; background: var(--status-warning-surface); color: var(--status-warning-text); font-size: 14px; }
+  .review-gate--complete { border-color: var(--status-success-text); background: var(--status-success-surface); color: var(--status-success-text); }
+  .review-page mark { cursor: pointer; }
+  .review-page mark:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 }
 
 @media (max-width: 640px) {
@@ -308,6 +322,10 @@ html.dark .hover\:bg-rose-50:hover { background-color: var(--surface-danger-hove
   body { font-size: 16px; }
   input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px !important; }
   .ui-dialog { padding: 18px; }
+  .review-page__title-row { align-items: flex-start; }
+  .review-page__title-row h1 { font-size: 1.15rem; }
+  .approval-page .review-page__header > div:last-child { flex-wrap: wrap; }
+  .approval-page .review-page__header > div:last-child > button { min-height: 44px; }
   .ui-table--responsive thead { display: none; }
   .ui-table--responsive tr { display: grid; grid-template-columns: 1fr auto; padding: 10px 0; }
   .ui-table--responsive td { padding: 4px 8px; border: 0; }
@@ -346,7 +364,7 @@ html.dark .hover\:bg-rose-50:hover { background-color: var(--surface-danger-hove
 .app-nav__link:hover { background: var(--surface-subtle); color: var(--text-primary); }
 .app-nav__link.is-active { background: var(--surface-subtle); color: var(--brand-green); font-weight: 700; }
 .app-nav__link svg { flex: 0 0 auto; }
-.app-nav__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-nav__label { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
 .app-sidebar__footer { display: grid; gap: 3px; margin-top: auto; padding: 18px 4px 4px; color: var(--text-secondary); font-size: 12px; }
 .app-sidebar__footer p { margin: 0; color: var(--text-primary); font-size: 13px; font-weight: 600; }
 .app-topbar { position: sticky; top: 0; z-index: 40; display: flex; min-width: 0; min-height: 68px; align-items: center; gap: 18px; border-bottom: 1px solid var(--border-subtle); background: var(--surface-card); padding: 8px 24px; }

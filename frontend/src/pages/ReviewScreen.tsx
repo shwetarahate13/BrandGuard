@@ -17,6 +17,7 @@ import {
 import { api } from "../api";
 import { Submission, Finding, User } from "../types";
 import { DiffViewer } from "../components/DiffViewer";
+import { Modal, Stepper } from "../components/ui";
 
 const SourceMediaViewer = React.lazy(() =>
   import("../components/SourceMediaViewer").then((module) => ({ default: module.SourceMediaViewer })),
@@ -110,6 +111,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     : null;
 
   const currentText = latestVersion?.text || "";
+  const workflowStep = submission?.status === "draft" ? 0 : submission?.status === "approved" ? 3 : 1;
   const openFindings = findings.filter((finding) => finding.status === "open");
   const resolvedFindings = findings.filter((finding) => finding.status !== "open");
   const sourceMimeType = latestVersion?.source_mime_type;
@@ -412,7 +414,16 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       elements.push(
         <mark
           key={`mark-${f.id}`}
+          role="button"
+          tabIndex={0}
+          aria-label={`${f.category.replace("_", " ")} finding: ${f.issue}`}
           onClick={() => setSelectedFindingId(f.id)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setSelectedFindingId(f.id);
+            }
+          }}
           className={`px-1 py-0.5 rounded transition-all ${sevColor}`}
           title={`${f.category}: ${f.issue}`}
         >
@@ -455,10 +466,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="review-page max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Top Banner & Navigation */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-stone-200 mb-6">
-        <div>
+      <div className="review-page__header flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-stone-200 mb-6">
+        <div className="min-w-0">
           <button
             onClick={() => navigate("/")}
             className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-900 mb-2 font-medium"
@@ -466,7 +477,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
           </button>
-          <div className="flex items-center gap-3">
+          <div className="review-page__title-row flex items-center gap-3">
             <h1 className="text-xl font-bold text-stone-900">{submission.title}</h1>
             <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 border border-stone-300">
               {submission.status}
@@ -505,6 +516,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           )}
         </div>
       </div>
+
+      <Stepper steps={["Draft", "Review", "Sign-off", "Approved"]} current={workflowStep} className="review-page__stepper mb-6" />
 
       {reviewing && (
         <div className="mb-6 rounded-xl border border-brand-200 bg-brand-50 p-3" role="status" aria-live="polite">
@@ -578,7 +591,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
         )}
 
       {/* Main Two-Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="review-page__layout grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Content with Span Highlights (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
           {canPreviewSource && latestVersion?.source_mime_type && (
@@ -651,6 +664,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <form onSubmit={handleAddComment} className="flex gap-2 pt-2">
               <input
                 type="text"
+                aria-label="Add a review comment"
                 placeholder="Add compliance note or question..."
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
@@ -835,94 +849,36 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
         </div>
       </div>
 
-      {previewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="preview-title">
-          <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div><h2 id="preview-title" className="text-base font-bold text-stone-900">Preview corrected draft</h2><p className="mt-1 text-xs text-stone-500">Highlighted wording is proposed. Nothing has been applied.</p></div>
-              <button type="button" onClick={() => setPreviewOpen(false)} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700">Close</button>
-            </div>
-            <div className="grid min-h-0 flex-1 gap-4 overflow-auto md:grid-cols-2">
-              <section className="min-w-0 rounded-xl border border-stone-200 p-4"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-stone-600">Original</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-800">{currentText}</pre></section>
-              <section className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-stone-600">Corrected draft</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-800">{renderPreviewChanges()}</pre></section>
-            </div>
-            <div className="mt-4 flex justify-end"><button type="button" onClick={() => { setRevisionText(previewText); setDraftUndoText(currentText); setDraftDirty(false); setEditingDraft(true); setPreviewOpen(false); liveSaveText.current = null; }} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white">Open in Edit Draft</button></div>
-          </div>
+      <Modal open={previewOpen} title="Preview corrected draft" onClose={() => setPreviewOpen(false)} className="ui-dialog--wide">
+        <p className="mb-4 text-sm text-secondary">Highlighted wording is proposed. Nothing has been applied.</p>
+        <div className="grid min-h-0 max-h-[60vh] gap-4 overflow-auto md:grid-cols-2">
+          <section className="min-w-0 rounded-xl border border-stone-200 p-4"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-stone-600">Original</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-800">{currentText}</pre></section>
+          <section className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-stone-600">Corrected draft</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-800">{renderPreviewChanges()}</pre></section>
         </div>
-      )}
+        <div className="mt-4 flex justify-end"><button type="button" onClick={() => { setRevisionText(previewText); setDraftUndoText(currentText); setDraftDirty(false); setEditingDraft(true); setPreviewOpen(false); liveSaveText.current = null; }} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white">Open in Edit Draft</button></div>
+      </Modal>
 
-      {/* Edit Custom Replacement Modal */}
-      {editingFinding && (
-        <div className="fixed inset-0 z-50 bg-stone-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-stone-200 shadow-xl space-y-4">
-            <h3 className="font-bold text-stone-900 text-sm">Edit Custom Replacement</h3>
-            <p className="text-xs text-stone-500">
-              Provide your own wording to replace: <span className="font-semibold text-stone-700">"{editingFinding.issue}"</span>
-            </p>
-
-            <textarea
-              rows={4}
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              className="w-full p-3 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setEditingFinding(null)}
-                disabled={!!decisionPendingId}
-                className="px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEditSubmit}
-                disabled={!!decisionPendingId || !editText.trim()}
-                className="px-4 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold hover:bg-stone-800 disabled:opacity-50"
-              >
-                {decisionPendingId ? "Applying…" : "Apply Edit"}
-              </button>
-            </div>
+      <Modal open={!!editingFinding} title="Edit custom replacement" onClose={() => setEditingFinding(null)}>
+        {editingFinding && <div className="space-y-4">
+          <p className="text-sm text-secondary">Provide your own wording to replace: <span className="font-semibold text-primary">“{editingFinding.issue}”</span></p>
+          <label className="ui-field text-sm font-semibold" htmlFor="finding-edit-text">Replacement wording<textarea id="finding-edit-text" rows={4} value={editText} onChange={(e) => setEditText(e.target.value)} className="w-full p-3 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" /></label>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setEditingFinding(null)} disabled={!!decisionPendingId} className="px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium">Cancel</button>
+            <button type="button" onClick={handleEditSubmit} disabled={!!decisionPendingId || !editText.trim()} className="px-4 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold hover:bg-stone-800 disabled:opacity-50">{decisionPendingId ? "Applying…" : "Apply Edit"}</button>
           </div>
-        </div>
-      )}
+        </div>}
+      </Modal>
 
-      {/* Dispute Modal */}
-      {disputingFinding && (
-        <div className="fixed inset-0 z-50 bg-stone-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-stone-200 shadow-xl space-y-4">
-            <h3 className="font-bold text-stone-900 text-sm">Dispute Finding</h3>
-            <p className="text-xs text-stone-500">
-              Explain why this finding should be overruled or where the brand guideline requires clarification:
-            </p>
-
-            <textarea
-              rows={4}
-              placeholder="e.g. This claim has verified clinical documentation in batch assay report #882."
-              value={disputeReason}
-              onChange={(e) => setDisputeReason(e.target.value)}
-              className="w-full p-3 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setDisputingFinding(null)}
-                disabled={!!decisionPendingId}
-                className="px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDisputeSubmit}
-                disabled={!!decisionPendingId || !disputeReason.trim()}
-                className="px-4 py-1.5 bg-rose-700 text-white rounded-lg text-xs font-semibold hover:bg-rose-800 disabled:opacity-50"
-              >
-                {decisionPendingId ? "Submitting…" : "Submit Dispute"}
-              </button>
-            </div>
+      <Modal open={!!disputingFinding} title="Dispute finding" onClose={() => setDisputingFinding(null)}>
+        {disputingFinding && <div className="space-y-4">
+          <p className="text-sm text-secondary">Explain why this finding should be overruled or where the brand guideline requires clarification.</p>
+          <label className="ui-field text-sm font-semibold" htmlFor="finding-dispute-reason">Dispute reason<textarea id="finding-dispute-reason" rows={4} placeholder="Explain the evidence or guideline context for this dispute." value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} className="w-full p-3 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500" /></label>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setDisputingFinding(null)} disabled={!!decisionPendingId} className="px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-lg font-medium">Cancel</button>
+            <button type="button" onClick={handleDisputeSubmit} disabled={!!decisionPendingId || !disputeReason.trim()} className="px-4 py-1.5 bg-rose-700 text-white rounded-lg text-xs font-semibold hover:bg-rose-800 disabled:opacity-50">{decisionPendingId ? "Submitting…" : "Submit Dispute"}</button>
           </div>
-        </div>
-      )}
+        </div>}
+      </Modal>
     </div>
   );
 };
