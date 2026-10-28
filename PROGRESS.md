@@ -1,5 +1,20 @@
 # Round 3 progress
 
+## Frontend redesign (2026-10-28)
+
+- Scope: frontend-only UI redesign requested after Round 3. Backend, migrations, scripts, tests outside `frontend/`, API shapes, roles, and workflow rules remain untouched.
+- Instructions/design read: `AGENTS.md`, `DESIGN.md`, and this progress file. The source palette is mapped into BrandGuard-specific tokens; the BrandGuard UI must not reuse Starbucks marks or retail copy.
+- Skills consulted: project `design-taste-frontend` and `web-design-guidelines`; global `frontend-app-builder`, `frontend-testing-debugging`, `react-best-practices`, and `shadcn-best-practices`. shadcn-specific component generation is not used because this project has no `components.json` or shadcn dependency. The existing React/Vite/Tailwind stack and Lucide icon set are retained.
+- Baseline: after `npm ci`, frontend tests passed (7) and `npm run build` passed. `npm run` shows no lint or Playwright script/config in this checkout. Computer-use browser inventory reports browser use disabled in Work settings; a temporary Playwright install did not complete, so no rendered screenshots are claimed yet. Revisit browser QA after the shell and dashboard groups.
+
+### Step 1 — design tokens and shared primitives
+
+- Added semantic BrandGuard tokens for warm light surfaces and green-neutral dark surfaces, status pairs, controls, focus, highlights, typography, spacing, radii, shadows, and motion. Mapped Tailwind to the tokens and added a compatibility bridge for existing screens.
+- Added shared `Button`, `Card`, `Badge`, `Input`, `Select`, `Tabs`, `Table`, `Modal`/`Drawer`, `EmptyState`, `Stat`, `Stepper`, `Tooltip`, and `Toast` primitives. Existing `Skeleton` and toast provider now use the shared theme, reduced motion, and larger dismiss targets.
+- Added the BrandGuard application mapping, token table, component rules, and accessibility contract to `DESIGN.md`.
+- Verification: semantic contrast script passed all checked token pairs in light/dark; frontend tests 7 passed; TypeScript + Vite build passed. No lint script or Playwright tests exist in the repository.
+- Next exact step: refactor the app shell and role navigation to use the shared tokens/primitives, add a responsive user/theme menu and breadcrumbs without changing routes or permissions, then run the frontend checks and visual QA again.
+
 ## Writing Assistant progress (additional capability)
 
 - Phase 1: deterministic offline spelling and conservative grammar findings are integrated with the existing cited-finding pipeline. Findings use the seeded `STYLE-1` clause, retain exact source-text offsets, and include stable rule IDs and confidence. Admins can manage an allowlist of brand words. The bundled spelling correction list is deliberately conservative; unknown words are not flagged.

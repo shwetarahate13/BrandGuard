@@ -1,7 +1,7 @@
 import React from "react";
 
 export const Skeleton: React.FC<{ className?: string }> = ({ className = "h-4 w-full" }) => (
-  <div className={`animate-pulse bg-stone-200/80 dark:bg-stone-700/50 rounded ${className}`} />
+  <div aria-hidden="true" className={`ui-skeleton animate-pulse ${className}`} />
 );
 
 export const DashboardSkeleton: React.FC = () => (

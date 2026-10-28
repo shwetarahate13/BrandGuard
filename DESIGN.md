@@ -578,3 +578,42 @@ When refining existing screens generated with this design system:
 - Form error-state full styling (red border weight, icon placement) visible on the tint token but not exhaustively extracted
 - Careers-page specific components (cup-name card, search radio grid) are referenced in token names but not covered by this extraction
 - Starbucks Visa Card / Starbucks-Card (SVC) detailed mockup specs are hinted at by `--svcRoundedCorners` and `--svcShadowFilter` tokens but not fully documented
+
+## BrandGuard application implementation contract
+
+This file describes the visual reference. BrandGuard uses its warm canvas, green palette, compact rounded cards, pill actions, restrained layered elevation, and sans-serif voice in a compliance product context. Do not copy Starbucks marks, product names, retail navigation, or coffee imagery into BrandGuard. Product copy, role workflows, information density, and accessible controls remain specific to BrandGuard.
+
+### Semantic tokens
+
+The frontend is the source of implementation values in `frontend/src/index.css`; Tailwind maps to these semantic roles in `frontend/tailwind.config.js`. Existing screens use the warm green palette below. Do not add new one-off color values where a role token applies.
+
+| Role | Light | Dark |
+|------|-------|------|
+| Page canvas | `#f2f0eb` | `#171c19` |
+| Card surface | `#ffffff` | `#222a26` |
+| Secondary surface | `#edebe9` | `#2a332e` |
+| Raised / hover surface | `#e1ded8` / `#e7e5e4` | `#35423a` / `#3f4c44` |
+| Main text | `#1e3932` | `#f2f6f3` |
+| Body text | `#292b28` | `#d5ded8` |
+| Secondary text | `#4e514c` | `#c0cbc4` |
+| Primary action | `#00754a` | `#00754a` |
+| Success | `#00543b` on `#e8f4ed` | `#9de1bb` on `#153a2b` |
+| Warning | `#713c00` on `#fff5df` | `#f5d47b` on `#3b2d12` |
+| Danger | `#9f1d14` on `#fff0ed` | `#ffb4a9` on `#482321` |
+| Focus | `#00754a` | `#c7e8d7` |
+
+Brand green (`#006241`) identifies the product, Green Accent (`#00754a`) marks the primary action, and House Green (`#1e3932`) anchors high-emphasis surfaces. Gold is reserved for a specific reward or premium state, not general navigation or ordinary primary actions. Statuses use both labels and semantic color. Dark mode is explicit (`html.dark`) and stored locally; it never relies only on OS preference.
+
+### Type, spacing, and components
+
+- Use the local system stack `"Helvetica Neue", Helvetica, Arial, sans-serif`; no remote font or asset requests. Body copy is 16px with 1.5 line-height and `-0.01em` tracking. Headings use scale and weight, with readable line lengths.
+- Use the 4, 8, 16, 24, 32, 40, 48, 56, and 64px spacing steps. Cards use 12px radius; controls use 8px; pill actions use 50px. Cards use a faint green-tinted two-layer shadow; stronger shadows are only for floating controls and dialogs.
+- Shared controls use semantic variants: filled green primary action, outlined secondary action, quiet neutral action, and explicit destructive action. Inputs keep visible labels, descriptions and errors. Tabs are keyboard navigable. Dialogs have a title, Escape dismissal, focus handling from the native dialog element, and a visible close control.
+- Dashboard metrics may use aligned peer cards. Prefer meaningful lists, tables, and evidence panels over decorative icon tiles. Charts use at most four distinguishable hues and include text labels.
+- Motion uses short color/transform transitions, the pill press response, and reduced-motion support. Never use `transition: all`; do not animate layout or keep skeleton motion when reduced motion is requested.
+
+### Accessibility contract
+
+- Text contrast is at least 4.5:1 and essential control/focus contrast is at least 3:1 in both themes. `scripts/check_theme_contrast.py` verifies the semantic foreground/background pairs.
+- Keyboard focus stays visible and unobscured. Interactive targets are at least 44px on touch layouts. Form controls retain a minimum 16px mobile font size; native selects declare both foreground and background through the theme.
+- Keep semantic landmarks and heading order; name icon-only controls; associate labels and help/errors with fields; announce status messages politely; do not encode workflow state by color alone.
