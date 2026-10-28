@@ -2,6 +2,14 @@
 
 BrandGuard is a local-first brand governance workspace. Creators check and revise content, reviewers verify escalated claims, managers make final decisions, and admins manage users, sources, and audit records. The app runs offline in mock-LLM mode after setup; human reviewers make the compliance decisions.
 
+## Feature summary
+
+- Offline English spelling checks and conservative grammar rules, with cited writing findings and an admin-managed brand-word allowlist.
+- Source-grounded guidance for terminology, tone, claims, facts, accessibility, and regulatory wording, with human-controlled suggestions, safe batch fixes, previews, rechecks, and version history.
+- Role-based creator, manager, reviewer, and admin workspaces, including the three Round 3 improvements: Guideline-Gap Insights (A), Image Review and Format-Aware PDF Inspection (B), and Reinforcement Feedback Loop (C).
+
+The writing rules are a focused aid, not a full grammar checker. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for supported languages and other boundaries.
+
 ## Architecture
 
 ```mermaid

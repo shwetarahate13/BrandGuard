@@ -18,6 +18,17 @@ This inventory describes behavior in the current local application.
 
 See [ROUND3_IMPROVEMENTS.md](ROUND3_IMPROVEMENTS.md) for implementation detail and [LIMITATIONS.md](LIMITATIONS.md) for boundaries.
 
+## Additional capabilities
+
+### Writing assistant
+
+- The offline writing checker reports common misspellings from a small, reviewed correction list and 11 conservative grammar rules. Each result uses the seeded `STYLE-1` guideline, keeps the exact text span for review, and has a stable rule ID. Admins can maintain the brand-word allowlist; code, markup, URLs, email addresses, mentions, and hashtags are protected from those checks.
+- Review findings are grouped by writing and compliance category and show the cited reason with a before/after diff when a replacement is available. Creators can accept, edit, or dispute individual suggestions, preview the combined draft, apply eligible high-confidence grammar/spelling or other safe fixes, edit the draft directly, recheck it, and use version history to undo a revision.
+- Unsupported claims are not rewritten from guesswork. A replacement that cannot be grounded in an approved fact remains with the reviewer. Claims and facts are excluded from the safe batch actions.
+- The New Submission sample picker includes grammar/spelling-heavy copy and a separate guideline/regulatory example alongside the existing demo samples.
+
+The deterministic writing checker works offline. The optional configured model is used by the broader sourced compliance review; it does not extend the writing checker's spelling dictionary or grammar rules. See [LIMITATIONS.md](LIMITATIONS.md) for language and coverage boundaries.
+
 ## Role workspaces
 
 - **Creator:** own submissions, checks, finding decisions, revision and resubmission, activity and feedback statistics, notifications, and onboarding tips.

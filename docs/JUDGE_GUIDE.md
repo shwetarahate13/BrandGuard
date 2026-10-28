@@ -9,6 +9,13 @@ Run `python scripts/setup_local.py`, then `python scripts/run_local.py`, and ope
 3. Save and check the revised version, then **Request review**. The status stepper shows progress through review, sign-off, and approval.
 4. After a decision, use **My Work** to reopen the item. Find approval certificates from **Certificates**.
 
+### Writing assistant walkthrough
+
+1. In **New Submission**, choose **Writing assistant: grammar and spelling** from **Try a sample**, then submit the sample for a check. The second writing sample demonstrates guideline and regulatory findings.
+2. On the review page, inspect the **Grammar and spelling** group and its `STYLE-1` citation. Accept or edit a safe individual suggestion, or use **Fix all grammar and spelling** for eligible high-confidence writing fixes. **Apply all safe fixes** also includes eligible terminology and accessibility suggestions.
+3. Use **Preview corrected draft** before applying a batch. Each accepted change creates a version and triggers a fresh check; **Edit draft** lets you make direct changes and recheck them, and version history provides undo.
+4. Claims and facts are never included in safe batches. If a claim has no replacement grounded in an approved fact, BrandGuard marks it for reviewer attention and offers no unsupported rewrite.
+
 ## Manager
 
 1. Open **Command Center** and select a submission. Review its findings and creator's decisions.

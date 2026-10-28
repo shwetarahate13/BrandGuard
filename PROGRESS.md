@@ -41,7 +41,9 @@
 - Phase 4: completed the conservative English-only writing checker, protected-markup and Unicode handling, repeated-action safeguards, 19 offline evaluation fixtures, two demo samples, and a Playwright creator journey.
 - Verification: focused backend tests passed (15); frontend tests passed (7); TypeScript and production build passed; Playwright journey passed. The direct fixture evaluator found spelling precision/recall 3/3 and grammar precision/recall 11/11, with zero false flags across 3 clean branded controls and no flags on the Spanish/Hindi controls. The checker handled a 1,000-word sample under 2 seconds.
 - Browser journey: a creator checked a flawed draft, accepted a safe writing suggestion, received a re-check, and requested review. An unsupported “all-natural” claim with no supporting approved fact remained marked “Needs Reviewer” and had no Accept Fix action, as required by the no-invented-facts rule.
-- Current writing-assistant phase: Phase 5, documentation.
+- Phase 5: documented the Writing Assistant under Additional capabilities; updated the limitation notes, judge walkthrough, and README feature summary. The docs distinguish the deterministic offline writing rules from the broader optional LLM compliance check.
+- Verification: checked all described controls and examples against the merged UI and implementation; documentation links and `git diff --check` are verified. The optional LLM is not described as improving grammar because it currently does not return grammar or spelling findings.
+- Writing Assistant phases 1–5 are complete.
 
 ## Current state
 
