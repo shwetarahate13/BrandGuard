@@ -59,6 +59,14 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
     const matchesStatus = statusFilter === "all" || s.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+  const statusOrder: SubmissionStatus[] = ["draft", "checked", "in_review", "changes_requested", "approved", "rejected"];
+  const activityDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - (6 - index));
+    const key = date.toISOString().slice(0, 10);
+    return { key, count: submissions.filter((submission) => submission.created_at.slice(0, 10) === key).length };
+  });
+  const activityMax = Math.max(1, ...activityDays.map((day) => day.count));
 
   const getStatusBadge = (status: SubmissionStatus) => {
     const map: Record<SubmissionStatus, { label: string; color: string; icon: any }> = {
@@ -81,7 +89,7 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="dashboard-workspace dashboard-workspace--creator max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
@@ -93,31 +101,27 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-stone-900 to-stone-800 text-white p-6 sm:p-8 rounded-3xl shadow-xl border border-stone-700">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
-            Creator Workspace • My Work
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Welcome, {user.name}</h1>
-          <p className="text-stone-300 text-xs sm:text-sm mt-1 max-w-xl">
-            Pre-publication governance workspace. Review your draft copy, fix flagged guideline findings, and resubmit for brand manager sign-off.
-          </p>
+    <div className="dashboard-workspace dashboard-workspace--creator max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <section className="dashboard-hero dashboard-hero--creator" aria-labelledby="creator-dashboard-title">
+        <div className="dashboard-hero__copy">
+          <div className="dashboard-hero__eyebrow"><Sparkles className="w-4 h-4" /> Creator workspace <span aria-hidden="true">·</span> My work</div>
+          <h1 id="creator-dashboard-title" className="text-2xl sm:text-3xl font-extrabold tracking-tight">Welcome, {user.name}</h1>
+          <p>Shape a draft, check it against brand guidance, and follow each review decision through to approval.</p>
         </div>
+        <div className="dashboard-hero__actions">
         <button
           onClick={() => navigate("/new")}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-sm shadow-lg hover:shadow-amber-500/20 transition-all focus:ring-2 focus:ring-amber-300 focus:outline-none"
+          className="dashboard-primary-action"
         >
           <PlusCircle className="w-4 h-4" />
-          New Content Check
+          Start a content check
         </button>
-      </div>
+        </div>
+      </section>
 
       {/* Creator Personal KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+      <div className="dashboard-kpis grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">My Submissions</p>
             <p className="text-2xl font-black text-stone-900 mt-1">{personalStats?.total_submissions ?? submissions.length}</p>
@@ -128,7 +132,7 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Fix Acceptance Rate</p>
             <p className="text-2xl font-black text-stone-900 mt-1">{personalStats?.acceptance_rate ?? 0}%</p>
@@ -139,7 +143,7 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Action Needed</p>
             <p className="text-2xl font-black text-orange-600 mt-1">
@@ -152,7 +156,7 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Approved Copies</p>
             <p className="text-2xl font-black text-emerald-600 mt-1">
@@ -166,6 +170,36 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
         </div>
       </div>
 
+      <section className="dashboard-pipeline" aria-label="My submissions by status">
+        <div className="dashboard-section-heading">
+          <div><h2>My work by status</h2><p>Choose a stage to narrow your submissions.</p></div>
+          <span className="dashboard-section-note">{submissions.length} total</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+          {statusOrder.map((status) => (
+            <button key={status} type="button" aria-pressed={statusFilter === status} onClick={() => setStatusFilter(status)} className={`dashboard-pipeline__item text-left p-4 rounded-xl border ${statusFilter === status ? "is-active" : ""}`}>
+              <span className="text-[10px] uppercase font-bold tracking-wider">{status.replace("_", " ")}</span>
+              <span className="block text-2xl font-black mt-1">{submissions.filter((submission) => submission.status === status).length}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="dashboard-overview-grid grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Creator activity and guidance themes">
+        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
+          <div className="dashboard-section-heading"><div><h2>Submission activity</h2><p>New drafts created during the past seven days.</p></div></div>
+          <div className="dashboard-activity-chart mt-4" role="img" aria-label="Daily submission counts for the last seven days">
+            {activityDays.map(({ key, count }) => <div key={key} className="dashboard-activity-chart__day"><div className="dashboard-activity-chart__bar-wrap"><span className="dashboard-activity-chart__bar" style={{ height: `${Math.max(count ? 8 : 0, (count / activityMax) * 100)}%` }} title={`${count} submissions`} /></div><span>{new Date(`${key}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" })}</span><b>{count}</b></div>)}
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
+          <div className="dashboard-section-heading"><div><h2>Recurring guidance themes</h2><p>Patterns from your previous review decisions.</p></div></div>
+          {personalStats?.recurring_mistakes?.length ? <div className="dashboard-mini-breakdown mt-4">
+            {personalStats.recurring_mistakes.slice(0, 4).map((issue, index) => <div key={`${issue.category}-${index}`} className="dashboard-mini-breakdown__row"><span>{issue.category.replace(/_/g, " ")} <small>{issue.severity}</small></span><b>{issue.count}</b><div className="dashboard-mini-breakdown__track"><i style={{ width: `${Math.min(100, issue.count / Math.max(1, ...personalStats.recurring_mistakes.map((item) => item.count)) * 100)}%` }} /></div></div>)}
+          </div> : <p className="mt-4 text-sm text-secondary">No recurring patterns yet. Review decisions will appear here as trends form.</p>}
+        </div>
+      </section>
+
       {/* Main 2-column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left 2 Cols: My Submissions Table */}
@@ -178,11 +212,12 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
               </div>
 
               {/* Filters */}
-              <div className="flex items-center gap-3">
-                <div className="relative">
+              <div className="dashboard-filters flex items-center gap-3">
+                <div className="dashboard-search relative">
                   <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
+                    aria-label="Search my submissions"
                     placeholder="Search my copy..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -190,6 +225,7 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
                   />
                 </div>
                 <select
+                  aria-label="Filter my submissions by status"
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="text-xs border border-stone-300 rounded-lg px-2.5 py-1.5 bg-white text-stone-700 focus:ring-2 focus:ring-stone-900 focus:outline-none"
@@ -200,6 +236,7 @@ export const CreatorDashboard: React.FC<CreatorDashboardProps> = ({ user, naviga
                   <option value="in_review">In Review</option>
                   <option value="changes_requested">Changes Requested</option>
                   <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
                 </select>
               </div>
             </div>

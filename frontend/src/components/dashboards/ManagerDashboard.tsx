@@ -17,6 +17,7 @@ import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthCla
 import { Skeleton } from "../Skeleton";
 import { useToast } from "../Toast";
 import { SavedViews } from "../SavedViews";
+import { EmptyState } from "../ui";
 
 interface ManagerDashboardProps {
   user: User;
@@ -161,40 +162,34 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
   const severityEntries = Object.entries(insights?.findings_by_severity ?? {}).sort((a, b) => b[1] - a[1]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-purple-950 via-stone-900 to-stone-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl border border-purple-900/40">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-400/20 border border-purple-400/30 text-purple-300 text-xs font-semibold mb-2">
-            <ShieldAlert className="w-3.5 h-3.5" />
-            Brand Management Command Center
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Team Command Center</h1>
-          <p className="text-stone-300 text-xs sm:text-sm mt-1 max-w-xl">
-            Triage pre-publication submissions, manage reviewer assignments, enforce brand standards, and resolve guideline friction.
-          </p>
+    <div className="dashboard-workspace dashboard-workspace--manager max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <section className="dashboard-hero dashboard-hero--manager" aria-labelledby="manager-dashboard-title">
+        <div className="dashboard-hero__copy">
+          <div className="dashboard-hero__eyebrow"><ShieldAlert className="w-4 h-4" /> Brand governance <span aria-hidden="true">·</span> Manager</div>
+          <h1 id="manager-dashboard-title" className="text-2xl sm:text-3xl font-extrabold tracking-tight">Team approval queue</h1>
+          <p>Prioritize decisions, route high-risk copy to reviewers, and spot guidance that needs clarification.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="dashboard-hero__actions">
           <button
             onClick={() => navigate("/dashboard/guideline-health")}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-600 font-semibold text-xs transition-colors"
+            className="dashboard-secondary-action"
           >
-            <Flame className="w-3.5 h-3.5 text-amber-400" />
+            <Flame className="w-4 h-4" />
             Guideline Health
           </button>
           <button
             onClick={() => navigate("/insights")}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs shadow-lg shadow-purple-600/20 transition-colors"
+            className="dashboard-secondary-action"
           >
-            <BarChart3 className="w-3.5 h-3.5" />
+            <BarChart3 className="w-4 h-4" />
             Org Insights
           </button>
         </div>
-      </div>
+      </section>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+      <div className="dashboard-kpis grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Pending Approvals</p>
             <p className="text-2xl font-black text-amber-600 mt-1">{pendingApprovalsCount}</p>
@@ -205,18 +200,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Avg Turnaround</p>
             <p className="text-2xl font-black text-stone-900 mt-1">{insights?.avg_turnaround_hours ?? 0} hrs</p>
             <p className="text-[11px] text-emerald-600 font-semibold mt-1">SLA target &lt; 4.0 hrs</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
             <CheckCircle className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Total Submissions</p>
             <p className="text-2xl font-black text-stone-900 mt-1">{insights?.total_submissions ?? submissions.length}</p>
@@ -227,7 +222,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">High-Friction Clauses</p>
             <p className="text-2xl font-black text-rose-600 mt-1">{highRiskClauses.length}</p>
@@ -239,9 +234,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
         </div>
       </div>
 
-      <section aria-label="Submission status pipeline" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+      <section aria-label="Submission status pipeline" className="dashboard-pipeline grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         {pipelineStatuses.map((status) => (
-          <button key={status} onClick={() => setStatusFilter(status)} className={`text-left p-4 rounded-xl border transition-colors ${statusFilter === status ? "border-purple-700 bg-purple-50" : "border-stone-200 bg-white hover:border-purple-300"}`}>
+          <button key={status} onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status} className={`text-left p-4 rounded-xl border transition-colors ${statusFilter === status ? "dashboard-pipeline__item is-active" : "dashboard-pipeline__item"}`}>
             <span className="text-[10px] uppercase font-bold tracking-wider text-stone-600">{status.replace("_", " ")}</span>
             <span className="block text-2xl font-black text-stone-900 mt-1">{submissions.filter((submission) => submission.status === status).length}</span>
           </button>
@@ -259,24 +254,24 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
               return <div key={day} className="grid grid-cols-[4.5rem_1fr] gap-3 items-center text-[11px]">
                 <span className="text-stone-600">{new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}</span>
                 <div className="space-y-1">
-                  <div className="h-2 rounded bg-purple-100"><div className="h-full rounded bg-purple-700" style={{ width: `${(submissionsToday / max) * 100}%` }} title={`${submissionsToday} submissions`} /></div>
-                  <div className="h-2 rounded bg-amber-100"><div className="h-full rounded bg-amber-600" style={{ width: `${(findingsToday / max) * 100}%` }} title={`${findingsToday} findings`} /></div>
+                  <div className="dashboard-chart-track"><div className="dashboard-chart-bar" style={{ width: `${(submissionsToday / max) * 100}%` }} title={`${submissionsToday} submissions`} /></div>
+                  <div className="dashboard-chart-track dashboard-chart-track--warm"><div className="dashboard-chart-bar dashboard-chart-bar--warm" style={{ width: `${(findingsToday / max) * 100}%` }} title={`${findingsToday} findings`} /></div>
                 </div>
               </div>;
             })}
           </div>
-          <p className="mt-3 text-[11px] text-stone-600">Purple: submissions · Amber: findings</p>
+          <p className="mt-3 text-[11px] text-stone-600">Green: submissions · Amber: findings</p>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4">
-          {[{ title: "Findings by Category", entries: categoryEntries, color: "bg-purple-700" }, { title: "Findings by Severity", entries: severityEntries, color: "bg-rose-700" }].map((chart) => {
+          {[{ title: "Findings by Category", entries: categoryEntries, color: "dashboard-chart-bar" }, { title: "Findings by Severity", entries: severityEntries, color: "dashboard-chart-bar dashboard-chart-bar--danger" }].map((chart) => {
             const max = Math.max(1, ...chart.entries.map(([, count]) => count));
             return <div key={chart.title} className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
               <h2 className="text-sm font-bold text-stone-900">{chart.title}</h2>
               {chart.entries.length === 0 ? <p className="mt-4 text-xs text-stone-600">No findings recorded.</p> : <div className="mt-4 space-y-3">
                 {chart.entries.map(([label, count]) => <div key={label}>
                   <div className="flex justify-between gap-2 text-[11px] mb-1"><span className="capitalize text-stone-700">{label.replace(/_/g, " ")}</span><span className="font-bold text-stone-900">{count}</span></div>
-                  <div className="h-2 bg-stone-100 rounded"><div className={`h-full rounded ${chart.color}`} style={{ width: `${(count / max) * 100}%` }} /></div>
+                  <div className="dashboard-chart-track"><div className={chart.color} style={{ width: `${(count / max) * 100}%` }} /></div>
                 </div>)}
               </div>}
             </div>;
@@ -290,7 +285,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
             <h2 className="text-sm font-bold text-stone-900">Reviewer Feedback</h2>
             <p className="mt-1 text-[11px] text-stone-600">Decision outcomes and recurring suppressed patterns by guideline category.</p>
           </div>
-          <span className="text-[10px] uppercase tracking-wider font-bold text-purple-800 bg-purple-50 border border-purple-200 rounded-full px-2.5 py-1">Adaptive ranking</span>
+          <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">Adaptive ranking</span>
         </div>
         {feedbackStats.length ? <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
           {feedbackStats.map((stat) => <div key={stat.category} className="rounded-xl bg-stone-50 border border-stone-200 p-3">
@@ -320,21 +315,23 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
             <p className="text-xs text-stone-500 mt-0.5">Filter by review status, inspect SLA age, and assign compliance specialists.</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="dashboard-filters flex items-center gap-3">
+            <div className="dashboard-search relative">
               <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
+                aria-label="Search submissions or authors"
                 placeholder="Search submission or author..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:ring-2 focus:ring-purple-600 focus:outline-none w-52"
+                className="pl-8 pr-3 py-1.5 text-xs border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none w-52"
               />
             </div>
             <select
+              aria-label="Filter approval queue by status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs border border-stone-300 rounded-lg px-2.5 py-1.5 bg-white text-stone-700 font-semibold focus:ring-2 focus:ring-purple-600 focus:outline-none"
+              className="text-xs border border-stone-300 rounded-lg px-2.5 py-1.5 bg-white text-stone-700 font-semibold focus:ring-2 focus:ring-emerald-600 focus:outline-none"
             >
               <option value="all">All Content</option>
               <option value="in_review">In Review (Action Required)</option>
@@ -401,9 +398,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
                     </td>
                     <td className="py-3.5 px-4">
                       <select
+                        aria-label={`Assign reviewer for ${sub.title}`}
                         value={sub.assigned_to_id || ""}
                         onChange={(e) => handleAssign(sub.id, e.target.value)}
-                        className="text-xs border border-stone-300 rounded-lg px-2 py-1 bg-white text-stone-800 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                        className="text-xs border border-stone-300 rounded-lg px-2 py-1 bg-white text-stone-800 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
                       >
                         <option value="">Unassigned</option>
                         {reviewers.map((rev) => (
@@ -427,7 +425,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
                             <button
                               type="button"
                               onClick={() => handleDueDateSave(sub.id, dueDateDrafts[sub.id] ?? (sub.assignment_due_at ? toLocalDateTimeInput(sub.assignment_due_at) : ""))}
-                              className="text-[10px] font-bold rounded-md px-2 py-1 bg-purple-700 hover:bg-purple-800 text-white"
+                              className="text-[10px] font-bold rounded-md px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white"
                             >Save</button>
                           </div>
                           <span className={`text-[10px] font-semibold ${sub.is_overdue ? "text-red-700" : "text-stone-500"}`}>
@@ -455,6 +453,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
                   </tr>
                 );
               })}
+              {filtered.length === 0 && <tr><td colSpan={6}><EmptyState title="No submissions match this view" description="Adjust the search or status filter to find work in the approval queue." action={<button type="button" className="dashboard-secondary-action" onClick={() => { setSearch(""); setStatusFilter("all"); }}>Clear filters</button>} /></td></tr>}
             </tbody>
           </table>
         </div>

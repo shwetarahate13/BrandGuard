@@ -17,6 +17,7 @@ import { api } from "../../api";
 import { User, SystemSettings, AuditLog, FeedbackCategoryStats, SystemStatus } from "../../types";
 import { Skeleton } from "../Skeleton";
 import { useToast } from "../Toast";
+import { EmptyState } from "../ui";
 
 interface AdminDashboardProps {
   user: User;
@@ -168,7 +169,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="dashboard-workspace dashboard-workspace--admin max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
@@ -180,33 +181,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-stone-900 to-stone-800 text-white p-6 sm:p-8 rounded-3xl shadow-xl border border-stone-700">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/30 text-amber-300 text-xs font-semibold mb-2">
-            <Shield className="w-3.5 h-3.5" />
-            System Governance Administration
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Admin Console</h1>
-          <p className="text-stone-300 text-xs sm:text-sm mt-1 max-w-xl">
-            Manage user accounts & roles, system thresholds, audit logs with CSV export, and approved brand source registries.
-          </p>
+    <div className="dashboard-workspace dashboard-workspace--admin max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <section className="dashboard-hero dashboard-hero--admin" aria-labelledby="admin-dashboard-title">
+        <div className="dashboard-hero__copy">
+          <div className="dashboard-hero__eyebrow"><Shield className="w-4 h-4" /> Workspace administration <span aria-hidden="true">·</span> Admin</div>
+          <h1 id="admin-dashboard-title" className="text-2xl sm:text-3xl font-extrabold tracking-tight">System governance</h1>
+          <p>Manage team access, runtime settings, audit history, and the feedback model from one place.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="dashboard-hero__actions">
           <button
             onClick={() => navigate("/sources")}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-md transition-colors"
+            className="dashboard-secondary-action"
           >
-            <Database className="w-3.5 h-3.5" />
+            <Database className="w-4 h-4" />
             Manage Approved Sources
           </button>
         </div>
-      </div>
+      </section>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+      <div className="dashboard-kpis grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Active Users</p>
             <p className="text-2xl font-black text-stone-900 mt-1">{users.filter((u) => u.is_active).length}</p>
@@ -217,7 +212,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">System Health</p>
             <p className={`text-lg font-black mt-1 ${systemStatus?.database_connected ? "text-emerald-800" : "text-rose-800"}`}>
@@ -230,7 +225,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">LLM Engine</p>
             <p className="text-2xl font-black text-stone-900 mt-1">{settings?.llm_enabled ? "Active" : "Offline"}</p>
@@ -241,18 +236,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Audit Trail</p>
             <p className="text-2xl font-black text-stone-900 mt-1">{auditLogs.length} events</p>
             <p className="text-[11px] text-stone-400 mt-1">Full immutable history</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
             <FileSpreadsheet className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
+        <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Feedback Categories</p>
             <p className="text-2xl font-black text-stone-900 mt-1">{feedbackStats.length}</p>
@@ -264,8 +259,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
         </div>
       </div>
 
+      <section className="dashboard-overview-grid grid grid-cols-1 xl:grid-cols-2 gap-4" aria-label="Workspace overview">
+        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
+          <div className="dashboard-section-heading"><div><h2>Team role mix</h2><p>Active users by workspace responsibility.</p></div></div>
+          <div className="dashboard-mini-breakdown mt-4">
+            {(["admin", "manager", "reviewer", "creator"] as const).map((role) => {
+              const count = users.filter((member) => member.is_active && member.role === role).length;
+              const max = Math.max(1, ...(["admin", "manager", "reviewer", "creator"] as const).map((key) => users.filter((member) => member.is_active && member.role === key).length));
+              return <div key={role} className="dashboard-mini-breakdown__row"><span>{role}<small>active accounts</small></span><b>{count}</b><div className="dashboard-mini-breakdown__track"><i style={{ width: `${(count / max) * 100}%` }} /></div></div>;
+            })}
+          </div>
+        </div>
+        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
+          <div className="dashboard-section-heading"><div><h2>Latest audit activity</h2><p>Recent changes recorded in the immutable audit trail.</p></div><button type="button" className="dashboard-secondary-action" onClick={() => setActiveTab("audit")}>Open audit log</button></div>
+          {auditLogs.length ? <ul className="dashboard-audit-feed mt-4">{auditLogs.slice(0, 4).map((log) => <li key={log.id}><span className="dashboard-audit-feed__mark" aria-hidden="true" /><div><b>{log.user?.name || "System"}</b><span>{log.action.replace(/_/g, " ")}{log.entity ? ` · ${log.entity}` : ""}</span></div><time dateTime={log.created_at}>{new Date(log.created_at).toLocaleDateString()}</time></li>)}</ul> : <EmptyState title="No audit events yet" description="Recorded account, submission, and approval activity will appear here." />}
+        </div>
+      </section>
+
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-stone-200">
+      <div className="dashboard-admin-tabs flex items-center gap-2 border-b border-stone-200" role="tablist" aria-label="Administration sections">
         {[
           { key: "users", label: "User Management", icon: Users },
           { key: "settings", label: "System Settings", icon: Settings },
@@ -277,7 +289,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
           return (
             <button
               key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              id={`admin-tab-${tab.key}`}
+              tabIndex={active ? 0 : -1}
               onClick={() => setActiveTab(tab.key as any)}
+              onKeyDown={(event) => {
+                const keys = ["users", "settings", "audit", "feedback"] as const;
+                const current = keys.indexOf(activeTab);
+                const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+                if (event.key === "Home") { event.preventDefault(); setActiveTab(keys[0]); document.getElementById("admin-tab-users")?.focus(); }
+                else if (event.key === "End") { event.preventDefault(); setActiveTab(keys[keys.length - 1]); document.getElementById("admin-tab-feedback")?.focus(); }
+                else if (step) { event.preventDefault(); const next = keys[(current + step + keys.length) % keys.length]; setActiveTab(next); requestAnimationFrame(() => document.getElementById(`admin-tab-${next}`)?.focus()); }
+              }}
               className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
                 active
                   ? "border-stone-900 text-stone-900"
@@ -293,7 +318,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
 
       {/* Tab 1: User Management */}
       {activeTab === "users" && (
-        <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
+        <div id="admin-panel-users" role="tabpanel" aria-labelledby="admin-tab-users" className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-stone-900">User Management</h2>
@@ -327,6 +352,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
                     </td>
                     <td className="py-3.5 px-4">
                       <select
+                        aria-label={`Role for ${u.name}`}
                         value={u.role}
                         onChange={(e) => handleUpdateRole(u.id, e.target.value)}
                         className="text-xs border border-stone-300 rounded-lg px-2.5 py-1 bg-white text-stone-800 font-semibold focus:ring-2 focus:ring-stone-900 focus:outline-none"
@@ -363,6 +389,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
                     </td>
                   </tr>
                 ))}
+                {users.length === 0 && (
+                  <tr><td colSpan={4}><EmptyState title="No team members yet" description="Add a team member to begin assigning governance roles." action={<button type="button" className="dashboard-primary-action" onClick={() => setShowUserModal(true)}><Plus className="h-4 w-4" />Add a user</button>} /></td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -371,7 +400,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
 
       {/* Tab 2: System Settings */}
       {activeTab === "settings" && (
-        <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
+        <div id="admin-panel-settings" role="tabpanel" aria-labelledby="admin-tab-settings" className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
           <div>
             <h2 className="text-lg font-bold text-stone-900">Governance System Settings</h2>
             <p className="text-xs text-stone-500 mt-0.5">Control live LLM evaluation toggles, confidence routing thresholds, and vector similarity gates.</p>
@@ -396,8 +425,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
             </div>
 
             <div className="p-4 rounded-xl border border-stone-200 bg-stone-50/60 space-y-2">
-              <label className="block text-xs font-bold text-stone-900">Minimum Finding Confidence</label>
+              <label htmlFor="admin-min-confidence" className="block text-xs font-bold text-stone-900">Minimum Finding Confidence</label>
               <select
+                id="admin-min-confidence"
                 value={settings?.min_confidence || "medium"}
                 onChange={async (e) => {
                   const updated = await api.updateSystemSettings({ min_confidence: e.target.value });
@@ -413,8 +443,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
             </div>
 
             <div className="p-4 rounded-xl border border-stone-200 bg-stone-50/60 space-y-2">
-              <label className="block text-xs font-bold text-stone-900">Vector Retrieval Cosine Similarity Threshold</label>
+              <label htmlFor="admin-similarity-threshold" className="block text-xs font-bold text-stone-900">Vector Retrieval Cosine Similarity Threshold</label>
               <input
+                id="admin-similarity-threshold"
                 type="number"
                 step="0.05"
                 min="0.5"
@@ -436,7 +467,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
 
       {/* Tab 3: Audit Logs & Export */}
       {activeTab === "audit" && (
-        <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
+        <div id="admin-panel-audit" role="tabpanel" aria-labelledby="admin-tab-audit" className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-stone-900">Audit Logs & Export</h2>
@@ -489,6 +520,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
                     </td>
                   </tr>
                 ))}
+                {auditLogs.length === 0 && <tr><td colSpan={5}><EmptyState title="No audit events yet" description="Recorded account, submission, and approval activity will appear here." /></td></tr>}
               </tbody>
             </table>
           </div>
@@ -497,7 +529,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
 
       {/* Tab 4: Feedback Model Control */}
       {activeTab === "feedback" && (
-        <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
+        <div id="admin-panel-feedback" role="tabpanel" aria-labelledby="admin-tab-feedback" className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-stone-900">Reinforcement Feedback Model Stats</h2>
@@ -543,6 +575,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
                     </td>
                   </tr>
                 ))}
+                {feedbackStats.length === 0 && <tr><td colSpan={5}><EmptyState title="No feedback decisions yet" description="Accepted, edited, or disputed findings will build category-level feedback statistics." /></td></tr>}
               </tbody>
             </table>
           </div>
@@ -556,8 +589,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
             <h3 className="text-base font-bold text-stone-900">Add New Team Member</h3>
             <form onSubmit={handleCreateUser} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-stone-700">Full Name</label>
+                <label htmlFor="admin-new-user-name" className="block text-xs font-semibold text-stone-700">Full Name</label>
                 <input
+                  id="admin-new-user-name"
                   type="text"
                   required
                   value={newUserName}
@@ -567,8 +601,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-stone-700">Email Address</label>
+                <label htmlFor="admin-new-user-email" className="block text-xs font-semibold text-stone-700">Email Address</label>
                 <input
+                  id="admin-new-user-email"
                   type="email"
                   required
                   value={newUserEmail}
@@ -578,8 +613,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-stone-700">Password</label>
+                <label htmlFor="admin-new-user-password" className="block text-xs font-semibold text-stone-700">Password</label>
                 <input
+                  id="admin-new-user-password"
                   type="password"
                   required
                   value={newUserPassword}
@@ -589,8 +625,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-stone-700">Role</label>
+                <label htmlFor="admin-new-user-role" className="block text-xs font-semibold text-stone-700">Role</label>
                 <select
+                  id="admin-new-user-role"
                   value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value)}
                   className="w-full text-xs p-2.5 border border-stone-300 rounded-lg bg-white focus:ring-2 focus:ring-stone-900 focus:outline-none font-semibold"
@@ -628,8 +665,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, navigate }
             <h3 className="text-base font-bold text-stone-900">Reset User Password</h3>
             <form onSubmit={handleResetPassword} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-stone-700">New Password</label>
+                <label htmlFor="admin-reset-password" className="block text-xs font-semibold text-stone-700">New Password</label>
                 <input
+                  id="admin-reset-password"
                   type="password"
                   required
                   value={resetPassword}
