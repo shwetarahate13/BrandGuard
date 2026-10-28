@@ -15,6 +15,8 @@ BrandGuard is a local judging and review application, not a multi-user hosted se
 - The local neural retrieval model is loaded in the background. If it is missing or cannot load, BrandGuard uses the labelled hashing-vectorizer fallback until restarted after the issue is corrected.
 - The pip-only RapidOCR runtime may be slower on machines without hardware acceleration. OCR, PDF extraction, and content reviews use bounded background worker processes and report a timeout; terminating a timed-out worker can discard its transient progress record.
 - Clause rewrite proposals and optional content checks use an external language model only when configured. In mock/offline mode no provider request is made, and guideline rewrite proposals are not generated. The writing assistant's deterministic grammar and spelling rules are offline-only.
+- Expired facts are labelled in the source registry and checked during new content reviews. BrandGuard does not yet track every already-approved document affected by a fact that expires, changes, or is removed, and it does not create a one-click recheck draft for those documents.
+- External agency review links are not included. Reviewers must use a BrandGuard account; public certificate verification exposes certificate validity only and does not provide access to submission content or comments.
 - The database has no tenant boundary. Guideline feedback and repeat-dispute suppression are workspace-wide. Files and indexes are stored locally and are not backed up by the application.
 
 ## Requirements and security boundaries
