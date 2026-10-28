@@ -315,6 +315,17 @@ html.dark .hover\:bg-rose-50:hover { background-color: var(--surface-danger-hove
   .review-gate--complete { border-color: var(--status-success-text); background: var(--status-success-surface); color: var(--status-success-text); }
   .review-page mark { cursor: pointer; }
   .review-page mark:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+  .login-page { background: var(--surface-page); }
+  .login-card { border-radius: 20px; box-shadow: var(--shadow-floating); }
+  .login-page button, .new-submission-page button { min-height: 44px; }
+  .login-demo { border-color: var(--status-warning-text); background: var(--status-warning-surface); }
+  .login-demo__account { background: var(--surface-card); border-color: var(--border-subtle); }
+  .login-demo__account dl { min-width: 0; }
+  .new-submission-page { width: 100%; }
+  .new-submission-card { box-shadow: var(--shadow-card); }
+  .sample-picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 1.2fr); align-items: center; gap: 16px; border: 1px solid var(--border-subtle); border-radius: var(--radius-card); padding: 16px; background: var(--surface-subtle); }
+  .submission-upload { color: var(--text-secondary); }
+  .submission-upload__label { min-height: 44px; }
 }
 
 @media (max-width: 640px) {
@@ -326,6 +337,11 @@ html.dark .hover\:bg-rose-50:hover { background-color: var(--surface-danger-hove
   .review-page__title-row h1 { font-size: 1.15rem; }
   .approval-page .review-page__header > div:last-child { flex-wrap: wrap; }
   .approval-page .review-page__header > div:last-child > button { min-height: 44px; }
+  .sample-picker { grid-template-columns: minmax(0, 1fr); }
+  .login-page { align-items: flex-start; }
+  .login-card { padding: 20px; }
+  .login-demo { padding: 16px; }
+  .login-demo__account > div:first-child { align-items: flex-start; flex-direction: column; }
   .ui-table--responsive thead { display: none; }
   .ui-table--responsive tr { display: grid; grid-template-columns: 1fr auto; padding: 10px 0; }
   .ui-table--responsive td { padding: 4px 8px; border: 0; }

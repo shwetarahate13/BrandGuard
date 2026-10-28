@@ -5,6 +5,15 @@ interface NewSubmissionProps {
   navigate: (path: string) => void;
 }
 
+const SAMPLE_SUBMISSIONS = [
+  { id: "claims", title: "Unverified product launch claim", intent: "Introduce the new product and explain its benefits.", text: "Clinically proven to work for everyone. It is 100% safe and the number one choice for healthy skin." },
+  { id: "pricing", title: "Retail promotion with wrong price", intent: "Announce a limited-time discount to returning customers.", text: "This week only: our daily care set is just $9.99. Shop now before this unbelievable offer disappears!" },
+  { id: "expired-facts", title: "Campaign with outdated research", intent: "Share a research statistic to support our sustainability story.", text: "A 2021 report says 96% of customers already choose this packaging, and the figure is still current today." },
+  { id: "typos", title: "Product page with spelling mistakes", intent: "Describe how to use the moisturizer in a clear, friendly way.", text: "Apply a small ammount to clean skn every morning. This increadible formula works instantly." },
+  { id: "tone", title: "Social post with risky wording", intent: "Write an upbeat social post about a new collection.", text: "THIS IS THE BEST THING EVER!!! Grab yours now, don't be the last one without it lol." },
+  { id: "accessibility", title: "Email with an accessibility gap", intent: "Encourage customers to browse the spring collection.", text: "Discover the spring collection today. Click here to learn more and see the new products." },
+];
+
 export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
   const [tab, setTab] = useState<"paste" | "upload">("paste");
   const [title, setTitle] = useState("");
@@ -16,6 +25,18 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
   const [progressPercent, setProgressPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const submissionAttempt = useRef<{ signature: string; key: string } | null>(null);
+
+  const applySample = (sampleId: string) => {
+    const sample = SAMPLE_SUBMISSIONS.find((item) => item.id === sampleId);
+    if (!sample) return;
+    setTitle(sample.title);
+    setIntent(sample.intent);
+    setText(sample.text);
+    setTab("paste");
+    setFile(null);
+    setError(null);
+    submissionAttempt.current = null;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -106,7 +127,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="new-submission-page max-w-3xl mx-auto px-4 py-8">
       <button
         onClick={() => navigate("/")}
         className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-900 mb-6 font-medium transition-colors"
@@ -115,7 +136,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
         Back to Dashboard
       </button>
 
-      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 sm:p-8">
+      <div className="new-submission-card bg-white border border-stone-200 rounded-2xl shadow-sm p-6 sm:p-8">
         <div className="flex items-center justify-between pb-4 border-b border-stone-100 mb-6">
           <div>
             <h1 className="text-xl font-bold text-stone-900">New Pre-Publication Check</h1>
@@ -129,39 +150,55 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
         </div>
 
         {error && (
-          <div className="mb-6 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700">
+          <div role="alert" className="mb-6 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-sm text-rose-700">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <section className="sample-picker" aria-labelledby="sample-picker-title">
+            <div>
+              <h2 id="sample-picker-title" className="text-sm font-semibold text-primary">Try a sample</h2>
+              <p className="text-xs text-secondary">Load fictional copy with common brand-review issues into the form.</p>
+            </div>
+            <label className="ui-field text-sm font-medium" htmlFor="sample-submission">
+              Choose a sample
+              <select id="sample-submission" value="" onChange={(event) => applySample(event.target.value)} disabled={loading}>
+                <option value="" disabled>Select one of six examples…</option>
+                {SAMPLE_SUBMISSIONS.map((sample) => <option key={sample.id} value={sample.id}>{sample.title}</option>)}
+              </select>
+            </label>
+          </section>
+
           {/* Title */}
           <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1">
-              Submission Title <span className="text-rose-500">*</span>
+            <label htmlFor="submission-title" className="block text-sm font-semibold text-stone-700 mb-1">
+              Submission Title <span className="text-rose-700">*</span>
             </label>
             <input
+              id="submission-title"
               type="text"
               placeholder="e.g. Holiday Season Sourdough Campaign"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full px-3.5 py-2 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full px-3.5 py-3 text-base border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
 
           {/* Stated Intent */}
           <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1">
+            <label htmlFor="submission-intent" className="block text-sm font-semibold text-stone-700 mb-1">
               Creator Intent: What is this content trying to achieve?
             </label>
             <input
+              id="submission-intent"
               type="text"
               placeholder="e.g. Announce our organic oat elixir and emphasize our certified regional farm sourcing"
               value={intent}
               onChange={(e) => setIntent(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full px-3.5 py-3 text-base border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
             <p className="text-[11px] text-stone-500 mt-1">
               BrandGuard uses this stated purpose to ensure suggested rewrites preserve your original intent.
@@ -170,10 +207,15 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
 
           {/* Input Type Tabs */}
           <div className="pt-2">
-            <div className="flex border-b border-stone-200 mb-4">
+            <div role="tablist" aria-label="Submission content source" className="ui-tabs mb-4">
               <button
                 type="button"
                 onClick={() => setTab("paste")}
+                role="tab"
+                aria-selected={tab === "paste"}
+                disabled={loading}
+                id="paste-tab"
+                aria-controls="paste-panel"
                 className={`py-2 px-4 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                   tab === "paste"
                     ? "border-stone-900 text-stone-900"
@@ -186,6 +228,11 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
               <button
                 type="button"
                 onClick={() => setTab("upload")}
+                role="tab"
+                aria-selected={tab === "upload"}
+                disabled={loading}
+                id="upload-tab"
+                aria-controls="upload-panel"
                 className={`py-2 px-4 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                   tab === "upload"
                     ? "border-stone-900 text-stone-900"
@@ -198,14 +245,16 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
             </div>
 
             {tab === "paste" ? (
-              <div>
+              <div id="paste-panel" role="tabpanel" aria-labelledby="paste-tab">
+                <label htmlFor="submission-text" className="sr-only">Submission text</label>
                 <textarea
+                  id="submission-text"
                   rows={8}
                   maxLength={200_000}
                   placeholder="Paste marketing copy, press releases, product descriptions, or email drafts..."
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  className="w-full p-3.5 text-sm font-sans border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 leading-relaxed"
+                  className="w-full p-3.5 text-base font-sans border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 leading-relaxed"
                 />
                 <div className="flex justify-between items-center text-[11px] text-stone-400 mt-1">
                   <span>Cap: 20,000 words per check</span>
@@ -213,7 +262,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
                 </div>
               </div>
             ) : (
-              <div className="border-2 border-dashed border-stone-300 rounded-xl p-8 text-center hover:border-amber-500 transition-colors bg-stone-50/50">
+              <div id="upload-panel" role="tabpanel" aria-labelledby="upload-tab" className="submission-upload border-2 border-dashed border-stone-300 rounded-xl p-8 text-center hover:border-amber-500 transition-colors bg-stone-50/50">
                 <input
                   type="file"
                   id="file-upload"
@@ -221,10 +270,10 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
                   onChange={handleFileChange}
                   className="hidden"
                 />
-                <label htmlFor="file-upload" className="cursor-pointer block">
+                <label htmlFor="file-upload" className="submission-upload__label cursor-pointer block">
                   <Upload className="w-8 h-8 text-stone-400 mx-auto mb-2" />
                   <p className="text-xs font-semibold text-stone-700">
-                    {file ? file.name : "Click to select or drag and drop a document or image"}
+                    {file ? file.name : "Click to select a document or image"}
                   </p>
                   <p className="text-[11px] text-stone-400 mt-1">
                     Supports text, Markdown, HTML, PDF, Word, PNG, JPEG, and SVG files up to 25 MB.
@@ -237,11 +286,11 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
           {/* Action buttons */}
           <div className="pt-4 flex items-center justify-end gap-3 border-t border-stone-100">
             {loading && (
-              <div className="mr-auto min-w-40 flex-1" role="status" aria-live="polite">
+              <div className="mr-auto min-w-40 flex-1" role="status" aria-live="polite" aria-label="Submission check progress">
                 <div className="flex justify-between text-[11px] text-stone-600 mb-1">
                   <span>{progressMessage}</span><span>{progressPercent}%</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden">
+                <div className="h-2 rounded-full bg-stone-200 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent} aria-label="Review progress">
                   <div className="h-full bg-amber-500 transition-all" style={{ width: `${progressPercent}%` }} />
                 </div>
               </div>
@@ -249,14 +298,15 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
             <button
               type="button"
               onClick={() => navigate("/")}
-              className="px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-100 rounded-lg"
+              className="ui-button ui-button--quiet"
+              disabled={loading}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow transition-all disabled:opacity-50"
+              className="ui-button ui-button--primary"
             >
               {loading ? (
                 <>
