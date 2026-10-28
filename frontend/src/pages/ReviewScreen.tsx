@@ -10,6 +10,9 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
+  Eye,
+  Undo2,
+  Wand2,
 } from "lucide-react";
 import { api } from "../api";
 import { Submission, Finding, User } from "../types";
@@ -54,6 +57,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const [revisionText, setRevisionText] = useState("");
   const [revisionError, setRevisionError] = useState<string | null>(null);
   const [savingRevision, setSavingRevision] = useState(false);
+  const [editingDraft, setEditingDraft] = useState(false);
+  const [draftDirty, setDraftDirty] = useState(false);
+  const [draftUndoText, setDraftUndoText] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [batchApplying, setBatchApplying] = useState(false);
+  const liveSaveText = useRef<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewProgress, setReviewProgress] = useState({ percent: 0, message: "" });
   const [decisionPendingId, setDecisionPendingId] = useState<string | null>(null);
@@ -101,6 +110,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     : null;
 
   const currentText = latestVersion?.text || "";
+  const openFindings = findings.filter((finding) => finding.status === "open");
+  const resolvedFindings = findings.filter((finding) => finding.status !== "open");
   const sourceMimeType = latestVersion?.source_mime_type;
   const canPreviewSource = sourceMimeType === "application/pdf" || !!sourceMimeType?.startsWith("image/");
 
@@ -237,12 +248,87 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       await api.addVersion(submission.id, text);
       await runBackgroundCheck(submission.id);
       await loadData();
+      if (editingDraft) setEditingDraft(false);
     } catch (err) {
       setRevisionError(err instanceof Error ? err.message : "Unable to save and check the revised version.");
     } finally {
       setSavingRevision(false);
     }
   };
+
+  useEffect(() => {
+    if (!editingDraft || !draftDirty || !revisionText.trim() || revisionText.trim() === currentText || savingRevision || reviewing) return;
+    if (liveSaveText.current === revisionText.trim()) return;
+    const timer = window.setTimeout(async () => {
+      const text = revisionText.trim();
+      liveSaveText.current = text;
+      setSavingRevision(true);
+      setRevisionError(null);
+      try {
+        await api.addVersion(submissionId, text);
+        await runBackgroundCheck(submissionId);
+        await loadData();
+      } catch (error) {
+        liveSaveText.current = null;
+        setRevisionError(error instanceof Error ? error.message : "Live re-check failed.");
+      } finally {
+        setSavingRevision(false);
+      }
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [editingDraft, draftDirty, revisionText, currentText, savingRevision, reviewing, submissionId]);
+
+  const handleBatchApply = async (mode: "grammar" | "safe") => {
+    if (batchApplying || decisionPendingId || reviewing) return;
+    const eligible = openFindings.filter((finding) =>
+      mode === "grammar"
+        ? ["grammar", "spelling"].includes(finding.category)
+        : ["grammar", "spelling", "terminology", "accessibility"].includes(finding.category),
+    ).filter((finding) => finding.suggested_rewrite && finding.confidence === "high" && !finding.needs_human);
+    if (!eligible.length) return;
+    setBatchApplying(true);
+    setActionError(null);
+    try {
+      await api.applySafeFixes(submissionId, eligible.map((finding) => finding.id), mode);
+      await runBackgroundCheck(submissionId);
+      await loadData();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to apply safe fixes.");
+    } finally {
+      setBatchApplying(false);
+    }
+  };
+
+  const previewEdits = openFindings
+    .filter((finding) => finding.suggested_rewrite && finding.span_start !== null && finding.span_end !== null)
+    .sort((a, b) => (a.span_start || 0) - (b.span_start || 0))
+    .filter((finding, index, list) => index === 0 || (finding.span_start || 0) >= (list[index - 1].span_end || 0));
+  const previewText = [...previewEdits].reverse().reduce((draft, finding) => {
+    const start = finding.span_start || 0;
+    const end = finding.span_end || 0;
+    return draft.slice(0, start) + (finding.suggested_rewrite || "") + draft.slice(end);
+  }, currentText);
+  const renderPreviewChanges = () => {
+    const parts: React.ReactNode[] = [];
+    let offset = 0;
+    previewEdits.forEach((finding) => {
+      const start = finding.span_start || 0;
+      const end = finding.span_end || 0;
+      if (start < offset) return;
+      parts.push(currentText.slice(offset, start));
+      parts.push(<mark key={finding.id} className="rounded bg-emerald-200 px-0.5 text-emerald-950">{finding.suggested_rewrite}</mark>);
+      offset = end;
+    });
+    parts.push(currentText.slice(offset));
+    return parts;
+  };
+  const findingGroups = [
+    { title: "Grammar and spelling", categories: ["grammar", "spelling"] },
+    { title: "Terminology", categories: ["terminology"] },
+    { title: "Tone", categories: ["tone"] },
+    { title: "Claims and facts", categories: ["unsupported_claim", "factual_accuracy", "messaging"] },
+    { title: "Accessibility", categories: ["accessibility"] },
+  ].map((group) => ({ ...group, items: findings.filter((finding) => group.categories.includes(finding.category)) })).filter((group) => group.items.length);
 
   const toggleSource = (fId: string) => {
     setExpandedSources((prev) => ({ ...prev, [fId]: !prev[fId] }));
@@ -368,9 +454,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     );
   }
 
-  const openFindings = findings.filter((f) => f.status === "open");
-  const resolvedFindings = findings.filter((f) => f.status !== "open");
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Top Banner & Navigation */}
@@ -440,6 +523,27 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       )}
 
       {user.role === "creator" && submission.creator_id === user.id &&
+        editingDraft && (
+          <form onSubmit={handleResubmitRevision} className="mb-6 rounded-xl border border-brand-200 bg-white p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-stone-900">Edit draft</h2>
+                <p className="mt-1 text-xs text-stone-600">Changes are re-checked after a short pause. Re-check now to save this version immediately.</p>
+              </div>
+              <button type="button" onClick={() => setEditingDraft(false)} className="text-xs text-stone-500 underline">Close editor</button>
+            </div>
+            {revisionError && <p role="alert" className="text-xs text-rose-700">{revisionError}</p>}
+            <div className="flex items-center justify-between gap-2">
+              <button type="button" disabled={savingRevision || reviewing || !draftUndoText} onClick={() => { liveSaveText.current = null; setRevisionText(draftUndoText); setDraftDirty(true); }} className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-2 text-xs text-stone-700 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" />Undo edits</button>
+              <div className="flex items-center gap-3">
+                {savingRevision && <span role="status" className="text-xs text-stone-500">Saving and re-checking…</span>}
+                <button type="submit" disabled={savingRevision || reviewing || !revisionText.trim()} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">Re-check</button>
+              </div>
+            </div>
+          </form>
+        )}
+
+      {user.role === "creator" && submission.creator_id === user.id && !editingDraft &&
         (submission.status === "changes_requested" || submission.status === "rejected") && (
           <form
             onSubmit={handleResubmitRevision}
@@ -511,7 +615,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             </div>
 
             <div className="p-6 min-h-[360px] bg-white">
-              {renderHighlightedText()}
+              {editingDraft ? (
+                <textarea aria-label="Edit draft content" value={revisionText} onChange={(event) => { setRevisionText(event.target.value); setDraftDirty(true); }} rows={18} maxLength={200000} className="min-h-[360px] w-full resize-y whitespace-pre-wrap font-serif text-base leading-relaxed text-stone-800 outline-none" />
+              ) : renderHighlightedText()}
             </div>
           </div>
 
@@ -575,17 +681,29 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             </span>
           </div>
 
+          {user.role === "creator" && submission.creator_id === user.id && (
+            <div className="flex flex-wrap gap-2">
+              {!editingDraft && <button type="button" onClick={() => { setDraftUndoText(currentText); setRevisionText(currentText); setDraftDirty(false); liveSaveText.current = null; setEditingDraft(true); }} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700">Edit draft</button>}
+              <button type="button" onClick={() => handleBatchApply("grammar")} disabled={batchApplying || reviewing || !openFindings.some((finding) => ["grammar", "spelling"].includes(finding.category) && finding.suggested_rewrite && finding.confidence === "high" && !finding.needs_human)} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 disabled:opacity-50">{batchApplying ? "Applying…" : "Fix all grammar and spelling"}</button>
+              <button type="button" onClick={() => handleBatchApply("safe")} disabled={batchApplying || reviewing || !openFindings.some((finding) => ["grammar", "spelling", "terminology", "accessibility"].includes(finding.category) && finding.suggested_rewrite && finding.confidence === "high" && !finding.needs_human)} className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Wand2 className="h-3.5 w-3.5 text-amber-300" />Apply all safe fixes</button>
+              <button type="button" onClick={() => setPreviewOpen(true)} disabled={!previewEdits.length} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 px-3 py-2 text-xs font-semibold text-brand-800 disabled:opacity-50"><Eye className="h-3.5 w-3.5" />Preview corrected draft</button>
+            </div>
+          )}
+
           {findings.length === 0 ? (
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center">
               <ShieldCheck className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
-              <h3 className="font-bold text-emerald-900 text-sm">No Compliance Issues Detected</h3>
+              <h3 className="font-bold text-emerald-900 text-sm">No issues found</h3>
               <p className="text-xs text-emerald-700 mt-1">
-                Content is fully compliant with all active brand voice guidelines, terms, and verified facts.
+                Checked spelling and grammar, terminology, tone, claims and facts, and accessibility against available approved sources.
               </p>
             </div>
           ) : (
             <div className="space-y-4 max-h-[calc(100vh-14rem)] overflow-y-auto pr-1">
-              {findings.map((f) => {
+              {findingGroups.map((group) => (
+                <section key={group.title} className="space-y-3">
+                  <h3 className="sticky top-0 z-10 rounded-lg bg-stone-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-stone-700">{group.title}</h3>
+                  {group.items.map((f) => {
                 const isSelected = selectedFindingId === f.id;
                 const isExpanded = !!expandedSources[f.id];
 
@@ -709,11 +827,29 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                     )}
                   </div>
                 );
-              })}
+                  })}
+                </section>
+              ))}
             </div>
           )}
         </div>
       </div>
+
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+          <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div><h2 id="preview-title" className="text-base font-bold text-stone-900">Preview corrected draft</h2><p className="mt-1 text-xs text-stone-500">Highlighted wording is proposed. Nothing has been applied.</p></div>
+              <button type="button" onClick={() => setPreviewOpen(false)} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700">Close</button>
+            </div>
+            <div className="grid min-h-0 flex-1 gap-4 overflow-auto md:grid-cols-2">
+              <section className="min-w-0 rounded-xl border border-stone-200 p-4"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-stone-600">Original</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-800">{currentText}</pre></section>
+              <section className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-stone-600">Corrected draft</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-800">{renderPreviewChanges()}</pre></section>
+            </div>
+            <div className="mt-4 flex justify-end"><button type="button" onClick={() => { setRevisionText(previewText); setDraftUndoText(currentText); setDraftDirty(false); setEditingDraft(true); setPreviewOpen(false); liveSaveText.current = null; }} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white">Open in Edit Draft</button></div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Custom Replacement Modal */}
       {editingFinding && (

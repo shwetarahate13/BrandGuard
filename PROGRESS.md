@@ -6,7 +6,9 @@
 - Verification: focused backend tests passed (4); frontend production build passed and the committed static bundle was rebuilt. Alembic now includes the admin brand-word setting. Secret/artifact scan found no tracked environment files, databases, Chroma folders, uploads, or key files.
 - Phase 2: suggestions now quote the relevant coded guideline in their reason, preserve intent, and route unsupported claims to a reviewer unless the exact proposed wording is present in the cited approved fact. Overlapping edits are prioritized by claims/facts, terminology, tone, accessibility, then grammar/spelling. Suggested drafts are rechecked through the full pipeline; if that check adds a high-severity finding, the suggestions are withheld.
 - Verification: writing-assistant tests passed (7); demo seed tests passed (2). The full-workflow integration test did not finish within about 100 seconds and was stopped; it needs a separate performance investigation before full-suite verification.
-- Current writing-assistant phase: Phase 3, review UI and creator editing.
+- Phase 3: the review UI groups findings, shows before/after diffs and cited reasons, offers individual decisions plus safe batch actions, and previews a highlighted full draft. Creators can edit, debounced re-check, manually re-check, and undo through version history. Batch safe fixes make one next version and record each acceptance in the existing feedback loop. Grammar-rule disputes are counted separately and suppress a rule at three; admins can inspect and reset these counters.
+- Verification: focused backend tests passed (9); frontend TypeScript check and production build passed; committed static bundle rebuilt. Batch version creation/replay and three-dispute suppression/admin reset are covered. The full-workflow integration test did not finish within about 100 seconds and was stopped, as recorded under Phase 2.
+- Current writing-assistant phase: Phase 4, robustness fixtures, evaluation, and journey coverage.
 
 ## Current state
 

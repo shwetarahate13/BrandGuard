@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, GuidelineDoc, GuidelineClause, ApprovedFact, Term, Asset, AssetKind,
-    AuditLog, SystemSetting
+    AuditLog, SystemSetting, WritingRuleDispute
 )
 from backend.app.schemas.schemas import (
     GuidelineDocCreate, GuidelineDocResponse,
@@ -23,6 +23,7 @@ from backend.app.services.permissions import Action, check_permission
 from backend.app.utils.audit import log_action
 from backend.app.utils.text_extract import extract_text, read_upload_contents, sanitize_upload_filename, sniff_upload_mime_type
 from backend.app.pipeline.retriever import index_all_sources
+from backend.app.pipeline.writing_rule_feedback import writing_rule_dispute_counts
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -460,6 +461,27 @@ def reset_user_password(
 
 
 # ── System Settings (Admin only) ──
+
+@router.get("/writing-assistant/rule-disputes")
+def get_writing_rule_disputes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_permission(current_user, Action.SETTINGS_MANAGE)
+    counts = writing_rule_dispute_counts(db)
+    return {"threshold": 3, "rules": counts, "suppressed": sorted(rule for rule, count in counts.items() if count >= 3)}
+
+
+@router.post("/writing-assistant/reset-rule-disputes")
+def reset_writing_rule_disputes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_permission(current_user, Action.SETTINGS_MANAGE)
+    deleted = db.query(WritingRuleDispute).delete(synchronize_session=False)
+    log_action(db, current_user.id, "reset_writing_rule_disputes", "writing_rule_dispute", meta={"deleted_count": deleted})
+    db.commit()
+    return {"deleted_count": deleted, "suppressed": []}
 
 @router.get("/settings", response_model=SystemSettingsResponse)
 def get_system_settings(

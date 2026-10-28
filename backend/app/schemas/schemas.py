@@ -372,6 +372,18 @@ class DecisionRequest(DecisionCreate):
             raise ValueError("edited_text is required for edit decisions")
         return self
 
+
+class ApplySafeFixesRequest(BaseModel):
+    finding_ids: list[str] = Field(min_length=1, max_length=200)
+    mode: Literal["grammar", "safe"] = "safe"
+
+
+class ApplySafeFixesResponse(BaseModel):
+    submission_id: str
+    version_no: int
+    applied_finding_ids: list[str]
+    applied_count: int
+
 class DecisionResponse(BaseModel):
     id: str
     finding_id: str

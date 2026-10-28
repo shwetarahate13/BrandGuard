@@ -235,6 +235,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ finding_id: findingId, action, edited_text, reason }),
     }),
+  applySafeFixes: async (submissionId: string, findingIds: string[], mode: "grammar" | "safe") =>
+    request<{ submission_id: string; version_no: number; applied_finding_ids: string[]; applied_count: number }>(
+      `/submissions/${encodeURIComponent(submissionId)}/findings/apply-safe-fixes`,
+      { method: "POST", body: JSON.stringify({ finding_ids: findingIds, mode }) },
+    ),
 
   // Workflow
   addComment: async (submissionId: string, body: string, findingId?: string, idempotencyKey?: string) =>
@@ -413,6 +418,8 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
   getSystemSettings: async () => request<SystemSettings>("/admin/settings"),
+  getWritingRuleDisputes: async () => request<{ threshold: number; rules: Record<string, number>; suppressed: string[] }>("/admin/writing-assistant/rule-disputes"),
+  resetWritingRuleDisputes: async () => request<{ deleted_count: number; suppressed: string[] }>("/admin/writing-assistant/reset-rule-disputes", { method: "POST" }),
   updateSystemSettings: async (data: Partial<SystemSettings>) =>
     request<SystemSettings>("/admin/settings", {
       method: "PATCH",

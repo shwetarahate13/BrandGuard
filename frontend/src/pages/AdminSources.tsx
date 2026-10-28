@@ -22,6 +22,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
   const [brandWords, setBrandWords] = useState<string[]>([]);
   const [brandWordsInput, setBrandWordsInput] = useState("");
   const [brandWordsSaved, setBrandWordsSaved] = useState<string | null>(null);
+  const [ruleDisputes, setRuleDisputes] = useState<{ threshold: number; rules: Record<string, number>; suppressed: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reindexing, setReindexing] = useState(false);
@@ -48,18 +49,20 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
     try {
       setLoading(true);
       setLoadError(null);
-      const [g, f, t, a, settings] = await Promise.all([
+      const [g, f, t, a, settings, disputes] = await Promise.all([
         api.getGuidelines(),
         api.getFacts(),
         api.getTerms(),
         api.getAssets(),
         canManage ? api.getSystemSettings() : Promise.resolve(null),
+        canManage ? api.getWritingRuleDisputes() : Promise.resolve(null),
       ]);
       setGuidelines(g);
       setFacts(f);
       setTerms(t);
       setAssets(a);
       if (settings) setBrandWords(settings.brand_words || []);
+      if (disputes) setRuleDisputes(disputes);
     } catch (err) {
       console.error("Failed to load sources:", err);
       setLoadError(err instanceof Error ? err.message : "Unable to load approved sources.");
@@ -149,6 +152,15 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
       window.setTimeout(() => setBrandWordsSaved(null), 3000);
     } catch (err) {
       setBrandWordsSaved(err instanceof Error ? err.message : "Unable to save brand words.");
+    }
+  };
+
+  const resetWritingRuleDisputes = async () => {
+    try {
+      await api.resetWritingRuleDisputes();
+      setRuleDisputes({ threshold: 3, rules: {}, suppressed: [] });
+    } catch (err) {
+      setBrandWordsSaved(err instanceof Error ? err.message : "Unable to reset grammar-rule disputes.");
     }
   };
 
@@ -332,6 +344,13 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
           <div className="flex items-center justify-between">
             <span role="status" className="text-xs text-stone-600">{brandWordsSaved}</span>
             <button type="button" onClick={saveBrandWords} disabled={!brandWordsInput.trim()} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">Save brand words</button>
+          </div>
+          <div className="border-t border-stone-200 pt-4">
+            <div className="flex items-center justify-between gap-3">
+              <div><h3 className="text-xs font-bold text-stone-800">Disputed grammar rules</h3><p className="mt-1 text-[11px] text-stone-500">A rule is suppressed after {ruleDisputes?.threshold || 3} distinct disputes. Reset clears these rule counters.</p></div>
+              <button type="button" onClick={resetWritingRuleDisputes} disabled={!ruleDisputes?.rules || Object.keys(ruleDisputes.rules).length === 0} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 disabled:opacity-50">Reset rule disputes</button>
+            </div>
+            {ruleDisputes && <div className="mt-3 flex flex-wrap gap-2">{Object.entries(ruleDisputes.rules).length ? Object.entries(ruleDisputes.rules).map(([rule, count]) => <span key={rule} className={`rounded-full border px-3 py-1 text-xs ${ruleDisputes.suppressed.includes(rule) ? "border-rose-200 bg-rose-50 text-rose-800" : "border-stone-200 bg-stone-50 text-stone-700"}`}>{rule}: {count} disputes{ruleDisputes.suppressed.includes(rule) ? " · suppressed" : ""}</span>) : <span className="text-xs text-stone-500">No grammar rule disputes recorded.</span>}</div>}
           </div>
         </section>
       )}

@@ -26,6 +26,7 @@ from backend.app.pipeline.retriever import retrieve_sources, reindex_if_empty
 from backend.app.pipeline.content_handlers import get_content_handler
 from backend.app.pipeline.citation_validator import validate_citations
 from backend.app.pipeline.suggestion_safety import prepare_suggestions
+from backend.app.pipeline.writing_rule_feedback import suppressed_writing_rules
 from backend.app.pipeline.confidence import (
     compute_confidence_and_routing,
     rank_findings_by_acceptance,
@@ -208,6 +209,14 @@ def run_pipeline(
 
     # 4. Deterministic rules engine
     rule_results: List[RuleFinding] = run_rules_engine(text, terms, facts, clauses, brand_words=brand_words)
+    suppressed_rules = suppressed_writing_rules(db)
+    if suppressed_rules:
+        rule_results = [
+            finding for finding in rule_results
+            if finding.category != "grammar"
+            or not (match := re.match(r"^(GRAM-\d+):", finding.issue))
+            or match.group(1) not in suppressed_rules
+        ]
 
     # Convert rule findings to dicts
     candidate_findings: List[Dict[str, Any]] = []

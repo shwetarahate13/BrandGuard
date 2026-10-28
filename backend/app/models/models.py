@@ -329,6 +329,16 @@ class SystemSetting(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
+class WritingRuleDispute(Base):
+    __tablename__ = "writing_rule_disputes"
+    __table_args__ = (UniqueConstraint("finding_id", name="uq_writing_rule_dispute_finding"),)
+
+    id = Column(String, primary_key=True, default=gen_id)
+    rule_id = Column(String(32), nullable=False, index=True)
+    finding_id = Column(String, ForeignKey("findings.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+
 class Comment(Base):
     __tablename__ = "comments"
 

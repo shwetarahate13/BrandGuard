@@ -1,5 +1,6 @@
 """Findings API routes: view findings and make decisions (accept, edit, dispute)."""
 from typing import List
+import re
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Path as APIPath
 from sqlalchemy.orm import Session
@@ -8,11 +9,12 @@ from sqlalchemy.exc import OperationalError
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, Finding, Decision, Comment,
-    FindingStatus, DecisionAction, SubmissionStatus, GuidelineClause, SourceType
+    FindingStatus, DecisionAction, SubmissionStatus, GuidelineClause, SourceType,
+    FindingCategory, FindingConfidence, WritingRuleDispute,
 )
 from backend.app.schemas.schemas import (
     FindingResponse, DecisionCreate, DecisionRequest, DecisionResponse,
-    EscalatedReviewRequest
+    EscalatedReviewRequest, ApplySafeFixesRequest, ApplySafeFixesResponse,
 )
 from backend.app.services.auth import get_current_user
 from backend.app.services.permissions import (
@@ -61,6 +63,115 @@ def get_submission_findings(
         .all()
     )
     return findings
+
+
+@router.post("/submissions/{submission_id}/findings/apply-safe-fixes", response_model=ApplySafeFixesResponse)
+def apply_safe_fixes(
+    submission_id: str,
+    payload: ApplySafeFixesRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Accept a batch of eligible safe edits and create one immutable next version."""
+    check_permission(current_user, Action.FINDINGS_DECIDE)
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the creator can apply these fixes")
+    latest = (
+        db.query(SubmissionVersion)
+        .filter(SubmissionVersion.submission_id == submission_id)
+        .order_by(SubmissionVersion.version_no.desc())
+        .first()
+    )
+    if not latest:
+        raise HTTPException(status_code=404, detail="Submission has no content version")
+
+    query = db.query(Finding).filter(
+        Finding.id.in_(set(payload.finding_ids)),
+        Finding.submission_id == submission_id,
+        Finding.version_id == latest.id,
+        Finding.status == FindingStatus.open,
+        Finding.needs_human.is_(False),
+        Finding.confidence == FindingConfidence.high,
+        Finding.suggested_rewrite.isnot(None),
+    )
+    eligible_categories = {FindingCategory.spelling, FindingCategory.grammar}
+    if payload.mode == "safe":
+        eligible_categories |= {FindingCategory.terminology, FindingCategory.accessibility}
+    eligible = query.filter(Finding.category.in_(eligible_categories)).order_by(Finding.span_start.asc()).all()
+
+    # Keep the first non-overlapping high-confidence edits in source order.
+    selected = []
+    last_end = -1
+    for finding in eligible:
+        if finding.span_start is None or finding.span_end is None:
+            continue
+        if finding.span_start < last_end:
+            continue
+        selected.append(finding)
+        last_end = finding.span_end
+    if not selected:
+        raise HTTPException(status_code=409, detail="No open high-confidence safe fixes are available")
+
+    new_text = latest.text
+    for finding in reversed(selected):
+        start, end = finding.span_start, finding.span_end
+        new_text = new_text[:start] + finding.suggested_rewrite + new_text[end:]
+    if len(new_text.split()) > 20_000:
+        raise HTTPException(status_code=422, detail="The revised content exceeds the 20,000-word limit")
+
+    decisions = []
+    for finding in selected:
+        claimed = db.query(Finding).filter(
+            Finding.id == finding.id, Finding.status == FindingStatus.open
+        ).update({Finding.status: FindingStatus.accepted}, synchronize_session=False)
+        if claimed != 1:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="A finding was decided concurrently; refresh before retrying")
+        original = latest.text[finding.span_start:finding.span_end]
+        decision = Decision(
+            finding_id=finding.id,
+            user_id=current_user.id,
+            action=DecisionAction.accept,
+            original_span=original,
+            suggested_rewrite=finding.suggested_rewrite,
+        )
+        db.add(decision)
+        db.flush()
+        decisions.append(decision)
+        try:
+            with db.begin_nested():
+                partial_fit(db, decision)
+        except Exception:
+            logger.exception("Preference model update failed for safe-fix decision %s", decision.id)
+
+    next_version = SubmissionVersion(
+        submission_id=submission.id,
+        version_no=latest.version_no + 1,
+        text=new_text,
+        source_file=latest.source_file,
+        source_mime_type=latest.source_mime_type,
+        source_filename=latest.source_filename,
+        source_layout=latest.source_layout,
+        created_by=current_user.id,
+    )
+    db.add(next_version)
+    db.flush()
+    submission.status = SubmissionStatus.draft
+    log_action(db, current_user.id, "apply_safe_fixes", "submission_version", next_version.id, {
+        "submission_id": submission.id,
+        "finding_ids": [finding.id for finding in selected],
+        "mode": payload.mode,
+    })
+    db.commit()
+    return ApplySafeFixesResponse(
+        submission_id=submission.id,
+        version_no=next_version.version_no,
+        applied_finding_ids=[finding.id for finding in selected],
+        applied_count=len(selected),
+    )
 
 
 def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, current_user: User) -> Decision:
@@ -132,6 +243,11 @@ def _submit_decision(finding_id: str, payload: DecisionCreate, db: Session, curr
     )
     db.add(decision)
     db.flush()
+
+    if action_lower == "dispute" and finding.category == FindingCategory.grammar:
+        rule_match = re.match(r"^(GRAM-\d+):", finding.issue)
+        if rule_match:
+            db.add(WritingRuleDispute(rule_id=rule_match.group(1), finding_id=finding.id))
 
     if action_lower == "dispute" and finding.source_type == SourceType.guideline_clause and finding.source_id:
         clause = db.query(GuidelineClause).filter(GuidelineClause.id == finding.source_id).first()
