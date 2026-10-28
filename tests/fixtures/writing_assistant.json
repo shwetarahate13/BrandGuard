@@ -1,0 +1,21 @@
+[
+  {"id":"spell_teh","text":"Teh harvest is ready.","expected_spelling":["Teh"],"expected_grammar":[]},
+  {"id":"spell_accomodate","text":"We can accomodate our patrons.","expected_spelling":["accomodate"],"expected_grammar":[]},
+  {"id":"spell_seperate","text":"Keep the batches seperate.","expected_spelling":["seperate"],"expected_grammar":[]},
+  {"id":"grammar_repeat","text":"We we serve fresh bread.","expected_spelling":[],"expected_grammar":["GRAM-1"]},
+  {"id":"grammar_article","text":"An banana is ripe.","expected_spelling":[],"expected_grammar":["GRAM-2"]},
+  {"id":"grammar_agreement","text":"They is ready.","expected_spelling":[],"expected_grammar":["GRAM-3"]},
+  {"id":"grammar_comparative","text":"This loaf is more faster to prepare.","expected_spelling":[],"expected_grammar":["GRAM-4"]},
+  {"id":"grammar_theyre","text":"Their going to the market.","expected_spelling":[],"expected_grammar":["GRAM-5"]},
+  {"id":"grammar_its","text":"Its a clear recipe.","expected_spelling":[],"expected_grammar":["GRAM-6"]},
+  {"id":"grammar_spaces","text":"We pack  each order.","expected_spelling":[],"expected_grammar":["GRAM-7"]},
+  {"id":"grammar_punctuation_space","text":"Wait,there is time.","expected_spelling":[],"expected_grammar":["GRAM-8"]},
+  {"id":"grammar_capitalization","text":"We left early. the bread is warm.","expected_spelling":[],"expected_grammar":["GRAM-9"]},
+  {"id":"grammar_runon","text":"We served dinner, they started soon.","expected_spelling":[],"expected_grammar":["GRAM-10"]},
+  {"id":"grammar_final_punctuation","text":"We serve our patrons","expected_spelling":[],"expected_grammar":["GRAM-11"]},
+  {"id":"clean_brand_copy_1","text":"Golden Oat Elixir is ready for our patrons. We share clear product details and helpful ingredient notes.","expected_spelling":[],"expected_grammar":[]},
+  {"id":"clean_brand_copy_2","text":"Heritage Sourdough rises slowly. Every loaf receives careful attention from our bakers.","expected_spelling":[],"expected_grammar":[]},
+  {"id":"clean_brand_copy_3","text":"Explore the recipe guide for simple serving ideas.","expected_spelling":[],"expected_grammar":[]},
+  {"id":"non_english_spanish","text":"El producto es bueno para los clientes.","expected_spelling":[],"expected_grammar":[]},
+  {"id":"non_english_hindi","text":"नमस्ते दुनिया","expected_spelling":[],"expected_grammar":[]}
+]

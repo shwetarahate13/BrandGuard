@@ -38,7 +38,10 @@
 - Verification: writing-assistant tests passed (7); demo seed tests passed (2). The full-workflow integration test did not finish within about 100 seconds and was stopped; it needs a separate performance investigation before full-suite verification.
 - Phase 3: the review UI groups findings, shows before/after diffs and cited reasons, offers individual decisions plus safe batch actions, and previews a highlighted full draft. Creators can edit, debounced re-check, manually re-check, and undo through version history. Batch safe fixes make one next version and record each acceptance in the existing feedback loop. Grammar-rule disputes are counted separately and suppress a rule at three; admins can inspect and reset these counters.
 - Verification: focused backend tests passed (9); frontend TypeScript check and production build passed; committed static bundle rebuilt. Batch version creation/replay and three-dispute suppression/admin reset are covered. The full-workflow integration test did not finish within about 100 seconds and was stopped, as recorded under Phase 2.
-- Current writing-assistant phase: Phase 4, robustness fixtures, evaluation, and journey coverage.
+- Phase 4: completed the conservative English-only writing checker, protected-markup and Unicode handling, repeated-action safeguards, 19 offline evaluation fixtures, two demo samples, and a Playwright creator journey.
+- Verification: focused backend tests passed (15); frontend tests passed (7); TypeScript and production build passed; Playwright journey passed. The direct fixture evaluator found spelling precision/recall 3/3 and grammar precision/recall 11/11, with zero false flags across 3 clean branded controls and no flags on the Spanish/Hindi controls. The checker handled a 1,000-word sample under 2 seconds.
+- Browser journey: a creator checked a flawed draft, accepted a safe writing suggestion, received a re-check, and requested review. An unsupported “all-natural” claim with no supporting approved fact remained marked “Needs Reviewer” and had no Accept Fix action, as required by the no-invented-facts rule.
+- Current writing-assistant phase: Phase 5, documentation.
 
 ## Current state
 

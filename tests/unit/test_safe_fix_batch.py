@@ -66,3 +66,22 @@ def test_batch_grammar_fixes_create_one_version_and_decisions():
         assert error.value.status_code == 409
     finally:
         db.close()
+
+
+def test_non_owner_cannot_apply_another_creators_safe_fixes():
+    db = get_session_factory()()
+    try:
+        run_seed(db)
+        creator = db.query(User).filter_by(email="creator@nexora.dev").one()
+        manager = db.query(User).filter_by(email="manager@nexora.dev").one()
+        submission, findings = _fixture_submission(db, creator)
+        with pytest.raises(HTTPException) as error:
+            apply_safe_fixes(
+                submission.id,
+                ApplySafeFixesRequest(finding_ids=[finding.id for finding in findings], mode="grammar"),
+                db,
+                manager,
+            )
+        assert error.value.status_code == 403
+    finally:
+        db.close()

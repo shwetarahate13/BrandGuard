@@ -1,5 +1,8 @@
 from backend.app.pipeline.writing_assistant import analyze_writing
 from backend.app.pipeline.suggestion_safety import prepare_suggestions
+from backend.app.pipeline.confidence import verify_intent_preserved
+from scripts.eval import evaluate_writing_assistant_fixtures
+import time
 
 
 STYLE = {
@@ -76,3 +79,38 @@ def test_rewrite_that_adds_unsupported_claim_is_withheld():
     assert finding["suggested_rewrite"] is None
     assert finding["needs_human"] is True
     assert "new high-severity issue" in finding["issue"]
+
+
+def test_all_planted_fixtures_detected_and_clean_brand_copy_has_no_false_flags():
+    result = evaluate_writing_assistant_fixtures()
+    for values in result["metrics"].values():
+        assert values["fn"] == 0
+        assert values["fp"] == 0
+        assert values["precision"] == 1
+        assert values["recall"] == 1
+    assert result["clean_brand_copy_controls"] >= 3
+    assert result["clean_brand_copy_false_flags"] == 0
+
+
+def test_markup_and_unicode_offsets_preserve_surrounding_content():
+    text = "**Accomodate** 😀"
+    finding = next(item for item in analyze_writing(text, STYLE) if item.category == "spelling")
+    corrected = text[:finding.span_start] + finding.suggested_rewrite + text[finding.span_end:]
+    assert corrected == "**Accommodate** 😀"
+
+
+def test_non_english_copy_is_not_flagged():
+    assert analyze_writing("El producto es bueno para los clientes", STYLE) == []
+    assert analyze_writing("नमस्ते दुनिया", STYLE) == []
+
+
+def test_intent_verification_keeps_aligned_rewrites_and_drops_divergent_ones():
+    assert verify_intent_preserved("customers", "patrons", "speak to our audience", "term") == "patrons"
+    assert verify_intent_preserved("organic oat drink", "cures cancer", "promote a healthy breakfast") is None
+
+
+def test_offline_check_of_one_thousand_words_is_bounded():
+    text = "Golden Oat Elixir is ready for our patrons. " * 125
+    started = time.perf_counter()
+    analyze_writing(text, STYLE)
+    assert time.perf_counter() - started < 2.0

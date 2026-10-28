@@ -12,6 +12,8 @@ const SAMPLE_SUBMISSIONS = [
   { id: "typos", title: "Product page with spelling mistakes", intent: "Describe how to use the moisturizer in a clear, friendly way.", text: "Apply a small ammount to clean skn every morning. This increadible formula works instantly." },
   { id: "tone", title: "Social post with risky wording", intent: "Write an upbeat social post about a new collection.", text: "THIS IS THE BEST THING EVER!!! Grab yours now, don't be the last one without it lol." },
   { id: "accessibility", title: "Email with an accessibility gap", intent: "Encourage customers to browse the spring collection.", text: "Discover the spring collection today. Click here to learn more and see the new products." },
+  { id: "writing-grammar", title: "Writing assistant: grammar and spelling", intent: "Share a brief note about our bakery and its patrons.", text: "Teh bakery accomodate every patron. Its a more faster way to enjoy fresh bread. We we welcome our neighbors" },
+  { id: "writing-guidelines", title: "Writing assistant: guidelines and regulation", intent: "Describe a new seasonal drink and invite readers to learn more.", text: "Our new Golden Oat Elixir is guaranteed to cure tired mornings. We call our clients and consumers to click here for more details." },
 ];
 
 export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {

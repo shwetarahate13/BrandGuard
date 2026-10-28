@@ -6,6 +6,7 @@ called misspellings. Protected markup and identifiers are excluded before rules 
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 
@@ -50,6 +51,11 @@ PROTECTED_PATTERNS = (
     re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b"),
     re.compile(r"(?<!\w)[@#][\w-]+"),
 )
+NON_ENGLISH_MARKERS = {
+    "el", "la", "los", "las", "un", "una", "y", "de", "del", "que", "para", "con", "por", "es", "en", "muy", "pero", "son", "está",
+    "le", "les", "des", "une", "et", "est", "du", "dans", "avec", "pour", "der", "die", "das", "ein", "eine", "und", "ist", "zu", "mit", "von", "für",
+    "o", "os", "as", "um", "uma", "e", "do", "da", "com", "em",
+}
 
 
 def _protected(text: str) -> list[tuple[int, int]]:
@@ -67,9 +73,25 @@ def _is_protected(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
     return any(start < right and end > left for left, right in spans)
 
 
+def _looks_non_english(text: str) -> bool:
+    words = {word.casefold() for word in TOKEN_RE.findall(text)}
+    letters = [char for char in text if char.isalpha()]
+    if not letters:
+        return False
+    non_latin = 0
+    for char in letters:
+        decomposed = unicodedata.normalize("NFKD", char)
+        if not any("a" <= part.lower() <= "z" for part in decomposed):
+            non_latin += 1
+    if non_latin / len(letters) > 0.05:
+        return True
+    other_hits = len(words & NON_ENGLISH_MARKERS)
+    return other_hits >= 2
+
+
 def analyze_writing(text: str, clause: dict | None, brand_words: list[str] | None = None) -> list[WritingFinding]:
     """Return conservative grammar/spelling findings; all spans index the original text."""
-    if not text or not clause or not clause.get("id") or not clause.get("text"):
+    if not text or _looks_non_english(text) or not clause or not clause.get("id") or not clause.get("text"):
         return []
     protected = _protected(text)
     allow = {word.casefold() for word in (brand_words or []) if word.strip()}
@@ -125,8 +147,10 @@ def analyze_writing(text: str, clause: dict | None, brand_words: list[str] | Non
         add(match.start(), match.end(), "grammar", "GRAM-10", "medium", None, "Possible comma splice or run-on sentence; review the sentence boundary.")
 
     # Missing final punctuation is flagged for review; no punctuation is invented automatically.
-    final_word_char = re.search(r"([A-Za-z0-9])(?=[^\w]*$)", text.rstrip())
-    if final_word_char:
+    trimmed_text = text.rstrip()
+    final_word_char = re.search(r"([A-Za-z0-9])(?=[^\w]*$)", trimmed_text)
+    punctuation_after_word = bool(final_word_char and re.search(r"[.!?]", trimmed_text[final_word_char.end():]))
+    if final_word_char and not punctuation_after_word:
         last = final_word_char.start(1)
         end = last + 1
         if not _is_protected(last, end, protected):
