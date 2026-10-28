@@ -1,39 +1,79 @@
 # BrandGuard
 
-BrandGuard is a local-first brand and compliance review workspace. It checks copy and uploaded documents against approved guidance, records human decisions, and supports reviewer sign-off and manager approval. 
+BrandGuard is a local-first brand governance workspace. Creators check and revise content, reviewers verify escalated claims, managers make final decisions, and admins manage users, sources, and audit records. The app runs offline in mock-LLM mode after setup; human reviewers make the compliance decisions.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  U[Browser] -->|React app| F[FastAPI]
-  F --> D[(SQLite by default)]
-  F --> V[(Local Chroma index)]
-  F --> M[OCR, PDF and review workers]
-  F -. optional configured provider .-> L[LLM]
+  B[Browser] --> UI[Bundled React interface]
+  UI --> API[FastAPI]
+  API --> DB[(SQLite by default)]
+  API --> IDX[(Local retrieval index)]
+  API --> JOBS[OCR, PDF and review jobs]
+  API -. optional configured provider .-> LLM[External language model]
 ```
 
-FastAPI serves the committed frontend bundle and JSON API on one local port. Alembic manages SQLite and PostgreSQL schema changes. The offline mock review mode needs no API key; neural retrieval warms in the background and falls back to a local hashing index if its model is unavailable.
+FastAPI serves the committed frontend bundle and API on one port. Alembic manages SQLite or configured PostgreSQL schema changes. The retrieval model and OCR runtime are local; an external language model is optional.
 
-## Clone and run
+## Run locally
 
-Install Python 3.11 or newer. On macOS or Linux, use the command for your installed minor version (for example, `python3.11`):
+You need Python 3.11 or newer and several gigabytes of free disk space. Node.js and Docker are not needed to run BrandGuard. Clone once; keep that folder and pull updates into it instead of cloning again.
+
+### macOS or Linux
+
+1. Install Git and Python 3.11 or newer.
+2. In Terminal, run:
+
+   ```sh
+   git clone https://github.com/shwetarahate13/BrandGuard.git
+   cd BrandGuard
+   python3 scripts/setup_local.py
+   python3 scripts/run_local.py
+   ```
+
+   If `python3` points to a version older than 3.11, use the versioned command, such as `python3.12`, for both scripts.
+
+### Windows PowerShell
+
+1. Install Git and Python 3.11 or newer, with the Python launcher (`py`).
+2. In PowerShell, run:
+
+   ```powershell
+   git clone https://github.com/shwetarahate13/BrandGuard.git
+   Set-Location BrandGuard
+   py -3.12 scripts/setup_local.py
+   py -3.12 scripts/run_local.py
+   ```
+
+   Replace `3.12` with the Python version installed on your computer.
+
+Setup creates the local virtual environment and `.env`, downloads the retrieval model for later offline use, applies migrations, and seeds demo data. It can take several minutes the first time. Open [http://localhost:8000](http://localhost:8000). Local setup enables `DEMO_MODE=true`, so the login page offers the four demo roles. Set `DEMO_MODE=false` in the local `.env` to disable demo accounts and demo data.
+
+### Update an existing clone
+
+Stop the running server with `Ctrl+C`, then open a terminal in the same `BrandGuard` folder and pull the latest code:
 
 ```sh
-git clone https://github.com/shwetarahate13/BrandGuard.git
-cd BrandGuard
-python3.12 scripts/setup_local.py
-python3.12 scripts/run_local.py
+git pull --ff-only origin main
 ```
 
-In Windows PowerShell, use `py -3.12 scripts/setup_local.py` followed by `py -3.12 scripts/run_local.py`. Replace `3.12` with the installed Python 3.11+ version in either example.
+Start it again with `python3 scripts/run_local.py` on macOS/Linux or `py -3.12 scripts/run_local.py` in Windows PowerShell. The launcher applies pending database migrations. If Python dependencies changed, rerun `scripts/setup_local.py` with the same platform-specific Python command; your local `.env` and database are kept.
 
-Open `http://localhost:8000`. Setup creates a virtual environment, installs pinned Python dependencies, downloads the retrieval model for offline use, creates a local `.env`, applies migrations, and seeds the local demo workspace. Node.js and Docker are not needed to run the app. Local setup enables `DEMO_MODE=true`; the login screen then shows the four throwaway demo accounts. Set `DEMO_MODE=false` in `.env` to disable demo accounts and sample data.
+## Tests
 
-Run the doctor with the same Python launcher (`python3.12 scripts/doctor.py` on macOS/Linux or `py -3.12 scripts/doctor.py` in PowerShell). To run tests, use `.venv/bin/python -m pytest -q` on macOS/Linux or `& .venv/Scripts/python.exe -m pytest -q` in PowerShell.
+Run the frontend checks from `frontend/`:
+
+```sh
+npm ci
+npm test
+npm run build
+```
+
+Run backend tests from the project root with `.venv/bin/python -m pytest -q` on macOS/Linux or `& .venv/Scripts/python.exe -m pytest -q` in PowerShell.
 
 ## AI assistance
 
-AI tools assisted development and documentation. The application defaults to deterministic offline review; an external language model is used only when explicitly configured. Human reviewers remain responsible for compliance decisions.
+AI tools assisted implementation and documentation. BrandGuard defaults to deterministic offline review. A configured external language model may receive submitted text, intent, and retrieved source excerpts. People remain responsible for compliance decisions.
 
 See [`docs/`](docs/) for the feature inventory, architecture, limitations, improvement details, and judge guide.
