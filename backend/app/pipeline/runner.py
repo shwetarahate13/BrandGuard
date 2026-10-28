@@ -25,6 +25,7 @@ from backend.app.pipeline.rules_engine import run_rules_engine, RuleFinding
 from backend.app.pipeline.retriever import retrieve_sources, reindex_if_empty
 from backend.app.pipeline.content_handlers import get_content_handler
 from backend.app.pipeline.citation_validator import validate_citations
+from backend.app.pipeline.suggestion_safety import prepare_suggestions
 from backend.app.pipeline.confidence import (
     compute_confidence_and_routing,
     rank_findings_by_acceptance,
@@ -116,10 +117,14 @@ def run_pipeline(
     version: SubmissionVersion,
     db: Session,
     progress=None,
+    *,
+    text_override: Optional[str] = None,
+    persist_findings: bool = True,
+    check_suggestions: bool = True,
 ) -> List[Finding]:
     """Execute the full BrandGuard review pipeline on a submission version."""
     settings = get_settings()
-    text = version.text
+    text = version.text if text_override is None else text_override
     intent = submission.intent or ""
 
     is_image = bool(version.source_mime_type and version.source_mime_type.startswith("image/"))
@@ -280,6 +285,38 @@ def run_pipeline(
 
     # Rank candidate rewrites by their predicted reviewer acceptance probability.
     validated_findings = rank_findings_by_acceptance(db, validated_findings, text)
+    baseline_high = {
+        (str(item.get("category")), str(item.get("source_id") or ""), re.sub(r"\s+", " ", str(item.get("issue", "")).casefold()).strip())
+        for item in validated_findings
+        if str(item.get("severity", "")) in {"major", "critical"}
+    }
+    validated_findings = prepare_suggestions(
+        validated_findings, text, intent, terms, facts, clauses, brand_words=brand_words
+    )
+
+    safe_suggestions = [item for item in validated_findings if item.get("suggested_rewrite") is not None]
+    if check_suggestions and safe_suggestions:
+        proposed = text
+        for item in sorted(safe_suggestions, key=lambda value: value.get("span_start") or 0, reverse=True):
+            start, end = item.get("span_start"), item.get("span_end")
+            if start is not None and end is not None:
+                proposed = proposed[:start] + item["suggested_rewrite"] + proposed[end:]
+        # Re-run retrieval, deterministic checks, and configured model checks
+        # against the complete proposed draft without persisting trial findings.
+        proposed_findings = run_pipeline(
+            submission, version, db, text_override=proposed,
+            persist_findings=False, check_suggestions=False,
+        )
+        proposed_high = {
+            (finding.category.value, str(finding.source_id or ""), re.sub(r"\s+", " ", finding.issue.casefold()).strip())
+            for finding in proposed_findings
+            if finding.severity in {FindingSeverity.major, FindingSeverity.critical}
+        }
+        if proposed_high - baseline_high:
+            for item in safe_suggestions:
+                item["suggested_rewrite"] = None
+                item["needs_human"] = True
+                item["issue"] = f"{item.get('issue', '')} The edit was withheld because a full draft re-check found a new high-severity issue."
 
     # 7. Confidence routing and intent-preserving rewrite verification
     final_db_findings: List[Finding] = []
@@ -367,10 +404,12 @@ def run_pipeline(
             location=location,
             status=FindingStatus.open,
         )
-        db.add(db_finding)
+        if persist_findings:
+            db.add(db_finding)
         final_db_findings.append(db_finding)
 
-    db.commit()
+    if persist_findings:
+        db.commit()
     if progress:
         progress(95, f"Saved {len(final_db_findings)} findings.")
     logger.info(f"Pipeline completed: {len(final_db_findings)} findings saved for submission {submission.id}")

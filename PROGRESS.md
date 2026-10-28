@@ -4,7 +4,9 @@
 
 - Phase 1: deterministic offline spelling and conservative grammar findings are integrated with the existing cited-finding pipeline. Findings use the seeded `STYLE-1` clause, retain exact source-text offsets, and include stable rule IDs and confidence. Admins can manage an allowlist of brand words. The bundled spelling correction list is deliberately conservative; unknown words are not flagged.
 - Verification: focused backend tests passed (4); frontend production build passed and the committed static bundle was rebuilt. Alembic now includes the admin brand-word setting. Secret/artifact scan found no tracked environment files, databases, Chroma folders, uploads, or key files.
-- Current writing-assistant phase: Phase 2, guideline-grounded suggested edits.
+- Phase 2: suggestions now quote the relevant coded guideline in their reason, preserve intent, and route unsupported claims to a reviewer unless the exact proposed wording is present in the cited approved fact. Overlapping edits are prioritized by claims/facts, terminology, tone, accessibility, then grammar/spelling. Suggested drafts are rechecked through the full pipeline; if that check adds a high-severity finding, the suggestions are withheld.
+- Verification: writing-assistant tests passed (7); demo seed tests passed (2). The full-workflow integration test did not finish within about 100 seconds and was stopped; it needs a separate performance investigation before full-suite verification.
+- Current writing-assistant phase: Phase 3, review UI and creator editing.
 
 ## Current state
 
