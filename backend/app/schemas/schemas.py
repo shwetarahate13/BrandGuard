@@ -235,7 +235,13 @@ class NotificationResponse(BaseModel):
 
 class EscalatedReviewRequest(BaseModel):
     action: Literal["confirm", "dismiss"]
-    justification: str = Field(min_length=3, max_length=2000)
+    justification: str = Field(min_length=5, max_length=2000)
+
+
+class ReviewerSignoffRequest(BaseModel):
+    checklist: dict[str, bool]
+    evidence_notes: str = Field(min_length=5, max_length=5000)
+    justification: str = Field(min_length=5, max_length=2000)
 
 
 # ── Admin User Management ──

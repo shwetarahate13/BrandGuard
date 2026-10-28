@@ -232,7 +232,7 @@ def review_escalated_finding(
         raise HTTPException(status_code=404, detail="Submission not found")
 
     check_can_view_submission(current_user, submission)
-    if current_user.role != UserRole.reviewer or (submission.assigned_to_id and submission.assigned_to_id != current_user.id):
+    if current_user.role != UserRole.reviewer or submission.assigned_to_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only a reviewer assigned to this submission can resolve escalated findings")
     if not finding_requires_reviewer_review(finding):
         raise HTTPException(status_code=400, detail="This finding is not escalated for compliance review")
@@ -248,6 +248,10 @@ def review_escalated_finding(
     if payload.action == "confirm":
         finding.needs_human = False
         note_body = f"[Compliance Confirmed]: {payload.justification.strip()}"
+        start = max(0, finding.span_start or 0)
+        end = min(len(latest_version.text), finding.span_end or start)
+        db.add(Decision(finding_id=finding.id, user_id=current_user.id, action=DecisionAction.accept,
+            original_span=latest_version.text[start:end], reason=payload.justification.strip()))
     else:
         finding.needs_human = False
         finding.status = FindingStatus.disputed

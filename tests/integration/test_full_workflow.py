@@ -264,8 +264,25 @@ def test_edit_dispute_changes_rejection_resubmission_and_review_assignment():
         "note": "High-risk approval must come from the reviewer.",
     })
     assert manager_approval.status_code == 403
+    high_risk_findings = client.get(f"/api/submissions/{high_risk_id}/findings", headers=reviewer).json()
+    for finding in high_risk_findings:
+        if finding["needs_human"] or finding["severity"] in ("critical", "major") or finding["category"] == "unsupported_claim":
+            reviewed = client.post(f"/api/findings/{finding['id']}/escalate-review", headers=reviewer, json={
+                "action": "confirm", "justification": "Claim reviewed against cited evidence and confirmed."
+            })
+            assert reviewed.status_code == 200, reviewed.text
+    signoff = client.post(f"/api/submissions/{high_risk_id}/reviewer-signoff", headers=reviewer, json={
+        "checklist": {"claims_verified": True, "facts_current": True, "accessibility_reviewed": True, "legal_wording_reviewed": True},
+        "evidence_notes": "Reviewed the approved fact and source excerpt for this claim.",
+        "justification": "Compliance review is complete; all findings are resolved."
+    })
+    assert signoff.status_code == 200, signoff.text
     reviewer_approval = client.post(f"/api/submissions/{high_risk_id}/approve", headers=reviewer, json={
         "decision": "approved",
-        "note": "Compliance review completed.",
+        "note": "Reviewer cannot give final approval.",
     })
-    assert reviewer_approval.status_code == 200, reviewer_approval.text
+    assert reviewer_approval.status_code == 403
+    manager_approval = client.post(f"/api/submissions/{high_risk_id}/approve", headers=manager, json={
+        "decision": "approved", "note": "Reviewer sign-off checked; final manager approval."
+    })
+    assert manager_approval.status_code == 200, manager_approval.text

@@ -5,7 +5,7 @@
 - Phase 0: complete and pushed in commit `2705e51` (`fix: verify role workspaces and theme contrast`).
 - Phase 1: implementation complete; fresh README setup proof remains blocked by the local disk limit, so Phase 1 verification is not closed.
 - Phase 2: resilience changes and tests complete; committed frontend bundle is current.
-- Next exact step: Phase 3, verify Improvements A, B, and C end to end, add any missing seeded history, and fix the UI/API gaps found.
+- Phases 0–3 are complete and pushed. Current active phase: Phase 4 reviewer workbench and role matrix.
 
 ## Phase 0 — health check and bugs
 
@@ -47,8 +47,9 @@
 - Phase 3: Improvements A, B, and C are implemented and verified. Guideline Health includes DFI recompute-on-read, clustered dispute reasons, recompute, LLM proposals or a clearly labelled offline template, and a guarded revision flow. Image review defaults on; default settings produce a boxed image finding, and missing RapidOCR gives a setup instruction. Feedback learning and suppression stats appear on dashboards; demo seed history shows a >30% DFI and one suppressed pattern. The manager UI showed the seeded clause, recomputed it, and applied edited wording; the dashboard showed the suppressed count. The sample image upload returned the actionable OCR dependency error in this environment.
   - Verification: backend suite 203 passed, 1 skipped; targeted Phase 3 tests 36 passed, 1 skipped; frontend TypeScript and production build passed; committed static bundle rebuilt.
   - Phase 3 limits: offline wording is an editing template and cannot be applied until its prompts are replaced. This environment does not have RapidOCR installed, so the real OCR engine could not be exercised here; the default-enabled image finding/box path is covered with the handler test, and the upload error path was exercised with the sample image.
-  - Next exact step: Phase 4, implement the reviewer workbench and verify the full role permission matrix.
-- Phase 4: reviewer workbench and full role matrix.
+- Phase 4: Reviewer findings now require the assigned reviewer to confirm or dismiss each escalated item with justification. The queue shows the claim excerpt beside its cited source. Reviewers record source evidence notes and complete the claims, current facts, accessibility, and legal wording checklist for the current version. Their sign-off is persisted separately and never approves the submission; a different manager must make final approval. Expired/outdated approved-fact findings also require reviewer sign-off. Reviewer metrics report average turnaround, confirmed and dismissed findings, and later overturn rate. Admin, manager, reviewer, and creator action permissions are covered across every action cell; reviewers no longer have final-approval permission.
+  - Verification: targeted workflow and permission tests 122 passed; full backend suite 203 passed, 1 skipped; frontend TypeScript and production build passed; rebuilt committed static bundle.
+  - Next exact step: Phase 5, fictional demo content, typo checks, and first-run experience.
 - Phase 5: fictional demo content, typo checks, and first-run experience.
 - Phase 6: role journeys, complete docs, and fresh-clone verification.
 - Phase 7: optional extras only after Phases 0–6 pass.

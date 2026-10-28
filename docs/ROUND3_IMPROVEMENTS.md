@@ -21,3 +21,11 @@ Accepted rewrites, human edits, creator disputes, and reviewer dismissals train 
 ## Verification
 
 Tests are maintained in `tests/unit/` and `tests/integration/`. The main workflow and role-specific browser path are documented in [JUDGE_GUIDE.md](JUDGE_GUIDE.md). The local setup and current limits are described in the [README](../README.md) and [LIMITATIONS.md](LIMITATIONS.md).
+
+## Phase 4 — reviewer workbench and approval controls
+
+High-risk submissions, including findings that cite expired or outdated approved facts, need assigned reviewer sign-off for the latest content version before a manager can issue final approval. Reviewer sign-off is stored as its own record with evidence notes, justification, and four required checklist items. It does not transition the submission to approved or create an approval certificate. The final manager must be a different user from the reviewer.
+
+The reviewer queue presents the claim excerpt and cited evidence side by side. Confirming or dismissing a finding requires a written justification. The reviewer dashboard reports turnaround time, confirmed and dismissed counts, and the rate of findings later changed by another user. The role permission tests check every action for each of the four roles, including the reviewer's lack of final-approval permission.
+
+Phase 4 verification: targeted workflow and permission tests passed (122); full backend suite passed (203, 1 skipped); frontend TypeScript and production build passed. `backend/app/static` was rebuilt from the frontend output.

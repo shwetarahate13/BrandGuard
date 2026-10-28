@@ -50,7 +50,6 @@ EXPECTED = {
     },
     UserRole.reviewer: {
         Action.SUBMISSION_VIEW_ASSIGNED,
-        Action.SUBMISSION_APPROVE,
         Action.FINDINGS_ESCALATE_REVIEW,
         Action.SUBMISSION_COMMENT,
         Action.SOURCES_READ,
@@ -139,5 +138,5 @@ def test_approval_policy_restricts_self_approval_and_high_risk_signoff():
     assert can_approve_submission(manager, high_risk)[0] is False
     assert can_approve_submission(reviewer, high_risk)[0] is False
     high_risk.assigned_to_id = reviewer.id
-    assert can_approve_submission(reviewer, high_risk)[0] is True
+    assert can_approve_submission(reviewer, high_risk)[0] is False
     assert can_approve_submission(admin, standard)[0] is False

@@ -358,6 +358,24 @@ class Approval(Base):
     version = relationship("SubmissionVersion")
 
 
+class ReviewerSignoff(Base):
+    """Compliance review record for a specific immutable submission version."""
+    __tablename__ = "reviewer_signoffs"
+    __table_args__ = (UniqueConstraint("submission_id", "version_id", name="uq_reviewer_signoff_version"),)
+
+    id = Column(String, primary_key=True, default=gen_id)
+    submission_id = Column(String, ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
+    version_id = Column(String, ForeignKey("submission_versions.id", ondelete="CASCADE"), nullable=False)
+    reviewer_id = Column(String, ForeignKey("users.id"), nullable=False)
+    checklist = Column(JSON, nullable=False)
+    evidence_notes = Column(Text, nullable=False)
+    justification = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    submission = relationship("Submission")
+    version = relationship("SubmissionVersion")
+    reviewer = relationship("User")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
     __table_args__ = (

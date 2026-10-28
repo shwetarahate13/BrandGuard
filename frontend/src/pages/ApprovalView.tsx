@@ -24,6 +24,10 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
   const [history, setHistory] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reviewerSignoff, setReviewerSignoff] = useState<any>(null);
+  const [evidenceNotes, setEvidenceNotes] = useState("");
+  const [signoffJustification, setSignoffJustification] = useState("");
+  const [checklist, setChecklist] = useState({ claims_verified: false, facts_current: false, accessibility_reviewed: false, legal_wording_reviewed: false });
 
   // Approval modal
   const [decisionModal, setDecisionModal] = useState<"approved" | "changes_requested" | "rejected" | null>(null);
@@ -40,6 +44,7 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
       setFindings(fList);
       const hist = await api.getHistory(submissionId);
       setHistory(hist);
+      setReviewerSignoff(await api.getReviewerSignoff(submissionId));
     } catch (err) {
       console.error("Failed to load approval view:", err);
       setLoadError(err instanceof Error ? err.message : "Unable to load approval details.");
@@ -72,6 +77,16 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
     }
   };
 
+  const handleReviewerSignoff = async () => {
+    setSubmitting(true);
+    try {
+      await api.submitReviewerSignoff(submissionId, checklist, evidenceNotes, signoffJustification);
+      await loadData();
+      alert("Reviewer compliance sign-off recorded. A different manager must issue final approval.");
+    } catch (err: any) { alert(`Unable to record sign-off: ${err.message}`); }
+    finally { setSubmitting(false); }
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 text-center text-stone-400 text-xs animate-pulse">
@@ -94,7 +109,7 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
     finding.needs_human || finding.severity === "critical" || finding.severity === "major" || finding.category === "unsupported_claim"
   );
   const isInReview = submission.status === "in_review";
-  const canManagerAct = user.role === "manager" && isInReview && !highRisk;
+  const canManagerAct = user.role === "manager" && isInReview && (!highRisk || reviewerSignoff?.signed_off) && reviewerSignoff?.reviewer_id !== user.id;
   const canReviewerSignOff = user.role === "reviewer" && user.id === submission.assigned_to_id && isInReview && highRisk;
   const latestVersion = submission.versions?.length
     ? submission.versions[submission.versions.length - 1]
@@ -128,12 +143,12 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
 
         {/* Manager/Reviewer Action Buttons */}
         <div className="flex items-center gap-2">
-          {(canManagerAct || canReviewerSignOff) && <button
+          {canManagerAct && <button
             onClick={() => setDecisionModal("approved")}
             className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold shadow-sm inline-flex items-center gap-1.5"
           >
             <ShieldCheck className="w-4 h-4" />
-            Approve Copy
+            Final Manager Approval
           </button>}
           {canManagerAct && <>
           <button
@@ -152,6 +167,15 @@ export const ApprovalView: React.FC<ApprovalViewProps> = ({
           </>}
         </div>
       </div>
+
+      {canReviewerSignOff && !reviewerSignoff?.signed_off && <section className="bg-white border border-emerald-200 rounded-2xl p-5 space-y-4">
+        <div><h2 className="font-bold text-sm">Reviewer sign-off checklist</h2><p className="text-xs text-stone-500">Complete each item after reviewing the cited source and retrieved evidence. A manager will make the final decision.</p></div>
+        <div className="grid sm:grid-cols-2 gap-2 text-xs">{([["claims_verified", "Claims verified"], ["facts_current", "Facts are current"], ["accessibility_reviewed", "Accessibility reviewed"], ["legal_wording_reviewed", "Legal wording reviewed"]] as const).map(([key, label]) => <label key={key} className="flex gap-2 items-center p-2 bg-stone-50 rounded"><input type="checkbox" checked={checklist[key]} onChange={e => setChecklist({...checklist, [key]: e.target.checked})}/>{label}</label>)}</div>
+        <label className="block text-xs font-semibold">Evidence notes<textarea className="mt-1 w-full border rounded-lg p-2" rows={3} value={evidenceNotes} onChange={e => setEvidenceNotes(e.target.value)} placeholder="Record source evidence reviewed and any relevant context." /></label>
+        <label className="block text-xs font-semibold">Sign-off justification<textarea className="mt-1 w-full border rounded-lg p-2" rows={2} value={signoffJustification} onChange={e => setSignoffJustification(e.target.value)} placeholder="Explain the compliance review outcome." /></label>
+        <button disabled={submitting || !Object.values(checklist).every(Boolean) || evidenceNotes.trim().length < 5 || signoffJustification.trim().length < 5} onClick={handleReviewerSignoff} className="px-4 py-2 bg-emerald-700 text-white rounded-lg text-xs font-semibold disabled:opacity-40">Record reviewer sign-off</button>
+      </section>}
+      {highRisk && reviewerSignoff?.signed_off && <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900">Reviewer sign-off recorded. Final approval is available to a different manager. <span className="block mt-1">Evidence: {reviewerSignoff.evidence_notes}</span></div>}
 
       {/* Unresolved findings alert */}
       {openFindings.length > 0 && (

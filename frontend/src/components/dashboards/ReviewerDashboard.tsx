@@ -27,6 +27,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
   const [justification, setJustification] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [metrics, setMetrics] = useState<{ average_turnaround_hours: number | null; confirmed: number; dismissed: number; overturned_rate: number } | null>(null);
   const { showToast } = useToast();
 
   const loadData = async () => {
@@ -35,13 +36,14 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
       const subs = await api.getSubmissions();
       // The API returns only work assigned to this reviewer or escalated submissions.
       setAssignedSubmissions(subs);
+      setMetrics(await api.getReviewerMetrics());
 
       // Collect escalated findings from assigned submissions
       const findingsList: Finding[] = [];
       for (const sub of subs.slice(0, 10)) {
         try {
           const fList = await api.getFindings(sub.id);
-          const escalated = fList.filter((f) => f.needs_human || f.severity === "critical" || f.category === "unsupported_claim");
+          const escalated = fList.filter((f) => f.needs_human || f.severity === "critical" || f.severity === "major" || f.category === "unsupported_claim" || /expired|outdated/i.test(f.issue));
           findingsList.push(...escalated);
         } catch {
           // ignore individual finding load errors
@@ -134,6 +136,15 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
           </div>
         </div>
 
+        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm sm:col-span-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">My reviewer metrics</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs">
+            <span>Avg. turnaround: <b>{metrics?.average_turnaround_hours == null ? "—" : `${metrics.average_turnaround_hours}h`}</b></span>
+            <span>Confirmed: <b>{metrics?.confirmed ?? 0}</b></span><span>Dismissed: <b>{metrics?.dismissed ?? 0}</b></span>
+            <span>Overturned: <b>{metrics?.overturned_rate ?? 0}%</b></span>
+          </div>
+        </div>
+
         <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Escalated Findings</p>
@@ -175,6 +186,10 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
         ) : (
           <div className="space-y-4">
             {escalatedFindings.map((finding) => (
+              (() => {
+                const version = assignedSubmissions.find((submission) => submission.id === finding.submission_id)?.versions?.slice(-1)[0];
+                const claimExcerpt = version?.text?.slice(Math.max(0, finding.span_start || 0), Math.min(version.text.length, finding.span_end || (finding.span_start || 0) + 300));
+                return (
               <div
                 key={finding.id}
                 className="p-5 rounded-2xl border border-stone-200 hover:border-emerald-300 bg-stone-50/50 transition-all space-y-4"
@@ -194,14 +209,14 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                 {/* Side-by-side: Content Claim vs Cited Source Quote */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-1">
-                    <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Suggested Fix / Rewording</p>
+                    <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Cited claim excerpt</p>
                     <p className="text-xs font-mono text-stone-800 bg-stone-50 p-2.5 rounded border border-stone-200">
-                      {finding.suggested_rewrite || "Flagged for manual compliance verification"}
+                      {claimExcerpt || finding.issue}
                     </p>
                   </div>
 
                   <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-200 space-y-1">
-                    <p className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Certified Grounded Truth (Source Quote)</p>
+                    <p className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Retrieved evidence / approved source</p>
                     <p className="text-xs text-emerald-950 italic bg-white/80 p-2.5 rounded border border-emerald-200/80">
                       "{finding.source_quote || "Approved Brand Fact / Source Note"}"
                     </p>
@@ -267,6 +282,8 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                   </div>
                 )}
               </div>
+                );
+              })()
             ))}
           </div>
         )}

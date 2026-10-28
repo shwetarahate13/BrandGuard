@@ -367,6 +367,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action, justification }),
     }),
+  submitReviewerSignoff: async (submissionId: string, checklist: Record<string, boolean>, evidence_notes: string, justification: string) =>
+    request<any>(`/submissions/${submissionId}/reviewer-signoff`, { method: "POST", body: JSON.stringify({ checklist, evidence_notes, justification }) }),
+  getReviewerSignoff: async (submissionId: string) => request<any>(`/submissions/${submissionId}/reviewer-signoff`),
+  getReviewerMetrics: async () => request<{ average_turnaround_hours: number | null; confirmed: number; dismissed: number; overturned_rate: number }>("/submissions/reviewer-metrics"),
 
   // Insights
   getInsightsSummary: async () => request<InsightsSummary>("/insights/summary"),

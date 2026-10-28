@@ -8,6 +8,8 @@ from backend.app.models.models import (
     Finding,
     FindingCategory,
     FindingSeverity,
+    SourceType,
+    ReviewerSignoff,
     Submission,
     User,
     UserRole,
@@ -74,7 +76,6 @@ PERMISSION_MATRIX: Dict[UserRole, Set[Action]] = {
     },
     UserRole.reviewer: {
         Action.SUBMISSION_VIEW_ASSIGNED,
-        Action.SUBMISSION_APPROVE,
         Action.FINDINGS_ESCALATE_REVIEW,
         Action.SUBMISSION_COMMENT,
         Action.SOURCES_READ,
@@ -123,12 +124,17 @@ def has_escalated_risk(submission: Submission) -> bool:
     if versions:
         latest_version_id = max(versions, key=lambda version: version.version_no).id
         findings = [finding for finding in findings if finding.version_id == latest_version_id]
-    return any(
+    if any(
         finding.needs_human
         or finding.severity in (FindingSeverity.critical, FindingSeverity.major)
         or finding.category == FindingCategory.unsupported_claim
+        or (getattr(finding.source_type, "value", finding.source_type) == SourceType.approved_fact.value and any(
+            marker in finding.issue.lower() for marker in ("expired", "outdated", "may be outdated")
+        ))
         for finding in findings
-    )
+    ):
+        return True
+    return False
 
 
 def check_can_view_submission(user: User, submission: Submission) -> None:
@@ -159,13 +165,25 @@ def can_approve_submission(user: User, submission: Submission) -> Tuple[bool, st
         return False, f"Role '{user.role.value}' cannot approve content"
 
     high_risk = has_escalated_risk(submission)
-    if user.role == UserRole.manager and high_risk:
-        return False, "High-risk submissions require reviewer sign-off"
     if user.role == UserRole.reviewer:
         if submission.assigned_to_id != user.id:
             return False, "Reviewers can only sign off assigned submissions"
         if not high_risk:
             return False, "Reviewers sign off high-risk submissions only"
+        return False, "Reviewers record compliance sign-off; only a different manager can issue final approval"
+    if user.role == UserRole.manager and high_risk:
+        versions = list(submission.versions or [])
+        if not versions:
+            return False, "There is no version available to approve"
+        latest = max(versions, key=lambda version: version.version_no)
+        session = submission._sa_instance_state.session
+        if session is None:
+            return False, "Reviewer sign-off is required before final approval"
+        signoff = session.query(ReviewerSignoff).filter_by(submission_id=submission.id, version_id=latest.id).first()
+        if not signoff:
+            return False, "Reviewer sign-off is required before final approval"
+        if signoff.reviewer_id == user.id:
+            return False, "The reviewer and final approver must be different people"
     return True, ""
 
 
@@ -180,4 +198,6 @@ def finding_requires_reviewer_review(finding: Finding) -> bool:
         finding.needs_human
         or finding.severity in (FindingSeverity.critical, FindingSeverity.major)
         or finding.category == FindingCategory.unsupported_claim
+        or (getattr(finding.source_type, "value", finding.source_type) == "approved_fact"
+            and any(marker in finding.issue.lower() for marker in ("expired", "outdated")))
     )

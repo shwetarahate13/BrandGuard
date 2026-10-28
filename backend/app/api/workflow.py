@@ -6,12 +6,12 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, SubmissionStatus,
-    Comment, Approval, ApprovalCertificate, ApprovalDecision, AuditLog, gen_id,
+    Comment, Approval, ApprovalCertificate, ApprovalDecision, AuditLog, ReviewerSignoff, Finding, Decision, gen_id,
 )
 from backend.app.llm.client import get_llm_mode
 from backend.app.schemas.schemas import (
     CommentCreate, CommentResponse, ApprovalCreate, ApprovalResponse,
-    AuditLogResponse
+    AuditLogResponse, ReviewerSignoffRequest
 )
 from backend.app.services.auth import get_current_user
 from backend.app.services.permissions import (
@@ -20,6 +20,7 @@ from backend.app.services.permissions import (
     check_approval_allowed,
     check_can_view_submission,
     has_escalated_risk,
+    finding_requires_reviewer_review,
 )
 from backend.app.utils.audit import log_action
 from backend.app.services.notifications import add_notification
@@ -27,6 +28,82 @@ from backend.app.services.idempotency import find_idempotency_record, request_fi
 from backend.app.services.certificates import approved_content_hash, create_certificate, render_certificate_pdf
 
 router = APIRouter(prefix="/submissions", tags=["workflow"])
+
+
+@router.post("/{submission_id}/reviewer-signoff")
+def reviewer_signoff(submission_id: str, payload: ReviewerSignoffRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Record compliance sign-off for a high-risk version; this never gives final approval."""
+    check_permission(current_user, Action.FINDINGS_ESCALATE_REVIEW)
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    check_can_view_submission(current_user, submission)
+    if current_user.role != UserRole.reviewer or submission.assigned_to_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the assigned reviewer can sign off")
+    if submission.status != SubmissionStatus.in_review or not has_escalated_risk(submission):
+        raise HTTPException(status_code=409, detail="Reviewer sign-off applies to high-risk submissions in review")
+    required = {"claims_verified", "facts_current", "accessibility_reviewed", "legal_wording_reviewed"}
+    if set(payload.checklist) != required or not all(payload.checklist.values()):
+        raise HTTPException(status_code=400, detail="Complete every required reviewer checklist item")
+    latest = db.query(SubmissionVersion).filter_by(submission_id=submission.id).order_by(SubmissionVersion.version_no.desc()).first()
+    if not latest:
+        raise HTTPException(status_code=409, detail="There is no version available to sign off")
+    pending = db.query(Finding).filter_by(submission_id=submission.id, version_id=latest.id).all()
+    for finding in pending:
+        if finding_requires_reviewer_review(finding):
+            reviewed = db.query(Decision).filter_by(finding_id=finding.id, user_id=current_user.id).first()
+            if not reviewed:
+                raise HTTPException(status_code=409, detail="Review and confirm or dismiss each escalated finding before sign-off")
+    existing = db.query(ReviewerSignoff).filter_by(submission_id=submission.id, version_id=latest.id).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="This version already has reviewer sign-off")
+    record = ReviewerSignoff(submission_id=submission.id, version_id=latest.id, reviewer_id=current_user.id,
+        checklist=payload.checklist, evidence_notes=payload.evidence_notes.strip(), justification=payload.justification.strip())
+    db.add(record)
+    log_action(db, current_user.id, "reviewer_signoff", "submission", submission.id,
+        {"version_id": latest.id, "checklist": payload.checklist, "evidence_notes": payload.evidence_notes.strip()}, submission_id=submission.id)
+    db.commit()
+    return {"status": "ok", "reviewer_signoff_id": record.id, "version_id": latest.id}
+
+
+@router.get("/{submission_id}/reviewer-signoff")
+def get_reviewer_signoff(submission_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    submission = db.query(Submission).filter_by(id=submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    check_can_view_submission(current_user, submission)
+    latest = db.query(SubmissionVersion).filter_by(submission_id=submission.id).order_by(SubmissionVersion.version_no.desc()).first()
+    signoff = db.query(ReviewerSignoff).filter_by(submission_id=submission.id, version_id=latest.id).first() if latest else None
+    return {"signed_off": bool(signoff), "reviewer_id": signoff.reviewer_id if signoff else None,
+        "created_at": signoff.created_at.isoformat() if signoff else None,
+        "checklist": signoff.checklist if signoff else {}, "evidence_notes": signoff.evidence_notes if signoff else ""}
+
+
+@router.get("/reviewer-metrics")
+def reviewer_metrics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    check_permission(current_user, Action.FINDINGS_ESCALATE_REVIEW)
+    from backend.app.models.models import DecisionAction
+    decisions = db.query(Decision).filter(Decision.user_id == current_user.id,
+        Decision.action.in_([DecisionAction.accept, DecisionAction.dispute])).all()
+    confirmed = sum(1 for item in decisions if item.action == DecisionAction.accept)
+    dismissed = sum(1 for item in decisions if item.action == DecisionAction.dispute)
+    reviewed_finding_ids = {item.finding_id for item in decisions}
+    overturned = 0
+    if reviewed_finding_ids:
+        later_decisions = db.query(Decision).filter(Decision.finding_id.in_(reviewed_finding_ids), Decision.user_id != current_user.id).all()
+        reviewer_times = {}
+        for item in decisions:
+            reviewer_times[item.finding_id] = max(reviewer_times.get(item.finding_id, item.created_at), item.created_at)
+        overturned = sum(1 for item in later_decisions if item.created_at > reviewer_times.get(item.finding_id, item.created_at))
+    signoffs = db.query(ReviewerSignoff).filter_by(reviewer_id=current_user.id).all()
+    durations = []
+    for signoff in signoffs:
+        submission = db.query(Submission).filter_by(id=signoff.submission_id).first()
+        if submission:
+            durations.append(max(0, (signoff.created_at - submission.created_at).total_seconds() / 3600))
+    return {"average_turnaround_hours": round(sum(durations) / len(durations), 2) if durations else None,
+        "confirmed": confirmed, "dismissed": dismissed,
+        "overturned_rate": round(100 * overturned / len(reviewed_finding_ids), 1) if reviewed_finding_ids else 0}
 
 
 @router.post("/{submission_id}/comments", response_model=CommentResponse)
