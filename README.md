@@ -80,8 +80,10 @@ npm run build
 
 Run backend tests from the project root with `.venv/bin/python -m pytest -q` on macOS/Linux or `& .venv/Scripts/python.exe -m pytest -q` in PowerShell.
 
+Run browser journeys from `frontend/` with `npm run test:e2e` after installing Chrome. They cover creator revision plus reviewer sign-off and manager approval.
+
 ## AI assistance
 
 AI tools assisted implementation and documentation. BrandGuard defaults to deterministic offline review. A configured external language model may receive submitted text, intent, and retrieved source excerpts. People remain responsible for compliance decisions.
 
-See [`docs/`](docs/) for the feature inventory, architecture, limitations, improvement details, and judge guide.
+See [`docs/`](docs/) for the [architecture](docs/ARCHITECTURE.md), feature inventory, limitations, improvement details, roadmap, and judge guide.

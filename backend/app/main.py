@@ -159,9 +159,11 @@ app.add_middleware(
 api_prefix = "/api"
 app.include_router(auth_router, prefix=api_prefix)
 app.include_router(admin_router, prefix=api_prefix)
+# Register workflow's fixed paths before submission detail's /{submission_id}
+# route so /submissions/reviewer-metrics cannot be captured as an ID.
+app.include_router(workflow_router, prefix=api_prefix)
 app.include_router(submissions_router, prefix=api_prefix)
 app.include_router(findings_router, prefix=api_prefix)
-app.include_router(workflow_router, prefix=api_prefix)
 app.include_router(insights_router, prefix=api_prefix)
 app.include_router(system_router, prefix=api_prefix)
 app.include_router(guidelines_router, prefix=api_prefix)

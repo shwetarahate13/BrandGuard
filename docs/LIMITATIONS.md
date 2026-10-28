@@ -13,7 +13,7 @@ BrandGuard is a local judging and review application, not a multi-user hosted se
 - OCR can miss stylized, low-contrast, or rotated text. Palette checks require RGB values in approved asset metadata. Logo matching needs a readable approved logo file. Clear-space checks need a measurable guideline; contrast checks cover detected text regions.
 - SVG active content and external references are rejected. Raster image dimensions are limited to 30 megapixels. Uploads are limited to 25 MB and each text check to 20,000 words.
 - The local neural retrieval model is loaded in the background. If it is missing or cannot load, BrandGuard uses the labelled hashing-vectorizer fallback until restarted after the issue is corrected.
-- The pip-only RapidOCR runtime may be slower on machines without hardware acceleration. OCR, PDF extraction, and content reviews use bounded background workers and report a timeout; a timed-out native library call may continue until that worker returns.
+- The pip-only RapidOCR runtime may be slower on machines without hardware acceleration. OCR, PDF extraction, and content reviews use bounded background worker processes and report a timeout; terminating a timed-out worker can discard its transient progress record.
 - Clause rewrite proposals and optional content checks use an external language model only when configured. In mock/offline mode no provider request is made, and guideline rewrite proposals are not generated. The writing assistant's deterministic grammar and spelling rules are offline-only.
 - The database has no tenant boundary. Guideline feedback and repeat-dispute suppression are workspace-wide. Files and indexes are stored locally and are not backed up by the application.
 
