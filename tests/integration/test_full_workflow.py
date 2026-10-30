@@ -150,7 +150,9 @@ def test_full_governance_workflow_and_rbac(monkeypatch):
     assert "terminology" in insights["findings_by_category"]
 
 
-def test_edit_dispute_changes_rejection_resubmission_and_review_assignment():
+def test_edit_dispute_changes_rejection_resubmission_and_review_assignment(monkeypatch):
+    monkeypatch.setattr("backend.app.pipeline.runner.reindex_if_empty", lambda _db: None)
+    monkeypatch.setattr("backend.app.pipeline.runner.retrieve_sources", lambda _text, top_k: [])
     db = get_session_factory()()
     run_seed(db)
     db.close()

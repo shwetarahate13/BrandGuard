@@ -118,5 +118,5 @@
 - Phase 5: Confidential submissions block external LLM calls; the submission form discloses AI use and every finding exposes a “How was this decided?” source panel.
 - Verification: confidential pipeline and text/upload API tests passed; writing sample, migration, production build, and forbidden-artifact scan passed.
 - Phase 6: source-path review and production frontend build completed; the FastAPI-served bundle was rebuilt. No browser automation, screenshots, or frontend test suite was run.
-- Verification: full backend suite ran once: 227 passed, 1 skipped, and 2 failed because `chromadb` and `python-docx` are absent from this environment.
-- Remaining: the full manual per-role screen sweep was not performed; legal rewrite/safety, expired-fact history, structured reviewer tasks, and finding version labels remain documented limits. Final artifact scan was clean; commit `96b1bee` was rebased and pushed to `origin/main`.
+- Verification: the first full suite had 227 passed, 1 skipped, and 2 failures from missing declared dependencies. After installing the pinned packages and isolating retrieval in the workflow test, both regressions passed and the final full suite passed: 229 passed, 1 skipped.
+- Remaining: the full manual per-role screen sweep was not performed; legal rewrite/safety, expired-fact history, structured reviewer tasks, and finding version labels remain documented limits. The earlier feature commits are pushed; this final test/doc update is pending.
