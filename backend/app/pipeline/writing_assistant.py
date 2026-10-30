@@ -40,6 +40,7 @@ SPELLING: dict[str, str] = {
     "succesful": "successful", "tommorow": "tomorrow", "untill": "until",
     "wich": "which", "wierd": "weird", "writting": "writing", "thier": "their",
     "teh": "the", "severly": "severely", "truely": "truly",
+    "guarentee": "guarantee",
 }
 
 TOKEN_RE = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?")
@@ -71,6 +72,17 @@ def _protected(text: str) -> list[tuple[int, int]]:
 
 def _is_protected(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
     return any(start < right and end > left for left, right in spans)
+
+
+def _third_person_verb(verb: str) -> str:
+    lower = verb.lower()
+    if lower in {"do", "go", "have"}:
+        return {"do": "does", "go": "goes", "have": "has"}[lower]
+    if lower.endswith("y") and len(lower) > 1 and lower[-2] not in "aeiou":
+        return verb[:-1] + "ies"
+    if lower.endswith(("s", "x", "z", "ch", "sh", "o")):
+        return verb + "es"
+    return verb + "s"
 
 
 def _looks_non_english(text: str) -> bool:
@@ -124,9 +136,13 @@ def analyze_writing(text: str, clause: dict | None, brand_words: list[str] | Non
 
     # High-confidence local grammar patterns.
     for pattern, replacement_fn, rule, reason in [
+        (re.compile(r"\btheir\s+is\b", re.I), lambda m: ("There is" if m.group()[0].isupper() else "there is"), "GRAM-3", "Use 'there is' for an existential statement, not the possessive 'their'."),
         (re.compile(r"\ba\s+([aeiou][A-Za-z-]*)\b", re.I), lambda m: "an " + m.group(1), "GRAM-2", "Use 'an' before a vowel sound in this simple case."),
         (re.compile(r"\ban\s+([bcdfghjklmnpqrstvwxyz][A-Za-z-]*)\b", re.I), lambda m: "a " + m.group(1), "GRAM-2", "Use 'a' before a consonant sound in this simple case."),
         (re.compile(r"\b(he|she|it|this|that)\s+are\b", re.I), lambda m: m.group(1) + " is", "GRAM-3", "Singular subject takes 'is' in this simple construction."),
+        (re.compile(r"\b(he|she|it)\s+(help|make|need|provide|support|offer|work|finish|use|run|deliver|improve|reduce|increase|do|go|have)\b", re.I),
+         lambda m: f"{m.group(1)} {_third_person_verb(m.group(2))}",
+         "GRAM-3", "Singular subject takes the third-person singular verb form."),
         (re.compile(r"\b(they|we|you|these|those)\s+is\b", re.I), lambda m: m.group(1) + " are", "GRAM-3", "Plural subject takes 'are' in this simple construction."),
         (re.compile(r"\b(they|we|you)\s+was\b", re.I), lambda m: m.group(1) + " were", "GRAM-3", "Plural subject takes 'were' in this simple construction."),
         (re.compile(r"\b(more|most)\s+(faster|slower|easier|better|quicker|stronger)\b", re.I), lambda m: m.group(2), "GRAM-4", "Avoid a double comparative."),
@@ -144,7 +160,7 @@ def analyze_writing(text: str, clause: dict | None, brand_words: list[str] | Non
     for match in re.finditer(r"(?:^|[.!?]\s+)([a-z])", text):
         add(match.start(1), match.end(1), "grammar", "GRAM-9", "high", match.group(1).upper(), "Capitalize the start of this sentence.")
     for match in re.finditer(r"\b(\w+)\s*,\s+(I|you|we|they|he|she|it|the|a|an)\s+\w+\s+\w+", text, re.I):
-        add(match.start(), match.end(), "grammar", "GRAM-10", "medium", None, "Possible comma splice or run-on sentence; review the sentence boundary.")
+        add(match.start(), match.end(), "grammar", "GRAM-10", "medium", re.sub(r",\s+", "; ", match.group(), count=1), "Possible comma splice; a semicolon preserves both independent clauses.")
 
     # Missing final punctuation is flagged for review; no punctuation is invented automatically.
     trimmed_text = text.rstrip()

@@ -109,7 +109,14 @@
 - Phase 8: full final verification, secret scan, commit, and push.
 - Phase 2 follow-up: review checks now run on Re-check or Ctrl/Cmd+Enter; idle checks are a 3-second opt-in, off by default. Draft text and cursor positions survive refreshes, unchanged text is skipped, and findings are visibly stale while edits are unchecked.
 - Verification: frontend TypeScript and production build passed; the FastAPI static bundle was rebuilt. No browser automation, screenshots, or frontend test suite was run.
-- Remaining: Phase 8 backend suite, final artifact scan, commit, rebase on `origin/main`, and push.
-- Phase 5 gap: added a persisted Confidential flag for text and file submissions; it bypasses configured external LLM calls while retaining deterministic local checks, and is disclosed in the UI and docs.
-- Verification: Alembic has one head; focused confidential pipeline and text/upload API tests passed (2); frontend production build passed.
-- Remaining: Phase 3 fact/regulation and source-conflict behavior plus Phase 4 reviewer queue/action gaps still need audit; final full-suite verification remains.
+- Phase 3: approved facts now support subject, value, unit, validity, and source; contextual date/value corrections cite the source, and conflicting active facts are surfaced to managers/admins.
+- Verification: structured-fact rules, safety, seed, and API round-trip tests passed; Alembic has one head and the frontend production build passed.
+- Remaining: clause-specific legal rewrite/safety and historical expired-fact impact tracking are documented limits; see `docs/LIMITATIONS.md`.
+- Phase 4: Compliance Desk now has sign-off, claims, and facts/prices queues; reviewers can confirm violations, dismiss, request evidence, or propose facts. Confirmed violations return to the creator; demo mode seeds six assigned in-review items.
+- Verification: reviewer action/idempotency and four-eyes gate tests, role journey, demo seed, and governance workflow passed; static production bundle rebuilt.
+- Remaining: evidence requests and fact proposals are linked notifications/comments rather than structured task records; see `docs/LIMITATIONS.md`.
+- Phase 5: Confidential submissions block external LLM calls; the submission form discloses AI use and every finding exposes a “How was this decided?” source panel.
+- Verification: confidential pipeline and text/upload API tests passed; writing sample, migration, production build, and forbidden-artifact scan passed.
+- Phase 6: source-path review and production frontend build completed; the FastAPI-served bundle was rebuilt. No browser automation, screenshots, or frontend test suite was run.
+- Verification: full backend suite ran once: 227 passed, 1 skipped, and 2 failed because `chromadb` and `python-docx` are absent from this environment.
+- Remaining: the full manual per-role screen sweep was not performed; legal rewrite/safety, expired-fact history, structured reviewer tasks, and finding version labels remain documented limits. Final artifact scan, commit, rebase, and push are pending.

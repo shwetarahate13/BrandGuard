@@ -15,13 +15,27 @@ def _demo_auth(role: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def test_admin_main_journey_covers_sources_feedback_audit_and_approval_boundary():
+def test_admin_main_journey_covers_sources_feedback_audit_and_approval_boundary(monkeypatch):
+    monkeypatch.setattr("backend.app.api.admin.index_all_sources", lambda _db: None)
     with get_session_factory()() as db:
         run_seed(db)
 
     admin = _demo_auth("admin")
     assert client.get("/api/admin/users", headers=admin).status_code == 200
     assert client.get("/api/admin/facts", headers=admin).status_code == 200
+    structured_fact = client.post(
+        "/api/admin/facts",
+        json={
+            "statement": "Bright Desk plan costs $39 per month.",
+            "subject": "Bright Desk plan",
+            "value": "$39",
+            "unit": "per month",
+            "source_note": "Approved pricing sheet",
+        },
+        headers=admin,
+    )
+    assert structured_fact.status_code == 200, structured_fact.text
+    assert structured_fact.json()["value"] == "$39"
     assert client.get("/api/admin/guidelines", headers=admin).status_code == 200
     assert client.get("/api/guidelines/health", headers=admin).status_code == 200
     assert client.get("/api/feedback/stats", headers=admin).status_code == 200
@@ -41,4 +55,3 @@ def test_admin_main_journey_covers_sources_feedback_audit_and_approval_boundary(
     metrics = client.get("/api/submissions/reviewer-metrics", headers=reviewer)
     assert metrics.status_code == 200, metrics.text
     assert {"confirmed", "dismissed", "overturned_rate"} <= metrics.json().keys()
-

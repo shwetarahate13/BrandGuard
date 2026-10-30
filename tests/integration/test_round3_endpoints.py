@@ -1054,3 +1054,156 @@ def test_reviewer_dismissal_trains_feedback_and_invalidates_guideline_health(api
         assert decision.reason == "The cited clause does not prohibit this supported claim."
         assert db.get(PreferenceModelState, "workspace-default").sample_count == 1
         assert db.get(GuidelineClause, "reviewer-dismiss-clause").dfi_computed_at is None
+
+
+def test_reviewer_followups_create_creator_and_admin_tasks_once(api_client, monkeypatch):
+    client, session_factory, _manager = api_client
+    reviewer = User(
+        id="reviewer-followup", name="Compliance Reviewer",
+        email="reviewer-followup@example.test", password_hash="unused",
+        role=UserRole.reviewer, is_active=True,
+    )
+    creator = User(
+        id="creator-followup", name="Content Creator",
+        email="creator-followup@example.test", password_hash="unused",
+        role=UserRole.creator, is_active=True,
+    )
+    admin = User(
+        id="admin-followup", name="Workspace Admin",
+        email="admin-followup@example.test", password_hash="unused",
+        role=UserRole.admin, is_active=True,
+    )
+    submission_id = "reviewer-followup-submission"
+    finding_id = "reviewer-followup-finding"
+    with session_factory.begin() as db:
+        clause = _add_clause(db, "reviewer-followup-clause")
+        db.add_all([reviewer, creator, admin])
+        db.add(Submission(
+            id=submission_id, creator_id=creator.id, assigned_to_id=reviewer.id,
+            title="Claim to verify", status=SubmissionStatus.in_review,
+        ))
+        db.add(SubmissionVersion(
+            id="reviewer-followup-version", submission_id=submission_id,
+            version_no=1, text="The product is clinically proven.", created_by=creator.id,
+        ))
+        db.add(Finding(
+            id=finding_id, submission_id=submission_id, version_id="reviewer-followup-version",
+            span_start=16, span_end=32, category=FindingCategory.unsupported_claim,
+            issue="The claim needs compliance review.", source_type=SourceType.guideline_clause,
+            source_id=clause.id, severity=FindingSeverity.major,
+            confidence=FindingConfidence.high, status=FindingStatus.open,
+        ))
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: reviewer)
+    evidence_payload = {
+        "action": "request_evidence",
+        "finding_id": finding_id,
+        "message": "Please attach the clinical study that supports this wording.",
+    }
+    evidence_key = "reviewer-task-evidence-" + finding_id
+    evidence = client.post(
+        f"/api/submissions/{submission_id}/reviewer-followups",
+        json=evidence_payload,
+        headers={"Idempotency-Key": evidence_key},
+    )
+    assert evidence.status_code == 200, evidence.text
+    assert evidence.json()["status"] == "created"
+    retry = client.post(
+        f"/api/submissions/{submission_id}/reviewer-followups",
+        json=evidence_payload,
+        headers={"Idempotency-Key": evidence_key},
+    )
+    assert retry.status_code == 200
+    assert retry.json()["status"] == "already_created"
+
+    proposal = client.post(
+        f"/api/submissions/{submission_id}/reviewer-followups",
+        json={
+            "action": "propose_fact",
+            "finding_id": finding_id,
+            "message": "Proposed value: 30%; source: signed clinical study, valid through 2027-01-01.",
+        },
+        headers={"Idempotency-Key": "reviewer-task-proposal-" + finding_id},
+    )
+    assert proposal.status_code == 200, proposal.text
+
+    confirmed = client.post(
+        f"/api/findings/{finding_id}/escalate-review",
+        json={"action": "confirm", "justification": "The cited evidence does not substantiate this clinical claim."},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    duplicate_confirmation = client.post(
+        f"/api/findings/{finding_id}/escalate-review",
+        json={"action": "confirm", "justification": "Confirming the same violation twice must be rejected."},
+    )
+    assert duplicate_confirmation.status_code == 409
+
+    with session_factory() as db:
+        comments = db.query(Comment).filter_by(finding_id=finding_id).all()
+        notifications = db.query(Notification).filter_by(submission_id=submission_id).all()
+        assert len(comments) == 3
+        assert db.get(Submission, submission_id).status == SubmissionStatus.changes_requested
+        assert {(item.user_id, item.kind) for item in notifications} == {
+            (creator.id, "evidence_requested"),
+            (admin.id, "fact_proposed"),
+            (creator.id, "reviewer_violation_confirmed"),
+        }
+
+
+def test_high_risk_manager_approval_requires_reviewer_signoff(api_client, monkeypatch):
+    client, session_factory, manager = api_client
+    reviewer = User(
+        id="reviewer-signoff-gate", name="Compliance Reviewer",
+        email="reviewer-signoff-gate@example.test", password_hash="unused",
+        role=UserRole.reviewer, is_active=True,
+    )
+    creator = User(
+        id="creator-signoff-gate", name="Content Creator",
+        email="creator-signoff-gate@example.test", password_hash="unused",
+        role=UserRole.creator, is_active=True,
+    )
+    submission_id = "reviewer-signoff-gate-submission"
+    finding_id = "reviewer-signoff-gate-finding"
+    with session_factory.begin() as db:
+        clause = _add_clause(db, "reviewer-signoff-gate-clause")
+        db.add_all([reviewer, creator])
+        db.add(Submission(
+            id=submission_id, creator_id=creator.id, assigned_to_id=reviewer.id,
+            title="Escalated copy", status=SubmissionStatus.in_review,
+        ))
+        db.add(SubmissionVersion(
+            id="reviewer-signoff-gate-version", submission_id=submission_id,
+            version_no=1, text="This product removes every stain.", created_by=creator.id,
+        ))
+        db.add(Finding(
+            id=finding_id, submission_id=submission_id, version_id="reviewer-signoff-gate-version",
+            span_start=0, span_end=34, category=FindingCategory.unsupported_claim,
+            issue="This claim needs reviewer verification.", source_type=SourceType.guideline_clause,
+            source_id=clause.id, severity=FindingSeverity.major,
+            confidence=FindingConfidence.high, needs_human=True, status=FindingStatus.open,
+        ))
+
+    approval_payload = {"decision": "approved", "note": "Manager approval"}
+    blocked = client.post(f"/api/submissions/{submission_id}/approve", json=approval_payload)
+    assert blocked.status_code == 403
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: reviewer)
+    dismissed = client.post(
+        f"/api/findings/{finding_id}/escalate-review",
+        json={"action": "dismiss", "justification": "The evidence shows the claim is not prohibited."},
+    )
+    assert dismissed.status_code == 200, dismissed.text
+    signoff = client.post(
+        f"/api/submissions/{submission_id}/reviewer-signoff",
+        json={
+            "checklist": {"claims_verified": True, "facts_current": True, "accessibility_reviewed": True, "legal_wording_reviewed": True},
+            "evidence_notes": "Reviewed the cited guidance and claim context.",
+            "justification": "Compliance review checklist completed.",
+        },
+    )
+    assert signoff.status_code == 200, signoff.text
+    reviewer_cannot_approve = client.post(f"/api/submissions/{submission_id}/approve", json=approval_payload)
+    assert reviewer_cannot_approve.status_code == 403
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: manager)
+    approved = client.post(f"/api/submissions/{submission_id}/approve", json=approval_payload)
+    assert approved.status_code == 200, approved.text

@@ -162,7 +162,7 @@ def verify_intent_preserved(
     # the exact term in the span. Its wording may not share lexical roots with
     # the campaign intent (for example, "cheap" -> "accessible pricing"),
     # so the generic intent heuristic must not hide that deterministic fix.
-    if source_type == SourceType.term or source_type == SourceType.term.value:
+    if source_type in (SourceType.term, SourceType.term.value, SourceType.approved_fact, SourceType.approved_fact.value):
         return suggested_rewrite.strip()
 
     # If creator provided no intent, accept sensible rewrite

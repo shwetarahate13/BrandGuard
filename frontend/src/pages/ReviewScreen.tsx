@@ -902,7 +902,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                         >
                           <span className="flex items-center gap-1">
                             <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
-                            Cited Source ({f.source_type || "Guideline"})
+                            How was this decided? · Cited source ({f.source_type || "Guideline"})
                           </span>
                           {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>

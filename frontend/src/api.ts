@@ -325,6 +325,9 @@ export const api = {
   getFacts: async () => request<ApprovedFact[]>("/admin/facts"),
   createFact: async (data: {
     statement: string;
+    subject?: string;
+    value?: string;
+    unit?: string;
     source_note?: string;
     valid_from?: string;
     valid_to?: string;
@@ -376,6 +379,12 @@ export const api = {
   submitReviewerSignoff: async (submissionId: string, checklist: Record<string, boolean>, evidence_notes: string, justification: string) =>
     request<any>(`/submissions/${submissionId}/reviewer-signoff`, { method: "POST", body: JSON.stringify({ checklist, evidence_notes, justification }) }),
   getReviewerSignoff: async (submissionId: string) => request<any>(`/submissions/${submissionId}/reviewer-signoff`),
+  createReviewerFollowup: async (submissionId: string, findingId: string, action: "request_evidence" | "propose_fact", message: string) =>
+    request<{ status: string; action: string; finding_id: string }>(`/submissions/${submissionId}/reviewer-followups`, {
+      method: "POST",
+      headers: { "Idempotency-Key": `reviewer-task-${action}-${findingId}` },
+      body: JSON.stringify({ action, finding_id: findingId, message }),
+    }),
   getReviewerMetrics: async () => request<{ average_turnaround_hours: number | null; confirmed: number; dismissed: number; overturned_rate: number }>("/submissions/reviewer-metrics"),
 
   // Insights

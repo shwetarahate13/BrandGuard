@@ -9,7 +9,7 @@ from sqlalchemy.exc import OperationalError
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, Finding, Decision, Comment,
-    FindingStatus, DecisionAction, SubmissionStatus, GuidelineClause, SourceType,
+    FindingStatus, DecisionAction, SubmissionStatus, GuidelineClause, SourceType, Notification,
     FindingCategory, FindingConfidence, WritingRuleDispute,
 )
 from backend.app.schemas.schemas import (
@@ -360,10 +360,20 @@ def review_escalated_finding(
     )
     if not latest_version or latest_version.id != finding.version_id:
         raise HTTPException(status_code=409, detail="This finding belongs to an older version; review the latest version instead")
+    if db.query(Decision).filter_by(finding_id=finding.id, user_id=current_user.id).first():
+        raise HTTPException(status_code=409, detail="You have already recorded a compliance decision for this finding")
 
     if payload.action == "confirm":
         finding.needs_human = False
         note_body = f"[Compliance Confirmed]: {payload.justification.strip()}"
+        submission.status = SubmissionStatus.changes_requested
+        db.add(Notification(
+            user_id=submission.creator_id,
+            submission_id=submission.id,
+            kind="reviewer_violation_confirmed",
+            title="Compliance reviewer confirmed a violation",
+            message=note_body,
+        ))
         start = max(0, finding.span_start or 0)
         end = min(len(latest_version.text), finding.span_end or start)
         db.add(Decision(finding_id=finding.id, user_id=current_user.id, action=DecisionAction.accept,

@@ -13,7 +13,8 @@ import {
   Download,
 } from "lucide-react";
 import { api } from "../../api";
-import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthClause, ActivityEvent, FeedbackCategoryStats } from "../../types";
+import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthClause, ActivityEvent, FeedbackCategoryStats, ApprovedFact } from "../../types";
+import { findActiveFactConflicts } from "../../utils/approvedFacts";
 import { Skeleton } from "../Skeleton";
 import { useToast } from "../Toast";
 import { SavedViews } from "../SavedViews";
@@ -36,6 +37,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
   const [highRiskClauses, setHighRiskClauses] = useState<GuidelineHealthClause[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [feedbackStats, setFeedbackStats] = useState<FeedbackCategoryStats[]>([]);
+  const [sourceConflicts, setSourceConflicts] = useState<ApprovedFact[][]>([]);
   const [dueDateDrafts, setDueDateDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -45,13 +47,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
   const loadData = async () => {
     try {
       setLoading(true);
-      const [subs, ins, health, activeReviewers, recentActivity, feedback] = await Promise.all([
+      const [subs, ins, health, activeReviewers, recentActivity, feedback, facts] = await Promise.all([
         api.getSubmissions(),
         api.getInsightsSummary().catch(() => null),
         api.getGuidelineHealth().catch(() => []),
         api.getReviewers(),
         api.getRecentActivity().catch(() => []),
         api.getFeedbackStats().catch(() => ({ categories: [] })),
+        api.getFacts(),
       ]);
       setSubmissions(subs);
       setInsights(ins);
@@ -59,6 +62,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
       setReviewers(activeReviewers);
       setActivity(recentActivity);
       setFeedbackStats(feedback.categories);
+      setSourceConflicts(findActiveFactConflicts(facts));
     } catch (err: any) {
       showToast(err.message || "Failed to load command center data", "error");
     } finally {
@@ -233,6 +237,26 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
           </div>
         </div>
       </div>
+
+      {sourceConflicts.length > 0 && (
+        <section className="rounded-xl border border-amber-300 bg-amber-50 p-4" aria-labelledby="manager-source-conflicts-title">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 id="manager-source-conflicts-title" className="text-sm font-bold text-amber-950">Source conflicts</h2>
+              <p className="mt-1 text-xs text-amber-900">Resolve disagreements between active approved facts before approving affected copy.</p>
+            </div>
+            <button type="button" onClick={() => navigate("/sources")} className="dashboard-secondary-action">Review sources</button>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {sourceConflicts.map((group) => (
+              <li key={group[0].subject} className="text-xs text-amber-950">
+                <strong>{group[0].subject}:</strong>{" "}
+                {group.map((fact) => `${fact.value}${fact.unit ? ` ${fact.unit}` : ""} (${fact.source_note || "source not recorded"})`).join(" · ")}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-label="Submission status pipeline" className="dashboard-pipeline grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
         {pipelineStatuses.map((status) => (

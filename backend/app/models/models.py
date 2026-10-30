@@ -161,6 +161,9 @@ class ApprovedFact(Base):
 
     id = Column(String, primary_key=True, default=gen_id)
     statement = Column(Text, nullable=False)
+    subject = Column(String(300), nullable=True)
+    value = Column(String(300), nullable=True)
+    unit = Column(String(100), nullable=True)
     source_note = Column(Text, nullable=True)
     valid_from = Column(DateTime, nullable=True)
     valid_to = Column(DateTime, nullable=True)

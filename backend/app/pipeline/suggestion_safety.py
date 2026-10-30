@@ -76,7 +76,11 @@ def prepare_suggestions(
         if category in HIGH_CATEGORIES:
             cited_fact = next((fact for fact in facts if str(fact.get("id")) == str(candidate.get("source_id"))), None)
             approved_wording = str(cited_fact.get("statement", "")) if cited_fact else ""
-            if candidate.get("source_type") != "approved_fact" or not rewrite or rewrite not in approved_wording:
+            structured_value = str(cited_fact.get("value", "")).strip() if cited_fact else ""
+            supported = bool(rewrite) and (
+                rewrite in approved_wording or (bool(structured_value) and rewrite == structured_value)
+            )
+            if candidate.get("source_type") != "approved_fact" or not rewrite or not supported:
                 rewrite = None
                 candidate["needs_human"] = True
 

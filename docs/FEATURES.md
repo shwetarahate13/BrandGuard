@@ -6,6 +6,7 @@ This inventory describes behavior in the current local application.
 
 - Create text submissions or upload TXT, Markdown, HTML, DOCX, PDF, PNG, JPEG, or sanitized SVG files. Uploads support up to 25 MB; text checks support up to 20,000 words.
 - Review copy against approved guideline clauses, facts, terminology, accessibility rules, and optional configured language-model checks. Findings link to their cited source and quote.
+- Admins can add structured fact subjects, values, units, validity dates, and source notes. Mismatched structured values are compared in context and active conflicts are surfaced to managers and admins.
 - Mark submissions Confidential to keep their text and intent out of configured external language-model checks; deterministic local checks remain available.
 - Accept, edit, or dispute findings; creators can revise, recheck, and resubmit. Managers can request changes, reject, or approve standard-risk work. High-risk work needs reviewer sign-off before manager approval. Self-approval is blocked.
 - PDF findings include extracted page coordinates and visible highlights. Images use OCR-linked text boxes and visual checks against configured approved assets and guidelines.
@@ -24,6 +25,7 @@ See [ROUND3_IMPROVEMENTS.md](ROUND3_IMPROVEMENTS.md) for implementation detail a
 ### Writing assistant
 
 - The offline writing checker reports common misspellings from a small, reviewed correction list and 11 conservative grammar rules. Each result uses the seeded `STYLE-1` guideline, keeps the exact text span for review, and has a stable rule ID. Admins can maintain the brand-word allowlist; code, markup, URLs, email addresses, mentions, and hashtags are protected from those checks.
+- Every finding's expandable source panel is labelled “How was this decided?” and shows the cited quote.
 - Review findings are grouped by writing and compliance category and show the cited reason with a before/after diff when a replacement is available. Creators can accept, edit, or dispute individual suggestions, preview the combined draft, apply eligible high-confidence grammar/spelling or other safe fixes, edit the draft directly, recheck it, and use version history to undo a revision.
 - Unsupported claims are not rewritten from guesswork. A replacement that cannot be grounded in an approved fact remains with the reviewer. Claims and facts are excluded from the safe batch actions.
 - The New Submission sample picker includes grammar/spelling-heavy copy and a separate guideline/regulatory example alongside the existing demo samples.
@@ -34,14 +36,14 @@ The deterministic writing checker works offline. The optional configured model i
 
 - **Creator:** own submissions, checks, finding decisions, revision and resubmission, activity and feedback statistics, notifications, and onboarding tips.
 - **Manager:** team queue, assignment and due dates, approval decisions, organization metrics, guideline health, and approval-report export.
-- **Reviewer:** assigned compliance work, escalated findings, evidence notes, required sign-off checklist, and reviewer metrics.
+- **Reviewer:** separate sign-off, escalated-claim, and facts/prices queues; confirm/dismiss actions; evidence-request and approved-fact-proposal notifications; required sign-off checklist; and reviewer metrics.
 - **Admin:** account and approved-source management, runtime status, audit and integrity tools, feedback reset, and organization insights.
 
 Other implemented capabilities include saved browser-local views, CSV/PDF approval reports, password change/reset, dark mode, first-run role tips, tamper-evident audit records, approval certificates, and public certificate verification.
 
 ## Demo workspace
 
-With `DEMO_MODE=true`, the local setup creates four throwaway role accounts and at least 15 fictional, explicitly flagged submissions across draft, checked, in-review, changes-requested, approved, and rejected states. The seed includes planted claim, pricing, expired-fact, typo, tone, accessibility, PDF, and image examples. Re-running the seed adds missing examples without duplicating or resetting submissions. The login page exposes one-click demo sign-in only while demo mode is enabled. The New Submission picker has six core review examples plus two writing-assistant examples.
+With `DEMO_MODE=true`, the local setup creates four throwaway role accounts and at least 18 fictional, explicitly flagged submissions across draft, checked, in-review, changes-requested, approved, and rejected states. At least six assigned in-review examples are available for the compliance reviewer. The seed includes planted claim, pricing, expired-fact, typo, tone, accessibility, PDF, and image examples. Re-running the seed adds missing examples without duplicating or resetting submissions. The login page exposes one-click demo sign-in only while demo mode is enabled. The New Submission picker has six core review examples plus two writing-assistant examples.
 
 ## Local operations
 

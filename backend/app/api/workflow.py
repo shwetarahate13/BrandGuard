@@ -6,12 +6,12 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, Submission, SubmissionVersion, SubmissionStatus,
-    Comment, Approval, ApprovalCertificate, ApprovalDecision, AuditLog, ReviewerSignoff, Finding, Decision, gen_id,
+    Comment, Approval, ApprovalCertificate, ApprovalDecision, AuditLog, ReviewerSignoff, Finding, Decision, FindingStatus, Notification, gen_id,
 )
 from backend.app.llm.client import get_llm_mode
 from backend.app.schemas.schemas import (
     CommentCreate, CommentResponse, ApprovalCreate, ApprovalResponse,
-    AuditLogResponse, ReviewerSignoffRequest
+    AuditLogResponse, ReviewerSignoffRequest, ReviewerFollowupCreate
 )
 from backend.app.services.auth import get_current_user
 from backend.app.services.permissions import (
@@ -28,6 +28,87 @@ from backend.app.services.idempotency import find_idempotency_record, request_fi
 from backend.app.services.certificates import approved_content_hash, create_certificate, render_certificate_pdf
 
 router = APIRouter(prefix="/submissions", tags=["workflow"])
+
+
+@router.post("/{submission_id}/reviewer-followups")
+def create_reviewer_followup(
+    submission_id: str,
+    payload: ReviewerFollowupCreate,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=128),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    check_permission(current_user, Action.FINDINGS_ESCALATE_REVIEW)
+    submission = db.query(Submission).filter_by(id=submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    check_can_view_submission(current_user, submission)
+    if current_user.role != UserRole.reviewer or submission.assigned_to_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the assigned reviewer can create compliance follow-up tasks")
+    if submission.status != SubmissionStatus.in_review:
+        raise HTTPException(status_code=409, detail="Reviewer follow-up tasks require a submission that is in review")
+
+    finding = db.query(Finding).filter_by(id=payload.finding_id, submission_id=submission.id).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    if finding.status != FindingStatus.open:
+        raise HTTPException(status_code=409, detail="Follow-up tasks can only be created for open findings")
+    if not finding_requires_reviewer_review(finding):
+        raise HTTPException(status_code=400, detail="Follow-up tasks require an escalated finding")
+
+    fingerprint = request_fingerprint({
+        "submission_id": submission.id,
+        "finding_id": finding.id,
+        "action": payload.action,
+        "message": payload.message,
+    })
+    scope = f"reviewer-followup:{submission.id}"
+    existing = find_idempotency_record(db, current_user.id, scope, idempotency_key, fingerprint)
+    if existing:
+        return {"status": "already_created", "action": payload.action, "finding_id": finding.id}
+
+    if payload.action == "request_evidence":
+        recipients = [submission.creator_id]
+        title = "Evidence requested by compliance reviewer"
+        kind = "evidence_requested"
+        task_label = "Evidence requested"
+    else:
+        recipients = [
+            user.id for user in db.query(User).filter_by(role=UserRole.admin, is_active=True).all()
+        ]
+        if not recipients:
+            raise HTTPException(status_code=409, detail="No active admin is available to review a fact proposal")
+        title = "Approved fact proposal needs review"
+        kind = "fact_proposed"
+        task_label = "Approved fact proposal"
+
+    comment = Comment(
+        id=gen_id(),
+        submission_id=submission.id,
+        finding_id=finding.id,
+        user_id=current_user.id,
+        body=f"{task_label}: {payload.message}",
+    )
+    db.add(comment)
+    for recipient_id in recipients:
+        db.add(Notification(
+            user_id=recipient_id,
+            submission_id=submission.id,
+            kind=kind,
+            title=title,
+            message=f"{payload.message} Finding: {finding.issue}",
+        ))
+    remember_request(db, current_user.id, scope, idempotency_key, fingerprint, comment.id)
+    log_action(db, current_user.id, f"reviewer_{payload.action}", "finding", finding.id)
+    try:
+        db.commit()
+    except (IntegrityError, OperationalError) as exc:
+        db.rollback()
+        existing = find_idempotency_record(db, current_user.id, scope, idempotency_key, fingerprint)
+        if existing:
+            return {"status": "already_created", "action": payload.action, "finding_id": finding.id}
+        raise HTTPException(status_code=409, detail="The reviewer task may have been saved at the same time. Refresh before retrying.") from exc
+    return {"status": "created", "action": payload.action, "finding_id": finding.id}
 
 
 @router.post("/{submission_id}/reviewer-signoff")

@@ -26,7 +26,9 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
   const [loading, setLoading] = useState(true);
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
   const [justification, setJustification] = useState("");
+  const [followupAction, setFollowupAction] = useState<"request_evidence" | "propose_fact" | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [needsSignoff, setNeedsSignoff] = useState<Submission[]>([]);
   const [metrics, setMetrics] = useState<{ average_turnaround_hours: number | null; confirmed: number; dismissed: number; overturned_rate: number } | null>(null);
   const { showToast } = useToast();
 
@@ -40,7 +42,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
 
       // Collect escalated findings from assigned submissions
       const findingsList: Finding[] = [];
-      for (const sub of subs.slice(0, 10)) {
+      for (const sub of subs.filter((item) => item.assigned_to_id === user.id || item.status === "in_review").slice(0, 50)) {
         try {
           const fList = await api.getFindings(sub.id);
           const escalated = fList.filter((f) => f.needs_human || f.severity === "critical" || f.severity === "major" || f.category === "unsupported_claim" || /expired|outdated/i.test(f.issue));
@@ -50,6 +52,9 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
         }
       }
       setEscalatedFindings(findingsList);
+      const inReviewAssignments = subs.filter((sub) => sub.assigned_to_id === user.id && sub.status === "in_review");
+      const signoffs = await Promise.all(inReviewAssignments.map((sub) => api.getReviewerSignoff(sub.id)));
+      setNeedsSignoff(inReviewAssignments.filter((_, index) => !signoffs[index]?.signed_off));
     } catch (err: any) {
       showToast(err.message || "Failed to load Compliance Desk data", "error");
     } finally {
@@ -79,6 +84,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
       );
       setSelectedFinding(null);
       setJustification("");
+      setFollowupAction(null);
       loadData();
     } catch (err: any) {
       showToast(err.message || "Action failed", "error");
@@ -87,7 +93,31 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
     }
   };
 
+  const handleFollowupAction = async () => {
+    if (!selectedFinding || !followupAction) return;
+    if (justification.trim().length < 5) {
+      showToast("Add at least five characters describing the requested evidence or proposed fact.", "error");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await api.createReviewerFollowup(selectedFinding.submission_id, selectedFinding.id, followupAction, justification.trim());
+      showToast(followupAction === "request_evidence" ? "Evidence request sent to the creator." : "Fact proposal sent to the admin queue.", "success");
+      setSelectedFinding(null);
+      setJustification("");
+      setFollowupAction(null);
+      await loadData();
+    } catch (err: any) {
+      showToast(err.message || "Could not create the reviewer follow-up.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const pipelineStatuses: SubmissionStatus[] = ["draft", "checked", "in_review", "changes_requested", "approved", "rejected"];
+  const pendingFindings = escalatedFindings.filter((finding) => finding.status === "open");
+  const claimQueue = pendingFindings.filter((finding) => finding.category === "unsupported_claim");
+  const factQueue = pendingFindings.filter((finding) => finding.category === "factual_accuracy");
 
   if (loading) {
     return (
@@ -107,8 +137,8 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
       <section className="dashboard-hero dashboard-hero--reviewer" aria-labelledby="reviewer-dashboard-title">
         <div className="dashboard-hero__copy">
           <div className="dashboard-hero__eyebrow"><ShieldCheck className="w-4 h-4" /> Compliance review <span aria-hidden="true">·</span> Reviewer</div>
-          <h1 id="reviewer-dashboard-title" className="text-2xl sm:text-3xl font-extrabold tracking-tight">Reviewer workbench</h1>
-          <p>Verify escalated claims against approved evidence, complete the compliance checks, and sign off assigned work.</p>
+          <h1 id="reviewer-dashboard-title" className="text-2xl sm:text-3xl font-extrabold tracking-tight">Compliance Desk</h1>
+          <p>Verify risky claims and facts against approved evidence, then sign off assigned compliance work.</p>
         </div>
         <div className="dashboard-hero__actions">
         <button
@@ -125,9 +155,9 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
       <div className="dashboard-kpis dashboard-kpis--reviewer grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Assigned to Me</p>
-            <p className="text-2xl font-black text-stone-900 mt-1">{assignedSubmissions.filter((submission) => submission.assigned_to_id === user.id).length}</p>
-            <p className="text-[11px] text-stone-400 mt-1">Directly allocated submissions</p>
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Needs your sign-off</p>
+            <p className="text-2xl font-black text-stone-900 mt-1">{needsSignoff.length}</p>
+            <p className="text-[11px] text-stone-400 mt-1">Assigned high-risk work awaiting review</p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <FileCheck className="w-6 h-6" />
@@ -145,9 +175,9 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
 
         <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Escalated Findings</p>
-            <p className="text-2xl font-black text-amber-600 mt-1">{escalatedFindings.length}</p>
-            <p className="text-[11px] text-stone-400 mt-1">Needs human / high severity / claims</p>
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Escalated claims</p>
+            <p className="text-2xl font-black text-amber-600 mt-1">{claimQueue.length}</p>
+            <p className="text-[11px] text-stone-400 mt-1">Claims awaiting compliance review</p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <AlertTriangle className="w-6 h-6" />
@@ -156,15 +186,25 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
 
         <div className="dashboard-kpi bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Compliance Role</p>
-            <p className="text-sm font-bold text-emerald-800 mt-1">Certified Compliance Authority</p>
-            <p className="text-[11px] text-stone-400 mt-1">Sign-off on high-risk copy</p>
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Facts and prices to verify</p>
+            <p className="text-2xl font-black text-amber-600 mt-1">{factQueue.length}</p>
+            <p className="text-[11px] text-stone-400 mt-1">Approved values need verification</p>
           </div>
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <ShieldCheck className="w-6 h-6" />
           </div>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 space-y-3" aria-labelledby="reviewer-signoff-queue">
+        <div><h2 id="reviewer-signoff-queue" className="text-sm font-bold text-emerald-950">Needs your sign-off ({needsSignoff.length})</h2><p className="text-xs text-emerald-900">Assigned high-risk submissions need your completed compliance checklist before a manager can approve.</p></div>
+        {needsSignoff.length ? needsSignoff.map((submission) => (
+          <div key={submission.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-white p-3">
+            <div className="min-w-0"><p className="truncate text-sm font-semibold text-stone-900">{submission.title}</p><p className="text-xs text-stone-600">Why: assigned high-risk copy is awaiting your version-specific sign-off.</p></div>
+            <button type="button" onClick={() => navigate(`/approval/${submission.id}`)} className="dashboard-secondary-action">Review</button>
+          </div>
+        )) : <p className="text-xs text-emerald-900">No assigned submissions currently need sign-off.</p>}
+      </section>
 
       <section className="dashboard-pipeline" aria-label="Assigned submissions by status">
         <div className="dashboard-section-heading">
@@ -182,13 +222,13 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
       {/* Side-by-Side Claim & Citation Inspection Panel */}
       <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-6">
         <div>
-          <h2 className="text-lg font-bold text-stone-900">Escalated Compliance Queue</h2>
+          <h2 className="text-lg font-bold text-stone-900">Escalated claims ({claimQueue.length})</h2>
           <p className="text-xs text-stone-500 mt-0.5">
             Inspect flagged health, sourcing, or factual claims side-by-side with approved brand facts. Provide written justification to confirm or dismiss.
           </p>
         </div>
 
-        {escalatedFindings.length === 0 ? (
+        {claimQueue.length === 0 ? (
           <div className="py-8 text-center bg-stone-50 rounded-xl border border-dashed border-stone-200">
             <ShieldCheck className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
             <p className="text-sm font-semibold text-stone-800">No Escalated Findings Currently Pending</p>
@@ -196,7 +236,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
           </div>
         ) : (
           <div className="space-y-4">
-            {escalatedFindings.map((finding) => (
+            {claimQueue.map((finding) => (
               (() => {
                 const version = assignedSubmissions.find((submission) => submission.id === finding.submission_id)?.versions?.slice(-1)[0];
                 const claimExcerpt = version?.text?.slice(Math.max(0, finding.span_start || 0), Math.min(version.text.length, finding.span_end || (finding.span_start || 0) + 300));
@@ -216,6 +256,17 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                     Status: <strong className="text-stone-800">{finding.status}</strong>
                   </span>
                 </div>
+
+                <section className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4" aria-labelledby="reviewer-facts-queue">
+                  <div><h2 id="reviewer-facts-queue" className="text-lg font-bold text-stone-900">Facts and prices to verify ({factQueue.length})</h2><p className="text-xs text-stone-500">Each item is escalated because a factual value may be wrong, expired, or unsupported.</p></div>
+                  {factQueue.length ? factQueue.map((finding) => (
+                    <div key={finding.id} className="rounded-xl border border-stone-200 p-4">
+                      <p className="text-xs font-semibold text-stone-900">{finding.issue}</p>
+                      {finding.source_quote && <p className="mt-2 text-xs text-stone-600">Approved source: {finding.source_quote}</p>}
+                      <button type="button" onClick={() => navigate(`/review/${finding.submission_id}`)} className="mt-3 dashboard-secondary-action">Inspect item and evidence</button>
+                    </div>
+                  )) : <p className="text-sm text-stone-600">No facts or prices are waiting for verification.</p>}
+                </section>
 
                 {/* Side-by-side: Content Claim vs Cited Source Quote */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -238,39 +289,47 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                 {selectedFinding?.id === finding.id ? (
                   <div className="p-4 bg-white rounded-xl border border-stone-300 space-y-3">
                     <label htmlFor="reviewer-escalation-justification" className="block text-xs font-bold text-stone-800">
-                      Compliance Justification Note <span className="text-rose-600">*</span>
+                      {followupAction === "request_evidence" ? "Evidence request for creator" : followupAction === "propose_fact" ? "Proposed fact and source for admin" : "Compliance justification note"} <span className="text-rose-600">*</span>
                     </label>
                     <textarea
                       id="reviewer-escalation-justification"
                       value={justification}
                       onChange={(e) => setJustification(e.target.value)}
-                      placeholder="Explain why this escalated claim is being confirmed or dismissed against regulatory guidelines..."
+                      placeholder={followupAction === "request_evidence" ? "Specify the evidence the creator must provide…" : followupAction === "propose_fact" ? "Describe the approved value, unit, expiry, and supporting source…" : "Explain why this escalated claim is being confirmed or dismissed against approved evidence…"}
                       rows={2}
                       className="w-full text-xs p-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-600 focus:outline-none"
                     />
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => setSelectedFinding(null)}
+                        onClick={() => { setSelectedFinding(null); setFollowupAction(null); }}
                         className="px-3 py-1.5 text-xs text-stone-600 hover:text-stone-900"
                       >
                         Cancel
                       </button>
-                      <button
-                        disabled={submitting}
-                        onClick={() => handleEscalatedAction("dismiss")}
-                        className="px-3.5 py-1.5 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs flex items-center gap-1"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                        Dismiss Finding
-                      </button>
-                      <button
-                        disabled={submitting}
-                        onClick={() => handleEscalatedAction("confirm")}
-                        className="px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1 shadow-sm"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        Confirm Finding
-                      </button>
+                      {followupAction ? (
+                        <button type="button" disabled={submitting} onClick={handleFollowupAction} className="px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs disabled:opacity-50">
+                          {submitting ? "Sending…" : followupAction === "request_evidence" ? "Send evidence request" : "Send fact proposal"}
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            disabled={submitting}
+                            onClick={() => handleEscalatedAction("dismiss")}
+                            className="px-3.5 py-1.5 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs flex items-center gap-1"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Dismiss Finding
+                          </button>
+                          <button
+                            disabled={submitting}
+                            onClick={() => handleEscalatedAction("confirm")}
+                            className="px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1 shadow-sm"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Confirm Finding
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -286,11 +345,14 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                       onClick={() => {
                         setSelectedFinding(finding);
                         setJustification("");
+                        setFollowupAction(null);
                       }}
                       className="px-4 py-1.5 bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold rounded-lg shadow-sm"
                     >
                       Provide Compliance Verdict
                     </button>
+                    <button type="button" onClick={() => { setSelectedFinding(finding); setJustification(""); setFollowupAction("request_evidence"); }} className="px-3 py-1.5 text-xs font-semibold text-stone-700 hover:text-stone-950">Request evidence</button>
+                    <button type="button" onClick={() => { setSelectedFinding(finding); setJustification(""); setFollowupAction("propose_fact"); }} className="px-3 py-1.5 text-xs font-semibold text-stone-700 hover:text-stone-950">Propose approved fact</button>
                   </div>
                 )}
               </div>
@@ -307,7 +369,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
         <div className="divide-y divide-stone-100">
           {assignedSubmissions.map((sub) => (
             (() => {
-              const canSignOff = sub.assigned_to_id === user.id && sub.status === "in_review" && escalatedFindings.some((finding) => finding.submission_id === sub.id);
+              const canSignOff = needsSignoff.some((submission) => submission.id === sub.id);
               return (
             <div key={sub.id} className="py-4 flex items-center justify-between gap-4">
               <div>

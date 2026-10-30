@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { GuidelineDoc, ApprovedFact, Term, Asset } from "../types";
+import { findActiveFactConflicts } from "../utils/approvedFacts";
 import { EmptyState } from "../components/ui";
 import { useToast } from "../components/Toast";
 
@@ -40,6 +41,9 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
   // New fact form
   const [showAddFact, setShowAddFact] = useState(false);
   const [newStatement, setNewStatement] = useState("");
+  const [newSubject, setNewSubject] = useState("");
+  const [newValue, setNewValue] = useState("");
+  const [newUnit, setNewUnit] = useState("");
   const [newNote, setNewNote] = useState("");
   const [newValidTo, setNewValidTo] = useState("");
 
@@ -113,16 +117,22 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
 
   const handleCreateFact = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStatement.trim()) return;
+    if (![newStatement, newSubject, newValue, newUnit, newNote].every((value) => value.trim())) return;
     setSavingSource(true);
     try {
       await api.createFact({
         statement: newStatement.trim(),
+        subject: newSubject.trim() || undefined,
+        value: newValue.trim() || undefined,
+        unit: newUnit.trim() || undefined,
         source_note: newNote.trim() || undefined,
         valid_to: newValidTo ? new Date(newValidTo).toISOString() : undefined,
       });
       setShowAddFact(false);
       setNewStatement("");
+      setNewSubject("");
+      setNewValue("");
+      setNewUnit("");
       setNewNote("");
       setNewValidTo("");
       await loadAll();
@@ -190,6 +200,8 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
     if (!validTo) return false;
     return new Date(validTo) < new Date();
   };
+
+  const activeFactConflicts = findActiveFactConflicts(facts);
 
   return (
     <div className="sources-page max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -295,6 +307,21 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                   className="w-full px-3 py-3 text-base border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="source-fact-subject" className="block text-sm font-semibold text-stone-700 mb-1">Subject</label>
+                  <input id="source-fact-subject" value={newSubject} onChange={(e) => setNewSubject(e.target.value)} placeholder="e.g. Bright Desk plan" required className="w-full px-3 py-2 text-base border border-stone-300 rounded-lg" />
+                </div>
+                <div>
+                  <label htmlFor="source-fact-value" className="block text-sm font-semibold text-stone-700 mb-1">Approved value</label>
+                  <input id="source-fact-value" value={newValue} onChange={(e) => setNewValue(e.target.value)} placeholder="e.g. $39 or 30%" required className="w-full px-3 py-2 text-base border border-stone-300 rounded-lg" />
+                </div>
+                <div>
+                  <label htmlFor="source-fact-unit" className="block text-sm font-semibold text-stone-700 mb-1">Unit or period</label>
+                  <input id="source-fact-unit" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} placeholder="e.g. per month or percent" required className="w-full px-3 py-2 text-base border border-stone-300 rounded-lg" />
+                </div>
+              </div>
+              <p className="text-xs text-stone-500">Complete all three fields to compare values in reviewed copy. Include currency or % in the approved value.</p>
               <div>
                 <label htmlFor="source-guideline-content" className="block text-sm font-semibold text-stone-700 mb-1">Document content</label>
                 <textarea
@@ -402,6 +429,21 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
             </button>}
           </div>
 
+          {activeFactConflicts.length > 0 && (
+            <section className="rounded-xl border border-amber-300 bg-amber-50 p-4" aria-labelledby="source-conflicts-title">
+              <h3 id="source-conflicts-title" className="text-sm font-bold text-amber-950">Source conflicts</h3>
+              <p className="mt-1 text-xs text-amber-900">Active approved values disagree. Resolve these before relying on an automatic correction.</p>
+              <ul className="mt-3 space-y-2">
+                {activeFactConflicts.map((group) => (
+                  <li key={group[0].subject} className="text-xs text-amber-950">
+                    <strong>{group[0].subject}:</strong>{" "}
+                    {group.map((fact) => `${fact.value}${fact.unit ? ` ${fact.unit}` : ""} (${fact.source_note || "source not recorded"})`).join(" · ")}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {canManage && showAddFact && (
             <form onSubmit={handleCreateFact} className="bg-white border border-stone-200 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="font-bold text-xs uppercase tracking-wider text-stone-700">Add Approved Fact</h3>
@@ -426,6 +468,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                     placeholder="e.g. 2024 Green Energy Audit"
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
+                    required
                     className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg"
                   />
                 </div>
@@ -466,6 +509,7 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                 <div key={fact.id} className="p-4 flex items-start justify-between gap-4 hover:bg-stone-50/50">
                   <div className="space-y-1">
                     <p className="text-xs font-medium text-stone-900">{fact.statement}</p>
+                    {(fact.subject || fact.value || fact.unit) && <p className="text-xs text-stone-600">Structured fact: {fact.subject || "—"} · {fact.value || "—"} {fact.unit || ""}</p>}
                     <div className="flex items-center gap-2 text-[11px] text-stone-400">
                       {fact.source_note && <span>Source: {fact.source_note}</span>}
                       {fact.valid_to && (

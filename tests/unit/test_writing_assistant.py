@@ -38,6 +38,23 @@ def test_known_spelling_is_detected_but_unknown_brand_word_is_left_alone():
     assert spelling[0].suggested_rewrite == "accommodate"
 
 
+def test_requested_sample_gets_concrete_grammar_and_spelling_replacements():
+    text = "Their is a new Bright Desk plan, it help teams finish reports more faster. We guarentee 100% accuracy and its the best tool in the world."
+    findings = analyze_writing(text, STYLE, ["Bright Desk"])
+    replacements = {
+        (text[item.span_start:item.span_end], item.suggested_rewrite)
+        for item in findings
+        if item.suggested_rewrite
+    }
+
+    assert ("Their is", "There is") in replacements
+    assert ("it help", "it helps") in replacements
+    assert ("more faster", "faster") in replacements
+    assert ("guarentee", "guarantee") in replacements
+    assert ("its the", "it's the") in replacements
+    assert all(item.source_quote == STYLE["text"] for item in findings)
+
+
 def test_empty_or_unseeded_clause_disables_writing_findings():
     assert analyze_writing("teh", None) == []
 

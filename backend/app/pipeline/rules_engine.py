@@ -166,8 +166,114 @@ def run_rules_engine(
                     suggested_rewrite=None,
                 ))
 
+    # 3. Structured facts: compare a value only in the same sentence as its subject.
+    structured_facts = [fact for fact in facts if fact.get("subject") and fact.get("value")]
+    subject_groups: dict[str, list[dict]] = {}
+    for fact in structured_facts:
+        subject_groups.setdefault(str(fact["subject"]).casefold().strip(), []).append(fact)
+
+    for subject_key, subject_facts in subject_groups.items():
+        subject = str(subject_facts[0]["subject"]).strip()
+        subject_pattern = re.compile(r"(?<!\w)" + re.escape(subject) + r"(?!\w)", re.IGNORECASE)
+        active_facts = [fact for fact in subject_facts if _is_active(fact)]
+        active_values = {
+            f"{_fact_value_signature(str(fact.get('value', '')).strip())}|{str(fact.get('unit') or '').strip().casefold()}"
+            for fact in active_facts
+        }
+        conflict = len(active_values) > 1
+        selected_fact = active_facts[0] if active_facts else max(subject_facts, key=lambda fact: str(fact.get("valid_to") or ""))
+
+        for subject_match in subject_pattern.finditer(text):
+            sentence_start = max((text.rfind(mark, 0, subject_match.start()) for mark in ".!?\n;"), default=-1) + 1
+            sentence_end_candidates = [text.find(mark, subject_match.end()) for mark in ".!?\n;"]
+            sentence_end_candidates = [pos for pos in sentence_end_candidates if pos >= 0]
+            sentence_end = min(sentence_end_candidates) if sentence_end_candidates else len(text)
+            sentence = text[sentence_start:sentence_end]
+            local_values = [
+                match for match in _FACT_VALUE_PATTERN.finditer(sentence)
+                if not (sentence_start + match.start() < subject_match.end() and sentence_start + match.end() > subject_match.start())
+            ]
+            if not local_values:
+                continue
+
+            if conflict:
+                findings.append(RuleFinding(
+                    span_start=subject_match.start(),
+                    span_end=subject_match.end(),
+                    category="factual_accuracy",
+                    issue=(
+                        f"Conflicting active approved facts exist for '{subject}': "
+                        + "; ".join(
+                            f"{fact.get('value')} {fact.get('unit') or ''} — {fact.get('source_note') or 'source not recorded'}"
+                            for fact in active_facts
+                        )
+                        + ". Send this value to a reviewer."
+                    ),
+                    source_type="approved_fact",
+                    source_id=selected_fact.get("id"),
+                    source_quote=selected_fact.get("statement"),
+                    severity="major",
+                    confidence="high",
+                ))
+                continue
+
+            if not active_facts:
+                if _is_expired(selected_fact) and any(
+                    _fact_value_signature(match.group()) == _fact_value_signature(str(selected_fact.get("value", "")))
+                    for match in local_values
+                ):
+                    expired_date = selected_fact.get("valid_to", "unknown")
+                    findings.append(RuleFinding(
+                        span_start=subject_match.start(),
+                        span_end=subject_match.end(),
+                        category="factual_accuracy",
+                        issue=f"The approved value for '{subject}' expired on {expired_date}; send it to a reviewer because no active replacement exists.",
+                        source_type="approved_fact",
+                        source_id=selected_fact.get("id"),
+                        source_quote=selected_fact.get("statement"),
+                        severity="major",
+                        confidence="high",
+                    ))
+                continue
+
+            approved_value = str(selected_fact.get("value", "")).strip()
+            expected_signature = _fact_value_signature(approved_value)
+            mismatches = [
+                match for match in local_values
+                if _fact_value_signature(match.group()) != expected_signature
+            ]
+            if not mismatches:
+                continue
+
+            # Multiple figures in the sentence cannot be safely mapped to a single fact.
+            if len(local_values) != 1:
+                continue
+
+            match = mismatches[0]
+            span_start, span_end = sentence_start + match.start(), sentence_start + match.end()
+            unit = str(selected_fact.get("unit") or "").strip()
+            source_note = str(selected_fact.get("source_note") or "").strip()
+            approved_label = f"{approved_value} {unit}".strip()
+            issue = f"Your text vs approved value — your text: '{match.group()}'; approved value: '{approved_label}'."
+            if source_note:
+                issue += f" Source: {source_note}."
+            findings.append(RuleFinding(
+                span_start=span_start,
+                span_end=span_end,
+                category="factual_accuracy",
+                issue=issue,
+                source_type="approved_fact",
+                source_id=selected_fact.get("id"),
+                source_quote=selected_fact.get("statement"),
+                severity="major",
+                confidence="high",
+                suggested_rewrite=_format_fact_value(approved_value, match.group()),
+            ))
+
     # 3. Outdated facts
     for fact in facts:
+        if fact.get("subject") and fact.get("value"):
+            continue
         if not _is_expired(fact):
             continue
         stmt = fact.get("statement", "")
@@ -296,3 +402,67 @@ def _is_expired(fact: dict) -> bool:
             valid_to = valid_to.replace(tzinfo=timezone.utc)
         return valid_to < now
     return False
+
+
+_FACT_VALUE_PATTERN = re.compile(
+    r"(?<!\w)(?:"
+    r"\d{4}-\d{1,2}-\d{1,2}"
+    r"|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"
+    r"|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}"
+    r"|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:,\s*\d{4})?"
+    r"|(?:[$€£]\s*)?\d[\d,]*(?:\.\d+)?\s*%?"
+    r")(?!\w)",
+    re.IGNORECASE,
+)
+
+
+def _fact_value_signature(value: str) -> str:
+    stripped = value.strip()
+    for date_format in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%m/%d/%y", "%m-%d-%y", "%B %d, %Y", "%b %d, %Y", "%B %Y", "%b %Y"):
+        try:
+            parsed = datetime.strptime(stripped, date_format)
+            return f"date:{parsed.month:02d}-{parsed.day:02d}-{parsed.year:04d}"
+        except ValueError:
+            pass
+    symbol = next((char for char in "$€£" if char in stripped), "")
+    percent = "%" if "%" in stripped or re.search(r"\bpercent\b", stripped, re.IGNORECASE) else ""
+    match = re.search(r"\d[\d,]*(?:\.\d+)?", value)
+    if not match:
+        return value.casefold().strip()
+    try:
+        number = float(match.group().replace(",", ""))
+    except ValueError:
+        return value.casefold().strip()
+    normalized_number = str(int(number)) if number.is_integer() else str(number)
+    return f"{symbol}{normalized_number}{percent}"
+
+
+def _format_fact_value(approved_value: str, original: str) -> str:
+    try:
+        approved_date = datetime.fromisoformat(approved_value.strip())
+    except ValueError:
+        return approved_value
+    if re.match(r"^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)", original, re.IGNORECASE):
+        month_format = "%b" if len(original.split()[0]) == 3 else "%B"
+        return f"{approved_date.strftime(month_format)} {approved_date.day}, {approved_date.year}"
+    if re.match(r"^\d{1,2}/", original):
+        return approved_date.strftime("%m/%d/%Y")
+    return approved_date.strftime("%Y-%m-%d")
+
+
+def _is_active(fact: dict) -> bool:
+    if _is_expired(fact):
+        return False
+    valid_from = fact.get("valid_from")
+    if not valid_from:
+        return True
+    if isinstance(valid_from, str):
+        try:
+            valid_from = datetime.fromisoformat(valid_from)
+        except (ValueError, TypeError):
+            return True
+    if not isinstance(valid_from, datetime):
+        return True
+    if valid_from.tzinfo is None:
+        valid_from = valid_from.replace(tzinfo=timezone.utc)
+    return valid_from <= datetime.now(timezone.utc)

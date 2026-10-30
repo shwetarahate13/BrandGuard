@@ -248,6 +248,9 @@ export interface GuidelineHealthClause {
 export interface ApprovedFact {
   id: string;
   statement: string;
+  subject?: string;
+  value?: string;
+  unit?: string;
   source_note?: string;
   valid_from?: string;
   valid_to?: string;

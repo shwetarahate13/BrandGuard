@@ -214,6 +214,9 @@ def create_fact(
     check_permission(current_user, Action.SOURCES_MANAGE)
     fact = ApprovedFact(
         statement=payload.statement,
+        subject=payload.subject,
+        value=payload.value,
+        unit=payload.unit,
         source_note=payload.source_note,
         valid_from=payload.valid_from,
         valid_to=payload.valid_to,

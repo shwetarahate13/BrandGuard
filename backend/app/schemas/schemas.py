@@ -99,6 +99,9 @@ class GuidelineClauseCreate(BaseModel):
 
 class ApprovedFactCreate(BaseModel):
     statement: str
+    subject: Optional[str] = Field(default=None, max_length=300)
+    value: Optional[str] = Field(default=None, max_length=300)
+    unit: Optional[str] = Field(default=None, max_length=100)
     source_note: Optional[str] = None
     valid_from: Optional[datetime] = None
     valid_to: Optional[datetime] = None
@@ -106,6 +109,9 @@ class ApprovedFactCreate(BaseModel):
 class ApprovedFactResponse(BaseModel):
     id: str
     statement: str
+    subject: Optional[str] = None
+    value: Optional[str] = None
+    unit: Optional[str] = None
     source_note: Optional[str] = None
     valid_from: Optional[datetime] = None
     valid_to: Optional[datetime] = None
@@ -247,6 +253,18 @@ class ReviewerSignoffRequest(BaseModel):
     checklist: dict[str, bool]
     evidence_notes: str = Field(min_length=5, max_length=5000)
     justification: str = Field(min_length=5, max_length=2000)
+
+class ReviewerFollowupCreate(BaseModel):
+    action: Literal["request_evidence", "propose_fact"]
+    finding_id: str = Field(min_length=1, max_length=64)
+    message: str = Field(min_length=5, max_length=2000)
+
+    @field_validator("message")
+    @classmethod
+    def followup_message_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("A task description is required")
+        return value.strip()
 
 
 # ── Admin User Management ──

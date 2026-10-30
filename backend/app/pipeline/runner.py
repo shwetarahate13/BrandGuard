@@ -144,7 +144,16 @@ def run_pipeline(
         for c in db.query(GuidelineClause).all()
     ]
     facts = [
-        {"id": str(f.id), "statement": f.statement, "valid_to": f.valid_to}
+        {
+            "id": str(f.id),
+            "statement": f.statement,
+            "subject": f.subject,
+            "value": f.value,
+            "unit": f.unit,
+            "source_note": f.source_note,
+            "valid_from": f.valid_from,
+            "valid_to": f.valid_to,
+        }
         for f in db.query(ApprovedFact).all()
     ]
     terms = [

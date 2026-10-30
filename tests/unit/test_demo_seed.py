@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.database import Base
 from backend.app.models.models import (
-    Decision, DecisionAction, Finding, GuidelineClause, Submission, SubmissionStatus,
+    ApprovedFact, Decision, DecisionAction, Finding, GuidelineClause, Submission, SubmissionStatus,
     User, UserRole,
 )
 from backend.app.pipeline.confidence import suppressed_span_combinations
@@ -64,13 +64,17 @@ def test_demo_seed_includes_high_friction_and_suppressed_feedback_history():
         with Session(engine) as db:
             run_seed(db)
             demo_submissions = db.query(Submission).filter(Submission.is_demo.is_(True)).all()
-            assert len(demo_submissions) >= 15
+            assert len(demo_submissions) >= 18
             assert {submission.status for submission in demo_submissions} >= set(SubmissionStatus)
             assert all(submission.versions for submission in demo_submissions)
             media_submissions = [submission for submission in demo_submissions if submission.content_type.value in {"pdf", "image"}]
             assert {submission.content_type.value for submission in media_submissions} == {"pdf", "image"}
             assert all(submission.versions[0].source_file for submission in media_submissions)
             assert any(submission.assigned_to and submission.assigned_to.role == UserRole.reviewer for submission in demo_submissions)
+            waiting = [submission for submission in demo_submissions if submission.status == SubmissionStatus.in_review]
+            assert len(waiting) >= 6
+            assert all(submission.assigned_to and submission.assigned_to.role == UserRole.reviewer for submission in waiting)
+            assert db.query(ApprovedFact).filter(ApprovedFact.subject == "Artisan Pantry Subscription box", ApprovedFact.value == "$34").count() == 1
             original_findings = db.query(Finding).count()
             original_submissions = len(demo_submissions)
             run_seed(db)

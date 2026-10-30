@@ -155,6 +155,10 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
           </div>
         </div>
 
+        <p className="mb-5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+          AI-use disclosure: deterministic checks run locally. If an external language model is configured, non-confidential content may be sent to that provider. Mark a submission Confidential to block external model calls.
+        </p>
+
         {error && (
           <div role="alert" className="mb-6 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-sm text-rose-700">
             <AlertCircle className="w-4 h-4 shrink-0" />
