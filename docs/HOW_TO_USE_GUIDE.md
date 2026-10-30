@@ -1,4 +1,4 @@
-# Judge guide
+# guide
 
 Run `python scripts/setup_local.py`, then `python scripts/run_local.py`, and open `http://localhost:8000`. Local setup enables demo mode; select one of the four accounts in the login-page panel. No demo password needs to be copied. If the panel is absent, check that `DEMO_MODE=true` is set in `.env` and restart the app.
 
