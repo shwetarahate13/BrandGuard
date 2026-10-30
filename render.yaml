@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: brandguard
+    runtime: python
+    region: oregon
+    plan: starter            # upgrade to standard for always-on (no spin-down)
+    buildCommand: pip install --upgrade pip && pip install --no-cache-dir -r backend/requirements.txt
+    startCommand: sh scripts/render_start.sh
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: JWT_SECRET
+        generateValue: true   # Render auto-generates a secure random value
+      - key: DEMO_MODE
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: brandguard-db
+          property: connectionString
+      - key: CHROMA_PERSIST_DIR
+        value: /data/chroma
+      - key: ASSET_STORAGE_DIR
+        value: /data/assets
+      - key: EMBEDDING_MODEL_PATH
+        value: /data/models/all-MiniLM-L6-v2
+      - key: LLM_PROVIDER
+        value: mock           # change to "anthropic" and add LLM_API_KEY to enable live LLM
+      - key: LLM_API_KEY
+        value: ""             # optional: paste your Anthropic key here
+      - key: CORS_ORIGINS
+        value: ""
+    disk:
+      name: brandguard-data
+      mountPath: /data
+      sizeGB: 5              # holds the ~100 MB model, ChromaDB index, and uploads
+databases:
+  - name: brandguard-db
+    databaseName: brandguard
+    plan: starter            # free 90-day PostgreSQL on Render
+    region: oregon
