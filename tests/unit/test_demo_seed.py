@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from backend.app.database import Base
 from backend.app.models.models import (
     ApprovedFact, Decision, DecisionAction, Finding, GuidelineClause, Submission, SubmissionStatus,
-    User, UserRole,
+    SourceType, User, UserRole,
 )
 from backend.app.pipeline.confidence import suppressed_span_combinations
 from backend.app.seed import DEMO_USERS, ensure_demo_users, run_seed
@@ -75,6 +75,20 @@ def test_demo_seed_includes_high_friction_and_suppressed_feedback_history():
             assert len(waiting) >= 6
             assert all(submission.assigned_to and submission.assigned_to.role == UserRole.reviewer for submission in waiting)
             assert db.query(ApprovedFact).filter(ApprovedFact.subject == "Artisan Pantry Subscription box", ApprovedFact.value == "$34").count() == 1
+            pricing_finding = db.query(Finding).filter_by(id="demo-finding-review-pricing").one()
+            pricing_fact = db.get(ApprovedFact, pricing_finding.source_id)
+            assert pricing_finding.source_type == SourceType.approved_fact
+            assert pricing_fact and pricing_fact.value == "$34"
+            assert pricing_finding.source_quote == pricing_fact.statement
+            assert "your text: '$28'; approved value: '$34 per month'" in pricing_finding.issue
+
+            energy_finding = db.query(Finding).filter_by(id="demo-finding-sustainability-stat").one()
+            energy_fact = db.get(ApprovedFact, energy_finding.source_id)
+            assert energy_finding.source_type == SourceType.approved_fact
+            assert energy_fact and energy_fact.value == "85%"
+            assert energy_finding.source_quote == energy_fact.statement
+            assert energy_finding.suggested_rewrite == "85% solar energy"
+
             original_findings = db.query(Finding).count()
             original_submissions = len(demo_submissions)
             run_seed(db)

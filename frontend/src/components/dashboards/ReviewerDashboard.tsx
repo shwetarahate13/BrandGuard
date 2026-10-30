@@ -257,22 +257,11 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                   </span>
                 </div>
 
-                <section className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4" aria-labelledby="reviewer-facts-queue">
-                  <div><h2 id="reviewer-facts-queue" className="text-lg font-bold text-stone-900">Facts and prices to verify ({factQueue.length})</h2><p className="text-xs text-stone-500">Each item is escalated because a factual value may be wrong, expired, or unsupported.</p></div>
-                  {factQueue.length ? factQueue.map((finding) => (
-                    <div key={finding.id} className="rounded-xl border border-stone-200 p-4">
-                      <p className="text-xs font-semibold text-stone-900">{finding.issue}</p>
-                      {finding.source_quote && <p className="mt-2 text-xs text-stone-600">Approved source: {finding.source_quote}</p>}
-                      <button type="button" onClick={() => navigate(`/review/${finding.submission_id}`)} className="mt-3 dashboard-secondary-action">Inspect item and evidence</button>
-                    </div>
-                  )) : <p className="text-sm text-stone-600">No facts or prices are waiting for verification.</p>}
-                </section>
-
                 {/* Side-by-side: Content Claim vs Cited Source Quote */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-1">
                     <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Cited claim excerpt</p>
-                    <p className="text-xs font-mono text-stone-800 bg-stone-50 p-2.5 rounded border border-stone-200">
+                    <p className="break-words text-sm text-stone-800 bg-stone-50 p-2.5 rounded border border-stone-200">
                       {claimExcerpt || finding.issue}
                     </p>
                   </div>
@@ -362,6 +351,17 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
           </div>
         )}
       </div>
+
+      <section className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4" aria-labelledby="reviewer-facts-queue">
+        <div><h2 id="reviewer-facts-queue" className="text-lg font-bold text-stone-900">Facts and prices to verify ({factQueue.length})</h2><p className="text-xs text-stone-500">Each item is escalated because a factual value may be wrong, expired, or unsupported.</p></div>
+        {factQueue.length ? factQueue.map((finding) => (
+          <div key={finding.id} className="rounded-xl border border-stone-200 p-4">
+            <p className="text-xs font-semibold text-stone-900">{finding.issue}</p>
+            {finding.source_quote && <p className="mt-2 text-xs text-stone-600">Approved source: {finding.source_quote}</p>}
+            <button type="button" onClick={() => navigate(`/review/${finding.submission_id}`)} className="mt-3 dashboard-secondary-action">Inspect item and evidence</button>
+          </div>
+        )) : <p className="text-sm text-stone-600">No facts or prices are waiting for verification.</p>}
+      </section>
 
       {/* Assigned and escalated submissions */}
       <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4">
