@@ -113,6 +113,76 @@ def test_structured_fact_correction_survives_safety_validation():
     assert finding["suggested_rewrite"] == "$34"
 
 
+def test_structured_fact_unit_mismatch_has_exact_replacement_and_comparison():
+    facts = [{
+        "id": "fact-price",
+        "statement": "Bright Desk plan costs $34 per month.",
+        "subject": "Bright Desk plan",
+        "value": "$34",
+        "unit": "per month",
+        "source_note": "Approved pricing sheet",
+    }]
+    text = "Bright Desk plan costs $34 per year."
+
+    findings = run_rules_engine(text, [], facts, [])
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert text[finding.span_start:finding.span_end] == "$34 per year"
+    assert finding.suggested_rewrite == "$34 per month"
+    assert "your text: '$34 per year'; approved value: '$34 per month'" in finding.issue
+
+
+def test_structured_fact_wrong_value_and_unit_are_corrected_together():
+    facts = [{
+        "id": "fact-price",
+        "statement": "Bright Desk plan costs $34 per month.",
+        "subject": "Bright Desk plan",
+        "value": "$34",
+        "unit": "per month",
+    }]
+    text = "Bright Desk plan costs $28 per year."
+
+    finding = run_rules_engine(text, [], facts, [])[0]
+
+    assert text[finding.span_start:finding.span_end] == "$28 per year"
+    assert finding.suggested_rewrite == "$34 per month"
+
+
+def test_structured_percent_fact_preserves_percent_unit():
+    facts = [{
+        "id": "fact-renewable",
+        "statement": "The facility uses 85% renewable energy.",
+        "subject": "renewable energy",
+        "value": "85",
+        "unit": "percent",
+    }]
+    text = "The facility uses 50% renewable energy."
+
+    finding = run_rules_engine(text, [], facts, [])[0]
+
+    assert text[finding.span_start:finding.span_end] == "50%"
+    assert finding.suggested_rewrite == "85%"
+    assert "approved value: '85%'" in finding.issue
+
+
+def test_unapproved_explicit_unit_is_routed_to_reviewer():
+    facts = [{
+        "id": "fact-quantity",
+        "statement": "The plan includes 12 seats.",
+        "subject": "plan",
+        "value": "12",
+        "source_note": "Approved plan sheet",
+    }]
+    text = "The plan includes 12 users."
+
+    finding = run_rules_engine(text, [], facts, [])[0]
+
+    assert text[finding.span_start:finding.span_end] == "12 users"
+    assert finding.suggested_rewrite is None
+    assert "reviewer must verify the quantity" in finding.issue
+
+
 def test_structured_fact_conflicts_never_suggest_a_replacement():
     facts = [
         {"id": "old", "statement": "Bright Desk plan is $39.", "subject": "Bright Desk plan", "value": "$39"},
@@ -158,3 +228,16 @@ def test_structured_fact_compares_dates_without_suggesting_expired_values():
     finding = findings[0]
     assert "March 14, 2026" == "The launch date is March 14, 2026."[finding.span_start:finding.span_end]
     assert finding.suggested_rewrite == "March 15, 2026"
+
+
+def test_structured_fact_matching_date_does_not_create_a_finding():
+    facts = [{
+        "id": "launch-date",
+        "statement": "The launch date is March 15, 2026.",
+        "subject": "launch date",
+        "value": "2026-03-15",
+        "unit": "date",
+        "source_note": "Approved launch calendar",
+    }]
+
+    assert run_rules_engine("The launch date is March 15, 2026.", [], facts, []) == []

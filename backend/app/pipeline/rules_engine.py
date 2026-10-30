@@ -237,10 +237,19 @@ def run_rules_engine(
                 continue
 
             approved_value = str(selected_fact.get("value", "")).strip()
-            expected_signature = _fact_value_signature(approved_value)
+            unit = str(selected_fact.get("unit") or "").strip()
+            expected_signature = _fact_value_signature(
+                approved_value if unit.casefold() == "date" else f"{approved_value} {unit}"
+            )
             mismatches = [
-                match for match in local_values
+                (match, observed_unit, unit_end)
+                for match in local_values
+                for observed_unit, unit_end in [_unit_after_value(sentence, match.end(), facts)]
                 if _fact_value_signature(match.group()) != expected_signature
+                or (
+                    observed_unit is not None
+                    and _normalize_fact_unit(observed_unit) != _normalize_fact_unit(unit)
+                )
             ]
             if not mismatches:
                 continue
@@ -249,14 +258,27 @@ def run_rules_engine(
             if len(local_values) != 1:
                 continue
 
-            match = mismatches[0]
-            span_start, span_end = sentence_start + match.start(), sentence_start + match.end()
-            unit = str(selected_fact.get("unit") or "").strip()
+            match, observed_unit, unit_end = mismatches[0]
+            unit_mismatch = (
+                observed_unit is not None
+                and _normalize_fact_unit(observed_unit) != _normalize_fact_unit(unit)
+            )
+            span_end_in_sentence = unit_end if unit_mismatch else match.end()
+            span_start, span_end = sentence_start + match.start(), sentence_start + span_end_in_sentence
+            original_value = sentence[match.start():span_end_in_sentence]
             source_note = str(selected_fact.get("source_note") or "").strip()
-            approved_label = f"{approved_value} {unit}".strip()
-            issue = f"Your text vs approved value — your text: '{match.group()}'; approved value: '{approved_label}'."
+            approved_label = _fact_value_label(approved_value, unit)
+            issue = f"Your text vs approved value — your text: '{original_value}'; approved value: '{approved_label}'."
             if source_note:
                 issue += f" Source: {source_note}."
+            replacement = _format_fact_value(approved_value, original_value)
+            if _normalize_fact_unit(unit) == "%":
+                replacement = _fact_value_label(replacement, unit)
+            elif unit_mismatch and unit:
+                replacement = _fact_value_label(replacement, unit)
+            elif unit_mismatch:
+                replacement = None
+                issue += " No approved unit is recorded, so a reviewer must verify the quantity."
             findings.append(RuleFinding(
                 span_start=span_start,
                 span_end=span_end,
@@ -267,7 +289,7 @@ def run_rules_engine(
                 source_quote=selected_fact.get("statement"),
                 severity="major",
                 confidence="high",
-                suggested_rewrite=_format_fact_value(approved_value, match.group()),
+                suggested_rewrite=replacement,
             ))
 
     # 3. Outdated facts
@@ -414,6 +436,42 @@ _FACT_VALUE_PATTERN = re.compile(
     r")(?!\w)",
     re.IGNORECASE,
 )
+
+_COMMON_FACT_UNITS = (
+    "per month", "per year", "per week", "per day", "per hour", "per user",
+    "percentage", "percent", "users", "user", "seats", "seat", "licenses", "license",
+    "employees", "locations", "location", "kwh", "mwh", "kg", "mg", "lbs", "lb",
+    "miles", "km", "meters", "metres", "hours", "days", "years", "months", "items", "units",
+)
+
+
+def _normalize_fact_unit(unit: str) -> str:
+    normalized = " ".join(unit.casefold().split())
+    if normalized in {"percentage", "percent"}:
+        return "%"
+    return normalized
+
+
+def _unit_after_value(text: str, end: int, facts: list[dict]) -> tuple[str | None, int]:
+    candidates = {
+        str(fact.get("unit") or "").strip()
+        for fact in facts
+        if str(fact.get("unit") or "").strip().casefold() not in {"date", "%", "percent", "percentage"}
+    }
+    candidates.update(_COMMON_FACT_UNITS)
+    for candidate in sorted(candidates, key=len, reverse=True):
+        match = re.match(r"\s+(" + re.escape(candidate) + r")(?!\w)", text[end:], re.IGNORECASE)
+        if match:
+            return " ".join(match.group(1).split()), end + match.end()
+    return None, end
+
+
+def _fact_value_label(value: str, unit: str) -> str:
+    if not unit or unit.casefold() == "date":
+        return value
+    if _normalize_fact_unit(unit) == "%":
+        return value if _fact_value_signature(value).endswith("%") else f"{value}%"
+    return f"{value} {unit}".strip()
 
 
 def _fact_value_signature(value: str) -> str:

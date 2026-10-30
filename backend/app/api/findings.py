@@ -365,6 +365,7 @@ def review_escalated_finding(
 
     if payload.action == "confirm":
         finding.needs_human = False
+        finding.status = FindingStatus.accepted
         note_body = f"[Compliance Confirmed]: {payload.justification.strip()}"
         submission.status = SubmissionStatus.changes_requested
         db.add(Notification(

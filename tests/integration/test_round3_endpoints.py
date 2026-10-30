@@ -1143,6 +1143,7 @@ def test_reviewer_followups_create_creator_and_admin_tasks_once(api_client, monk
         notifications = db.query(Notification).filter_by(submission_id=submission_id).all()
         assert len(comments) == 3
         assert db.get(Submission, submission_id).status == SubmissionStatus.changes_requested
+        assert db.get(Finding, finding_id).status == FindingStatus.accepted
         assert {(item.user_id, item.kind) for item in notifications} == {
             (creator.id, "evidence_requested"),
             (admin.id, "fact_proposed"),

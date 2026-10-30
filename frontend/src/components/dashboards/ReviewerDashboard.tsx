@@ -307,7 +307,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                             className="px-3.5 py-1.5 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs flex items-center gap-1"
                           >
                             <X className="w-3.5 h-3.5" />
-                            Dismiss Finding
+                            Dismiss finding
                           </button>
                           <button
                             disabled={submitting}
@@ -315,7 +315,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
                             className="px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1 shadow-sm"
                           >
                             <Check className="w-3.5 h-3.5" />
-                            Confirm Finding
+                            Confirm violation
                           </button>
                         </>
                       )}
