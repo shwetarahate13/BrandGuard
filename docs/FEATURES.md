@@ -6,6 +6,7 @@ This inventory describes behavior in the current local application.
 
 - Create text submissions or upload TXT, Markdown, HTML, DOCX, PDF, PNG, JPEG, or sanitized SVG files. Uploads support up to 25 MB; text checks support up to 20,000 words.
 - Review copy against approved guideline clauses, facts, terminology, accessibility rules, and optional configured language-model checks. Findings link to their cited source and quote.
+- Mark submissions Confidential to keep their text and intent out of configured external language-model checks; deterministic local checks remain available.
 - Accept, edit, or dispute findings; creators can revise, recheck, and resubmit. Managers can request changes, reject, or approve standard-risk work. High-risk work needs reviewer sign-off before manager approval. Self-approval is blocked.
 - PDF findings include extracted page coordinates and visible highlights. Images use OCR-linked text boxes and visual checks against configured approved assets and guidelines.
 - Slow document extraction and review run as bounded local background jobs with progress and a time limit. A retrieval-engine badge shows model warm-up or the active neural/hash engine.

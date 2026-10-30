@@ -180,6 +180,7 @@ def create_submission(
         intent=payload.intent.strip() if payload.intent else None,
         status=SubmissionStatus.draft,
         content_type=ctype,
+        confidential=payload.confidential,
     )
     db.add(submission)
 
@@ -215,6 +216,7 @@ async def upload_submission(
     title: str = Form(...),
     intent: Optional[str] = Form(None),
     content_type: Optional[str] = Form("text"),
+    confidential: bool = Form(False),
     background: bool = Query(False),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
     db: Session = Depends(get_db),
@@ -247,6 +249,7 @@ async def upload_submission(
         "mime_type": mime_type,
         "sha256": hashlib.sha256(contents).hexdigest(),
         "background": background,
+        "confidential": confidential,
     })
     existing = find_idempotency_record(db, current_user.id, "submission-create", idempotency_key, request_hash)
     if existing:
@@ -311,6 +314,7 @@ async def upload_submission(
             intent=intent.strip() if intent else None,
             status=SubmissionStatus.draft,
             content_type=ctype,
+            confidential=confidential,
         )
         db.add(submission)
         version = SubmissionVersion(
@@ -389,6 +393,7 @@ async def upload_submission(
         intent=intent.strip() if intent else None,
         status=SubmissionStatus.draft,
         content_type=ctype,
+        confidential=confidential,
     )
     db.add(submission)
 

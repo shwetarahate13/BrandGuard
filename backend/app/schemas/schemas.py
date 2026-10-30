@@ -154,6 +154,7 @@ class SubmissionCreate(BaseModel):
     intent: Optional[str] = None
     text: Optional[str] = Field(default=None, max_length=200_000)
     content_type: str = "text"
+    confidential: bool = False
 
     @field_validator("title")
     @classmethod
@@ -173,6 +174,7 @@ class SubmissionResponse(BaseModel):
     status: str
     content_type: str
     is_demo: bool = False
+    confidential: bool = False
     created_at: datetime
     updated_at: datetime
     creator: Optional[UserResponse] = None
@@ -197,6 +199,7 @@ class SubmissionListResponse(BaseModel):
     status: str
     content_type: str
     is_demo: bool = False
+    confidential: bool = False
     created_at: datetime
     updated_at: datetime
     creator: Optional[UserResponse] = None

@@ -21,6 +21,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
   const [title, setTitle] = useState("");
   const [intent, setIntent] = useState("");
   const [text, setText] = useState("");
+  const [confidential, setConfidential] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [progressMessage, setProgressMessage] = useState("");
@@ -81,6 +82,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
         intent: intent.trim(),
         text: tab === "paste" ? text.trim() : undefined,
         file: tab === "upload" && file ? [file.name, file.size, file.lastModified, file.type] : undefined,
+        confidential,
       });
       if (!submissionAttempt.current || submissionAttempt.current.signature !== signature) {
         submissionAttempt.current = { signature, key: crypto.randomUUID() };
@@ -97,6 +99,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
           intent: intent.trim(),
           text: text.trim(),
           content_type: "text",
+          confidential,
         }, idempotencyKey);
       } else {
         if (!file) {
@@ -108,6 +111,7 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
         formData.append("file", file);
         formData.append("title", title.trim());
         formData.append("intent", intent.trim());
+        formData.append("confidential", String(confidential));
         created = await api.uploadSubmission(formData, (progress, message) => {
           setProgressPercent(progress);
           setProgressMessage(message);
@@ -206,6 +210,19 @@ export const NewSubmission: React.FC<NewSubmissionProps> = ({ navigate }) => {
               BrandGuard uses this stated purpose to ensure suggested rewrites preserve your original intent.
             </p>
           </div>
+
+          <label className="flex min-h-11 items-start gap-3 rounded-xl bg-secondary p-3 text-sm text-primary">
+            <input
+              type="checkbox"
+              checked={confidential}
+              onChange={(event) => setConfidential(event.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="block font-semibold">Confidential</span>
+              <span className="text-xs text-secondary">Keep this submission out of external language-model checks. Local deterministic checks still run.</span>
+            </span>
+          </label>
 
           {/* Input Type Tabs */}
           <div className="pt-2">

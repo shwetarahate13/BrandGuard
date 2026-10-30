@@ -245,9 +245,8 @@ def run_pipeline(
 
     candidate_findings.extend(visual_candidates)
 
-    # 5. LLM or Mock check
-    llm_client = get_llm_client()
-    if isinstance(llm_client, MockProvider) or not settings.llm_available:
+    # 5. LLM or Mock check. Confidential content never reaches a configured provider.
+    if submission.confidential:
         mock_results = _mock_llm_check(
             text, spans, intent, all_retrieved_sources, terms, clauses, facts
         )
@@ -255,25 +254,34 @@ def run_pipeline(
             mf["is_rule"] = False
             candidate_findings.append(mf)
     else:
-        # Call LLM on spans with retrieved sources
-        source_ids = [str(s["id"]) for s in all_retrieved_sources]
-        for span_index, span in enumerate(spans):
-            llm_results = check_content_with_llm(
-                span_text=span.text,
-                intent=intent,
-                sources=all_retrieved_sources,
-                source_ids=source_ids,
+        llm_client = get_llm_client()
+        if isinstance(llm_client, MockProvider) or not settings.llm_available:
+            mock_results = _mock_llm_check(
+                text, spans, intent, all_retrieved_sources, terms, clauses, facts
             )
-            for lf in llm_results:
-                # Adjust span offsets relative to full text
-                start = lf.get("span_start", 0) + span.start
-                end = lf.get("span_end", len(span.text)) + span.start
-                lf["span_start"] = min(start, len(text))
-                lf["span_end"] = min(end, len(text))
-                lf["is_rule"] = False
-                candidate_findings.append(lf)
-            if progress and spans:
-                progress(60 + int(25 * (span_index + 1) / len(spans)), "Checking claims against cited guidance.")
+            for mf in mock_results:
+                mf["is_rule"] = False
+                candidate_findings.append(mf)
+        else:
+            # Call LLM on spans with retrieved sources
+            source_ids = [str(s["id"]) for s in all_retrieved_sources]
+            for span_index, span in enumerate(spans):
+                llm_results = check_content_with_llm(
+                    span_text=span.text,
+                    intent=intent,
+                    sources=all_retrieved_sources,
+                    source_ids=source_ids,
+                )
+                for lf in llm_results:
+                    # Adjust span offsets relative to full text
+                    start = lf.get("span_start", 0) + span.start
+                    end = lf.get("span_end", len(span.text)) + span.start
+                    lf["span_start"] = min(start, len(text))
+                    lf["span_end"] = min(end, len(text))
+                    lf["is_rule"] = False
+                    candidate_findings.append(lf)
+                if progress and spans:
+                    progress(60 + int(25 * (span_index + 1) / len(spans)), "Checking claims against cited guidance.")
 
     suppressed_combinations = suppressed_span_combinations(db)
     unsuppressed_candidates = []

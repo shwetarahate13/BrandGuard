@@ -588,6 +588,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               {submission.status}
             </span>
             {submission.is_demo && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">Demo data</span>}
+            {submission.confidential && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300">Confidential · local checks only</span>}
             <span className="text-xs text-stone-400">
               Version {latestVersion?.version_no || 1}
             </span>

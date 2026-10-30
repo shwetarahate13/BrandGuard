@@ -172,6 +172,7 @@ export interface Submission {
   status: SubmissionStatus;
   content_type: string;
   is_demo?: boolean;
+  confidential?: boolean;
   created_at: string;
   updated_at: string;
   creator?: User;

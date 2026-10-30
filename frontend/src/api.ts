@@ -168,6 +168,7 @@ export const api = {
     intent?: string;
     text?: string;
     content_type?: string;
+    confidential?: boolean;
   }, idempotencyKey?: string) =>
     request<Submission>("/submissions", {
       method: "POST",

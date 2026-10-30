@@ -287,3 +287,34 @@ def test_edit_dispute_changes_rejection_resubmission_and_review_assignment():
         "decision": "approved", "note": "Reviewer sign-off checked; final manager approval."
     })
     assert manager_approval.status_code == 200, manager_approval.text
+
+
+def test_confidential_text_and_upload_flags_round_trip():
+    db = get_session_factory()()
+    run_seed(db)
+    db.close()
+    login = client.post("/api/auth/login", json={
+        "email": "creator@nexora.dev",
+        "password": "CreatorDemo2026!",
+    })
+    assert login.status_code == 200, login.text
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    text_submission = client.post("/api/submissions", headers=headers, json={
+        "title": "Confidential text sample",
+        "text": "Private campaign draft.",
+        "confidential": True,
+    })
+    assert text_submission.status_code == 200, text_submission.text
+    text_id = text_submission.json()["id"]
+    assert text_submission.json()["confidential"] is True
+    assert client.get(f"/api/submissions/{text_id}", headers=headers).json()["confidential"] is True
+
+    uploaded_submission = client.post(
+        "/api/submissions/upload",
+        headers=headers,
+        data={"title": "Confidential uploaded sample", "confidential": "true"},
+        files={"file": ("confidential.txt", b"Private uploaded campaign draft.", "text/plain")},
+    )
+    assert uploaded_submission.status_code == 200, uploaded_submission.text
+    assert uploaded_submission.json()["confidential"] is True

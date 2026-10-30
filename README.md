@@ -84,6 +84,6 @@ Run browser journeys from `frontend/` with `npm run test:e2e` after installing C
 
 ## AI assistance
 
-AI tools assisted implementation and documentation. BrandGuard defaults to deterministic offline review. A configured external language model may receive submitted text, intent, and retrieved source excerpts. People remain responsible for compliance decisions.
+AI tools assisted implementation and documentation. BrandGuard defaults to deterministic offline review. A configured external language model may receive non-confidential submitted text, intent, and retrieved source excerpts; the Confidential flag blocks those provider checks for that submission. People remain responsible for compliance decisions.
 
 See [`docs/`](docs/) for the [architecture](docs/ARCHITECTURE.md), feature inventory, limitations, improvement details, roadmap, and judge guide.

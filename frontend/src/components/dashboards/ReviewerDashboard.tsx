@@ -312,6 +312,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
             <div key={sub.id} className="py-4 flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-bold text-stone-900">{sub.title}</p>
+                {sub.confidential && <p className="text-xs font-semibold text-purple-800">Confidential · external AI blocked</p>}
                 <p className="text-xs text-stone-500 mt-0.5">
                   Author: {sub.creator?.name} • Status: <span className="uppercase font-bold">{sub.status}</span>
                 </p>

@@ -110,3 +110,6 @@
 - Phase 2 follow-up: review checks now run on Re-check or Ctrl/Cmd+Enter; idle checks are a 3-second opt-in, off by default. Draft text and cursor positions survive refreshes, unchanged text is skipped, and findings are visibly stale while edits are unchecked.
 - Verification: frontend TypeScript and production build passed; the FastAPI static bundle was rebuilt. No browser automation, screenshots, or frontend test suite was run.
 - Remaining: Phase 8 backend suite, final artifact scan, commit, rebase on `origin/main`, and push.
+- Phase 5 gap: added a persisted Confidential flag for text and file submissions; it bypasses configured external LLM calls while retaining deterministic local checks, and is disclosed in the UI and docs.
+- Verification: Alembic has one head; focused confidential pipeline and text/upload API tests passed (2); frontend production build passed.
+- Remaining: Phase 3 fact/regulation and source-conflict behavior plus Phase 4 reviewer queue/action gaps still need audit; final full-suite verification remains.
