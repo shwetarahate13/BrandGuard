@@ -118,6 +118,20 @@ class ApprovedFactResponse(BaseModel):
     created_at: datetime
     model_config = {"from_attributes": True}
 
+class FactImpactResponse(BaseModel):
+    fact_id: str
+    fact_statement: str
+    subject: Optional[str] = None
+    value: Optional[str] = None
+    unit: Optional[str] = None
+    source_note: Optional[str] = None
+    valid_to: datetime
+    submission_id: str
+    submission_title: str
+    version_id: str
+    version_no: int
+    approved_at: datetime
+
 
 # ── Terms ──
 
@@ -371,6 +385,10 @@ class FindingResponse(BaseModel):
     needs_human: bool = False
     status: str
     location: Optional[dict] = None
+    version_change: Optional[Literal["resolved", "still_open", "new", "regressed"]] = None
+    finding_version_no: Optional[int] = None
+    comparison_version_no: Optional[int] = None
+    historical: bool = False
     created_at: datetime
     decisions: list["DecisionResponse"] = []
     model_config = {"from_attributes": True}

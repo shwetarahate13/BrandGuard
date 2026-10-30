@@ -6,7 +6,8 @@ This inventory describes behavior in the current local application.
 
 - Create text submissions or upload TXT, Markdown, HTML, DOCX, PDF, PNG, JPEG, or sanitized SVG files. Uploads support up to 25 MB; text checks support up to 20,000 words.
 - Review copy against approved guideline clauses, facts, terminology, accessibility rules, and optional configured language-model checks. Findings link to their cited source and quote.
-- Admins can add structured fact subjects, values, units, validity dates, and source notes. Mismatched structured values are compared in context and active conflicts are surfaced to managers and admins.
+- A new content version shows a word-level diff from its predecessor and labels findings as New, Still open, Resolved, or Regressed when a prior-version match is available.
+- Admins can add structured fact subjects, values, units, validity dates, and source notes. Mismatched structured values are compared in context; active fact conflicts and latest approved copies with findings citing expired facts are surfaced to managers and admins.
 - Mark submissions Confidential to keep their text and intent out of configured external language-model checks; deterministic local checks remain available.
 - Accept, edit, or dispute findings; creators can revise, recheck, and resubmit. Managers can request changes, reject, or approve standard-risk work. High-risk work needs reviewer sign-off before manager approval. Self-approval is blocked.
 - PDF findings include extracted page coordinates and visible highlights. Images use OCR-linked text boxes and visual checks against configured approved assets and guidelines.
@@ -36,7 +37,7 @@ The deterministic writing checker works offline. The optional configured model i
 
 - **Creator:** own submissions, checks, finding decisions, revision and resubmission, activity and feedback statistics, notifications, and onboarding tips.
 - **Manager:** team queue, assignment and due dates, approval decisions, organization metrics, guideline health, and approval-report export.
-- **Reviewer:** separate sign-off, escalated-claim, and facts/prices queues; confirm/dismiss actions; evidence-request and approved-fact-proposal notifications; required sign-off checklist; and reviewer metrics.
+- **Reviewer:** separate sign-off, escalated-claim, and facts/prices queues; claim/source review; exact text versus approved source and supported correction comparisons; confirm/dismiss actions; evidence-request and approved-fact-proposal notifications; required sign-off checklist; and reviewer metrics.
 - **Admin:** account and approved-source management, runtime status, audit and integrity tools, feedback reset, and organization insights.
 
 Other implemented capabilities include saved browser-local views, CSV/PDF approval reports, password change/reset, dark mode, first-run role tips, tamper-evident audit records, approval certificates, and public certificate verification.

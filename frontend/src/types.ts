@@ -138,6 +138,10 @@ export interface Finding {
   suggested_rewrite?: string;
   needs_human: boolean;
   status: FindingStatus;
+  version_change?: "resolved" | "still_open" | "new" | "regressed" | null;
+  finding_version_no?: number | null;
+  comparison_version_no?: number | null;
+  historical?: boolean;
   created_at: string;
   decisions: Decision[];
   location?: { page?: number; bbox?: [number, number, number, number]; media?: string } | null;
@@ -255,6 +259,21 @@ export interface ApprovedFact {
   valid_from?: string;
   valid_to?: string;
   created_at: string;
+}
+
+export interface FactImpact {
+  fact_id: string;
+  fact_statement: string;
+  subject?: string | null;
+  value?: string | null;
+  unit?: string | null;
+  source_note?: string | null;
+  valid_to: string;
+  submission_id: string;
+  submission_title: string;
+  version_id: string;
+  version_no: number;
+  approved_at: string;
 }
 
 export interface Term {

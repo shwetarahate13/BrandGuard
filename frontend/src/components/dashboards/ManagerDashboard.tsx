@@ -13,7 +13,7 @@ import {
   Download,
 } from "lucide-react";
 import { api } from "../../api";
-import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthClause, ActivityEvent, FeedbackCategoryStats, ApprovedFact } from "../../types";
+import { Submission, SubmissionStatus, User, InsightsSummary, GuidelineHealthClause, ActivityEvent, FeedbackCategoryStats, ApprovedFact, FactImpact } from "../../types";
 import { findActiveFactConflicts } from "../../utils/approvedFacts";
 import { Skeleton } from "../Skeleton";
 import { useToast } from "../Toast";
@@ -38,6 +38,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [feedbackStats, setFeedbackStats] = useState<FeedbackCategoryStats[]>([]);
   const [sourceConflicts, setSourceConflicts] = useState<ApprovedFact[][]>([]);
+  const [factImpacts, setFactImpacts] = useState<FactImpact[]>([]);
   const [dueDateDrafts, setDueDateDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -47,7 +48,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
   const loadData = async () => {
     try {
       setLoading(true);
-      const [subs, ins, health, activeReviewers, recentActivity, feedback, facts] = await Promise.all([
+      const [subs, ins, health, activeReviewers, recentActivity, feedback, facts, impacts] = await Promise.all([
         api.getSubmissions(),
         api.getInsightsSummary().catch(() => null),
         api.getGuidelineHealth().catch(() => []),
@@ -55,6 +56,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
         api.getRecentActivity().catch(() => []),
         api.getFeedbackStats().catch(() => ({ categories: [] })),
         api.getFacts(),
+        api.getFactImpacts(),
       ]);
       setSubmissions(subs);
       setInsights(ins);
@@ -63,6 +65,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
       setActivity(recentActivity);
       setFeedbackStats(feedback.categories);
       setSourceConflicts(findActiveFactConflicts(facts));
+      setFactImpacts(impacts);
     } catch (err: any) {
       showToast(err.message || "Failed to load command center data", "error");
     } finally {
@@ -238,12 +241,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
         </div>
       </div>
 
-      {sourceConflicts.length > 0 && (
+      {(sourceConflicts.length > 0 || factImpacts.length > 0) && (
         <section className="rounded-xl border border-amber-300 bg-amber-50 p-4" aria-labelledby="manager-source-conflicts-title">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 id="manager-source-conflicts-title" className="text-sm font-bold text-amber-950">Source conflicts</h2>
-              <p className="mt-1 text-xs text-amber-900">Resolve disagreements between active approved facts before approving affected copy.</p>
+              <h2 id="manager-source-conflicts-title" className="text-sm font-bold text-amber-950">
+                {sourceConflicts.length && factImpacts.length ? "Source conflicts and fact impacts" : factImpacts.length ? "Expired facts in approved content" : "Source conflicts"}
+              </h2>
+              <p className="mt-1 text-xs text-amber-900">Review active fact disagreements and approved copy that cites expired evidence.</p>
             </div>
             <button type="button" onClick={() => navigate("/sources")} className="dashboard-secondary-action">Review sources</button>
           </div>
@@ -255,6 +260,19 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user, naviga
               </li>
             ))}
           </ul>
+          {factImpacts.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-xs font-bold text-amber-950">Expired facts in approved content ({factImpacts.length})</h3>
+              <ul className="mt-2 space-y-2">
+                {factImpacts.map((impact) => (
+                  <li key={`${impact.fact_id}-${impact.submission_id}-${impact.version_id}`} className="flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950">
+                    <span><strong>{impact.submission_title} · v{impact.version_no}:</strong> {impact.subject || impact.fact_statement} — {impact.value || impact.fact_statement}{impact.unit ? ` ${impact.unit}` : ""} expired {new Date(impact.valid_to).toLocaleDateString()}.</span>
+                    <button type="button" onClick={() => navigate(`/review/${impact.submission_id}`)} className="dashboard-secondary-action">Review approved copy</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
 

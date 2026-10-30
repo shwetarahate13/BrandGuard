@@ -9,17 +9,22 @@ import {
   SpellCheck,
 } from "lucide-react";
 import { api } from "../api";
-import { GuidelineDoc, ApprovedFact, Term, Asset } from "../types";
+import { GuidelineDoc, ApprovedFact, FactImpact, Term, Asset } from "../types";
 import { findActiveFactConflicts } from "../utils/approvedFacts";
 import { EmptyState } from "../components/ui";
 import { useToast } from "../components/Toast";
 
-interface AdminSourcesProps { canManage?: boolean; }
+interface AdminSourcesProps {
+  canManage?: boolean;
+  canViewFactImpacts?: boolean;
+  navigate?: (path: string) => void;
+}
 
-export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false }) => {
+export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false, canViewFactImpacts = false, navigate }) => {
   const [activeTab, setActiveTab] = useState<"guidelines" | "facts" | "terms" | "assets" | "brand_words">("guidelines");
   const [guidelines, setGuidelines] = useState<GuidelineDoc[]>([]);
   const [facts, setFacts] = useState<ApprovedFact[]>([]);
+  const [factImpacts, setFactImpacts] = useState<FactImpact[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [brandWords, setBrandWords] = useState<string[]>([]);
@@ -57,16 +62,18 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
     try {
       setLoading(true);
       setLoadError(null);
-      const [g, f, t, a, settings, disputes] = await Promise.all([
+      const [g, f, t, a, settings, disputes, impacts] = await Promise.all([
         api.getGuidelines(),
         api.getFacts(),
         api.getTerms(),
         api.getAssets(),
         canManage ? api.getSystemSettings() : Promise.resolve(null),
         canManage ? api.getWritingRuleDisputes() : Promise.resolve(null),
+        canViewFactImpacts ? api.getFactImpacts() : Promise.resolve([]),
       ]);
       setGuidelines(g);
       setFacts(f);
+      setFactImpacts(impacts);
       setTerms(t);
       setAssets(a);
       if (settings) setBrandWords(settings.brand_words || []);
@@ -441,6 +448,23 @@ export const AdminSources: React.FC<AdminSourcesProps> = ({ canManage = false })
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {canViewFactImpacts && (
+            <section className="rounded-xl border border-amber-300 bg-amber-50 p-4" aria-labelledby="expired-fact-impacts-title">
+              <h3 id="expired-fact-impacts-title" className="text-sm font-bold text-amber-950">Expired facts in approved content ({factImpacts.length})</h3>
+              <p className="mt-1 text-xs text-amber-900">These latest approved versions cite facts that have expired.</p>
+              {factImpacts.length ? (
+                <ul className="mt-3 space-y-2">
+                  {factImpacts.map((impact) => (
+                    <li key={`${impact.fact_id}-${impact.submission_id}-${impact.version_id}`} className="flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950">
+                      <span className="min-w-0 break-words"><strong>{impact.submission_title} · v{impact.version_no}:</strong> {impact.subject || impact.fact_statement} — {impact.value || impact.fact_statement}{impact.unit ? ` ${impact.unit}` : ""} expired {new Date(impact.valid_to).toLocaleDateString()}.</span>
+                      <button type="button" onClick={() => navigate?.(`/review/${impact.submission_id}`)} className="dashboard-secondary-action">Review approved copy</button>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="mt-3 text-xs text-amber-900">No currently approved versions cite expired facts.</p>}
             </section>
           )}
 

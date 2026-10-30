@@ -21,6 +21,7 @@ from backend.app.api import workflow as workflow_api
 from backend.app.database import Base, get_db
 from backend.app.main import app
 from backend.app.models.models import (
+    ApprovedFact,
     Decision,
     DecisionAction,
     Comment,
@@ -128,6 +129,137 @@ def test_submission_visibility_and_role_routes_return_forbidden(api_client, monk
 
     monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: manager)
     assert client.get("/api/submissions/reviewers").status_code == 200
+
+
+def test_findings_include_version_comparison_and_prior_open_resolutions(api_client):
+    client, session_factory, _manager = api_client
+    creator = User(
+        id="version-compare-creator", name="Version Creator",
+        email="version-compare@example.test", password_hash="x",
+        role=UserRole.creator, is_active=True,
+    )
+    submission = Submission(
+        id="version-compare-submission", creator_id=creator.id,
+        title="Version comparison", status=SubmissionStatus.in_review,
+    )
+    previous = SubmissionVersion(
+        id="version-compare-v1", submission_id=submission.id,
+        version_no=1, text="Open item. Removed item. Fixed item.",
+        created_by=creator.id,
+    )
+    current = SubmissionVersion(
+        id="version-compare-v2", submission_id=submission.id,
+        version_no=2, text="Open item. Fixed item. New item.",
+        created_by=creator.id,
+    )
+
+    def finding(identifier, version, issue, status, start):
+        return Finding(
+            id=identifier, submission_id=submission.id, version_id=version.id,
+            span_start=start, span_end=start + 9, category=FindingCategory.tone,
+            issue=issue, severity=FindingSeverity.minor,
+            confidence=FindingConfidence.high, status=status,
+        )
+
+    previous_findings = [
+        finding("version-open", previous, "Open issue", FindingStatus.open, 0),
+        finding("version-removed", previous, "Removed issue", FindingStatus.open, 11),
+        finding("version-fixed", previous, "Fixed issue", FindingStatus.accepted, 24),
+    ]
+    current_findings = [
+        finding("version-open-new", current, "Open issue", FindingStatus.open, 0),
+        finding("version-fixed-again", current, "Fixed issue", FindingStatus.open, 11),
+        finding("version-new", current, "New issue", FindingStatus.open, 23),
+    ]
+    with session_factory.begin() as db:
+        db.add_all([creator, submission, previous, current, *previous_findings, *current_findings])
+
+    response = client.get(f"/api/submissions/{submission.id}/findings")
+    assert response.status_code == 200, response.text
+    by_id = {item["id"]: item for item in response.json()}
+    assert by_id["version-open-new"]["version_change"] == "still_open"
+    assert by_id["version-open-new"]["comparison_version_no"] == 1
+    assert by_id["version-fixed-again"]["version_change"] == "regressed"
+    assert by_id["version-new"]["version_change"] == "new"
+    assert by_id["version-removed"]["version_change"] == "resolved"
+    assert by_id["version-removed"]["historical"] is True
+    assert by_id["version-removed"]["finding_version_no"] == 1
+
+
+def test_expired_fact_impact_queue_only_reports_latest_approved_version(api_client, monkeypatch):
+    client, session_factory, manager = api_client
+    creator = User(
+        id="fact-impact-creator", name="Impact Creator",
+        email="fact-impact@example.test", password_hash="x",
+        role=UserRole.creator, is_active=True,
+    )
+    expired = ApprovedFact(
+        id="fact-impact-expired", statement="Bright Desk plan costs $12 per month.",
+        subject="Bright Desk plan", value="$12", unit="per month",
+        source_note="Expired price sheet",
+        valid_to=datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+    superseded = Submission(
+        id="fact-impact-superseded", creator_id=creator.id,
+        title="Newer approved copy", status=SubmissionStatus.approved,
+    )
+    old_version = SubmissionVersion(
+        id="fact-impact-superseded-v1", submission_id=superseded.id,
+        version_no=1, text="Old approved price.", created_by=creator.id,
+    )
+    current_version = SubmissionVersion(
+        id="fact-impact-superseded-v2", submission_id=superseded.id,
+        version_no=2, text="Updated approved copy.", created_by=creator.id,
+    )
+    still_affected = Submission(
+        id="fact-impact-current", creator_id=creator.id,
+        title="Affected approved copy", status=SubmissionStatus.approved,
+    )
+    affected_version = SubmissionVersion(
+        id="fact-impact-current-v1", submission_id=still_affected.id,
+        version_no=1, text="The approved copy still uses the old price.",
+        created_by=creator.id,
+    )
+    old_finding = Finding(
+        id="fact-impact-old-finding", submission_id=superseded.id,
+        version_id=old_version.id, span_start=0, span_end=18,
+        category=FindingCategory.factual_accuracy, issue="Expired price",
+        source_type=SourceType.approved_fact, source_id=expired.id,
+        severity=FindingSeverity.major, confidence=FindingConfidence.high,
+        status=FindingStatus.open,
+    )
+    affected_finding = Finding(
+        id="fact-impact-current-finding", submission_id=still_affected.id,
+        version_id=affected_version.id, span_start=0, span_end=20,
+        category=FindingCategory.factual_accuracy, issue="Expired price",
+        source_type=SourceType.approved_fact, source_id=expired.id,
+        severity=FindingSeverity.major, confidence=FindingConfidence.high,
+        status=FindingStatus.open,
+    )
+    approvals = [
+        Approval(
+            id=f"fact-impact-approval-{version.id}", submission_id=version.submission_id,
+            version_id=version.id, user_id=manager.id, decision=ApprovalDecision.approved,
+        )
+        for version in (old_version, current_version, affected_version)
+    ]
+    with session_factory.begin() as db:
+        db.add_all([
+            creator, expired, superseded, old_version, current_version, old_finding,
+            still_affected, affected_version, affected_finding, *approvals,
+        ])
+
+    response = client.get("/api/admin/fact-impacts")
+    assert response.status_code == 200, response.text
+    impacts = response.json()
+    assert len(impacts) == 1
+    assert impacts[0]["submission_id"] == still_affected.id
+    assert impacts[0]["version_no"] == 1
+    assert impacts[0]["fact_id"] == expired.id
+
+    creator_user = creator
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: creator_user)
+    assert client.get("/api/admin/fact-impacts").status_code == 403
 
 
 def test_admin_is_the_only_role_with_detailed_system_status(api_client, monkeypatch):

@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import * as Diff from "diff";
 import {
   ArrowLeft,
   Check,
@@ -182,9 +183,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     : null;
 
   const currentText = latestVersion?.text || "";
+  const previousVersion = submission?.versions?.length && submission.versions.length > 1
+    ? submission.versions[submission.versions.length - 2]
+    : null;
+  const versionDiff = useMemo(
+    () => previousVersion ? Diff.diffWordsWithSpace(previousVersion.text, currentText) : [],
+    [previousVersion?.id, currentText],
+  );
   const workflowStep = submission?.status === "draft" ? 0 : submission?.status === "approved" ? 3 : 1;
-  const openFindings = findings.filter((finding) => finding.status === "open");
-  const resolvedFindings = findings.filter((finding) => finding.status !== "open");
+  const currentFindings = findings.filter((finding) => !finding.historical && finding.version_id === latestVersion?.id);
+  const openFindings = currentFindings.filter((finding) => finding.status === "open");
+  const resolvedFindings = findings.filter((finding) => finding.status !== "open" || finding.version_change === "resolved");
   const sourceMimeType = latestVersion?.source_mime_type;
   const canPreviewSource = sourceMimeType === "application/pdf" || !!sourceMimeType?.startsWith("image/");
 
@@ -481,7 +490,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     if (!currentText) return <p className="text-stone-400 italic">No text content available.</p>;
 
     // Sort findings by start offset
-    const sorted = [...findings]
+    const sorted = [...currentFindings]
       .filter((f) => f.span_start !== null && f.span_end !== null && f.status === "open")
       .sort((a, b) => (a.span_start || 0) - (b.span_start || 0));
 
@@ -729,7 +738,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                     mimeType={latestVersion.source_mime_type}
                     sourceUrl={sourceUrl}
                     sourceLayout={latestVersion.source_layout}
-                    findings={findings}
+                    findings={currentFindings}
                     selectedFindingId={selectedFindingId}
                     onSelectFinding={setSelectedFindingId}
                   />
@@ -755,6 +764,21 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 {draftDirty ? "Previous-version findings are dimmed until re-check" : "Click any highlighted span to jump to its cited finding"}
               </span>
             </div>
+
+            {previousVersion && (
+              <details className="border-b border-stone-200 px-6 py-3">
+                <summary className="cursor-pointer text-xs font-semibold text-stone-700">
+                  Changes from version {previousVersion.version_no}
+                </summary>
+                <div className="mt-3 whitespace-pre-wrap break-words text-xs leading-relaxed text-stone-700">
+                  {versionDiff.map((part, index) => part.added
+                    ? <ins key={index} className="rounded bg-emerald-100 px-0.5 text-emerald-950 no-underline">{part.value}</ins>
+                    : part.removed
+                      ? <del key={index} className="rounded bg-rose-100 px-0.5 text-rose-900">{part.value}</del>
+                      : <span key={index}>{part.value}</span>)}
+                </div>
+              </details>
+            )}
 
             <div className="p-6 min-h-[360px] bg-white">
               {editingDraft ? (
@@ -851,9 +875,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 const isExpanded = !!expandedSources[f.id];
 
                 // Extract span from text
+                const findingText = submission.versions?.find((version) => version.id === f.version_id)?.text || currentText;
                 const originalSpan =
                   f.span_start !== null && f.span_end !== null
-                    ? currentText.substring(f.span_start, f.span_end)
+                    ? findingText.substring(f.span_start, f.span_end)
                     : "";
 
                 return (
@@ -875,8 +900,19 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                         {getSeverityBadge(f.severity)}
                       </div>
                       <div className="flex items-center gap-1.5">
+                        {f.version_change && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                            f.version_change === "resolved" ? "bg-emerald-100 text-emerald-900" :
+                              f.version_change === "regressed" ? "bg-rose-100 text-rose-900" :
+                                f.version_change === "new" ? "bg-blue-100 text-blue-900" :
+                                  "bg-amber-100 text-amber-900"
+                          }`}>
+                            {f.version_change === "still_open" ? "Still open" : f.version_change[0].toUpperCase() + f.version_change.slice(1)}
+                            {f.finding_version_no ? ` · v${f.finding_version_no}` : ""}
+                          </span>
+                        )}
                         {getConfidenceBadge(f.confidence, f.needs_human)}
-                        {f.status !== "open" && (
+                        {!f.historical && f.status !== "open" && (
                           <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-stone-200 text-stone-800">
                             {f.status}
                           </span>
@@ -924,7 +960,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                     )}
 
                     {/* Action Buttons: Accept / Edit / Dispute */}
-                    {f.status === "open" && user.role === "creator" && submission.creator_id === user.id && (
+                    {!f.historical && f.version_id === latestVersion?.id && f.status === "open" && user.role === "creator" && submission.creator_id === user.id && (
                       <div className="flex items-center gap-2 pt-2 border-t border-stone-100">
                         {f.suggested_rewrite && (
                           <button

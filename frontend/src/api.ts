@@ -7,6 +7,7 @@ import {
   Approval,
   GuidelineDoc,
   ApprovedFact,
+  FactImpact,
   Term,
   Asset,
   SystemStatus,
@@ -323,6 +324,7 @@ export const api = {
     request<any>(`/admin/guidelines/${id}`, { method: "DELETE" }),
 
   getFacts: async () => request<ApprovedFact[]>("/admin/facts"),
+  getFactImpacts: async () => request<FactImpact[]>("/admin/fact-impacts"),
   createFact: async (data: {
     statement: string;
     subject?: string;

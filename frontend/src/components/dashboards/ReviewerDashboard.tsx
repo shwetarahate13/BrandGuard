@@ -115,7 +115,7 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
   };
 
   const pipelineStatuses: SubmissionStatus[] = ["draft", "checked", "in_review", "changes_requested", "approved", "rejected"];
-  const pendingFindings = escalatedFindings.filter((finding) => finding.status === "open");
+  const pendingFindings = escalatedFindings.filter((finding) => finding.status === "open" && !finding.historical);
   const claimQueue = pendingFindings.filter((finding) => finding.category === "unsupported_claim");
   const factQueue = pendingFindings.filter((finding) => finding.category === "factual_accuracy");
 
@@ -354,13 +354,24 @@ export const ReviewerDashboard: React.FC<ReviewerDashboardProps> = ({ user, navi
 
       <section className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm space-y-4" aria-labelledby="reviewer-facts-queue">
         <div><h2 id="reviewer-facts-queue" className="text-lg font-bold text-stone-900">Facts and prices to verify ({factQueue.length})</h2><p className="text-xs text-stone-500">Each item is escalated because a factual value may be wrong, expired, or unsupported.</p></div>
-        {factQueue.length ? factQueue.map((finding) => (
-          <div key={finding.id} className="rounded-xl border border-stone-200 p-4">
-            <p className="text-xs font-semibold text-stone-900">{finding.issue}</p>
-            {finding.source_quote && <p className="mt-2 text-xs text-stone-600">Approved source: {finding.source_quote}</p>}
-            <button type="button" onClick={() => navigate(`/review/${finding.submission_id}`)} className="mt-3 dashboard-secondary-action">Inspect item and evidence</button>
-          </div>
-        )) : <p className="text-sm text-stone-600">No facts or prices are waiting for verification.</p>}
+        {factQueue.length ? factQueue.map((finding) => {
+          const submission = assignedSubmissions.find((item) => item.id === finding.submission_id);
+          const version = submission?.versions?.find((item) => item.id === finding.version_id);
+          const yourText = version && finding.span_start != null && finding.span_end != null
+            ? version.text.slice(finding.span_start, finding.span_end)
+            : null;
+          return (
+            <div key={finding.id} className="rounded-xl border border-stone-200 p-4">
+              <p className="text-xs font-semibold text-stone-900">{finding.issue}</p>
+              <dl className="mt-3 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+                <div className="min-w-0"><dt className="font-semibold text-stone-600">Your text</dt><dd className="mt-1 break-words text-stone-800">{yourText || "Exact text span unavailable; inspect the source."}</dd></div>
+                <div className="min-w-0"><dt className="font-semibold text-stone-600">Approved fact / source</dt><dd className="mt-1 break-words text-stone-800">{finding.source_quote || "No approved fact is cited; verify with the creator or Admin."}</dd></div>
+                {finding.suggested_rewrite && <div className="min-w-0 sm:col-span-2"><dt className="font-semibold text-emerald-800">Proposed correction</dt><dd className="mt-1 break-words text-emerald-950">{finding.suggested_rewrite}</dd></div>}
+              </dl>
+              <button type="button" onClick={() => navigate(`/review/${finding.submission_id}`)} className="mt-3 dashboard-secondary-action">Inspect item and evidence</button>
+            </div>
+          );
+        }) : <p className="text-sm text-stone-600">No facts or prices are waiting for verification.</p>}
       </section>
 
       {/* Assigned and escalated submissions */}

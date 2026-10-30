@@ -3,20 +3,21 @@ import csv
 import io
 import re
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Response
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 from backend.app.models.models import (
     User, UserRole, GuidelineDoc, GuidelineClause, ApprovedFact, Term, Asset, AssetKind,
-    AuditLog, SystemSetting, WritingRuleDispute
+    AuditLog, SystemSetting, WritingRuleDispute, Approval, ApprovalDecision, Finding,
+    SourceType, Submission, SubmissionVersion,
 )
 from backend.app.schemas.schemas import (
     GuidelineDocCreate, GuidelineDocResponse,
     ApprovedFactCreate, ApprovedFactResponse, TermCreate, TermResponse, AssetCreate, AssetResponse,
     UserCreateAdmin, UserUpdateAdmin, UserResetPasswordAdmin, UserResponse,
-    SystemSettingsResponse, SystemSettingsUpdate, AuditLogResponse
+    SystemSettingsResponse, SystemSettingsUpdate, AuditLogResponse, FactImpactResponse,
 )
 from backend.app.services.auth import get_current_user, hash_password
 from backend.app.services.permissions import Action, check_permission
@@ -203,6 +204,72 @@ def list_facts(
 ):
     check_permission(current_user, Action.SOURCES_READ)
     return db.query(ApprovedFact).order_by(ApprovedFact.created_at.desc()).offset(offset).limit(limit).all()
+
+
+@router.get("/fact-impacts", response_model=list[FactImpactResponse])
+def list_expired_fact_impacts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List current approved versions that still cite expired approved facts."""
+    if current_user.role not in (UserRole.manager, UserRole.admin):
+        raise HTTPException(status_code=403, detail="Only managers and admins can view approved-fact impacts")
+
+    now = datetime.now(timezone.utc)
+    rows = (
+        db.query(ApprovedFact, Submission, SubmissionVersion, Approval)
+        .join(Finding, Finding.source_id == ApprovedFact.id)
+        .join(SubmissionVersion, SubmissionVersion.id == Finding.version_id)
+        .join(Submission, Submission.id == SubmissionVersion.submission_id)
+        .join(Approval, Approval.version_id == SubmissionVersion.id)
+        .filter(
+            Finding.source_type == SourceType.approved_fact,
+            Approval.decision == ApprovalDecision.approved,
+            ApprovedFact.valid_to.isnot(None),
+            ApprovedFact.valid_to < now,
+        )
+        .order_by(ApprovedFact.valid_to.asc(), Submission.title.asc(), SubmissionVersion.version_no.desc())
+        .all()
+    )
+    submission_ids = {submission.id for _fact, submission, _version, _approval in rows}
+    latest_approved: dict[str, int] = {}
+    if submission_ids:
+        approved_versions = (
+            db.query(SubmissionVersion.submission_id, SubmissionVersion.version_no)
+            .join(Approval, Approval.version_id == SubmissionVersion.id)
+            .filter(
+                SubmissionVersion.submission_id.in_(submission_ids),
+                Approval.decision == ApprovalDecision.approved,
+            )
+            .all()
+        )
+        for submission_id, version_no in approved_versions:
+            latest_approved[submission_id] = max(latest_approved.get(submission_id, 0), version_no)
+
+    impacts = []
+    seen: set[tuple[str, str, str]] = set()
+    for fact, submission, version, approval in rows:
+        if version.version_no != latest_approved[submission.id]:
+            continue
+        key = (fact.id, submission.id, version.id)
+        if key in seen:
+            continue
+        seen.add(key)
+        impacts.append({
+            "fact_id": fact.id,
+            "fact_statement": fact.statement,
+            "subject": fact.subject,
+            "value": fact.value,
+            "unit": fact.unit,
+            "source_note": fact.source_note,
+            "valid_to": fact.valid_to,
+            "submission_id": submission.id,
+            "submission_title": submission.title,
+            "version_id": version.id,
+            "version_no": version.version_no,
+            "approved_at": approval.created_at,
+        })
+    return impacts
 
 
 @router.post("/facts", response_model=ApprovedFactResponse)

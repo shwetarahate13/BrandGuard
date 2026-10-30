@@ -165,7 +165,7 @@ export const App: React.FC = () => {
     if (user && user.role === "creator") {
       content = <Dashboard user={user} navigate={navigate} />;
     } else {
-      content = user ? <AdminSources canManage={user.role === "admin"} /> : renderLogin();
+      content = user ? <AdminSources canManage={user.role === "admin"} canViewFactImpacts={user.role === "manager" || user.role === "admin"} navigate={navigate} /> : renderLogin();
     }
   } else if (currentPath === "/insights") {
     // Only managers and admins can view organization-wide insights.

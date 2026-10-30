@@ -37,19 +37,21 @@ def get_submission_findings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieve findings for the latest version of a submission."""
+    """Retrieve current findings with a comparison to the preceding version."""
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
 
     check_can_view_submission(current_user, submission)
 
-    latest_version = (
+    versions = (
         db.query(SubmissionVersion)
         .filter(SubmissionVersion.submission_id == submission_id)
         .order_by(SubmissionVersion.version_no.desc())
-        .first()
+        .limit(2)
+        .all()
     )
+    latest_version = versions[0] if versions else None
     if not latest_version:
         return []
 
@@ -62,7 +64,54 @@ def get_submission_findings(
         )
         .all()
     )
-    return findings
+    response_findings = [FindingResponse.model_validate(finding) for finding in findings]
+    if len(versions) == 1:
+        return response_findings
+
+    previous_version = versions[1]
+    previous_findings = db.query(Finding).filter(Finding.version_id == previous_version.id).all()
+
+    def comparison_key(finding: Finding) -> tuple[str, str, str, str]:
+        category = getattr(finding.category, "value", finding.category)
+        source_type = getattr(finding.source_type, "value", finding.source_type) or ""
+        issue = " ".join((finding.issue or "").casefold().split())
+        source_id = finding.source_id or ""
+        return str(category), str(source_type), source_id, issue
+
+    previous_by_key: dict[tuple[str, str, str, str], list[Finding]] = {}
+    for finding in sorted(previous_findings, key=lambda item: item.span_start or 0):
+        previous_by_key.setdefault(comparison_key(finding), []).append(finding)
+
+    matched_previous_ids: set[str] = set()
+    for current, finding in zip(response_findings, findings):
+        matches = previous_by_key.get(comparison_key(finding), [])
+        previous = matches.pop(0) if matches else None
+        current.finding_version_no = latest_version.version_no
+        current.comparison_version_no = previous_version.version_no
+        if previous is None:
+            current.version_change = "new"
+            continue
+        matched_previous_ids.add(previous.id)
+        was_open = previous.status == FindingStatus.open
+        is_open = current.status == FindingStatus.open.value
+        current.version_change = (
+            "still_open" if was_open and is_open else
+            "regressed" if not was_open and is_open else
+            "resolved"
+        )
+
+    resolved_previous = [
+        finding for finding in previous_findings
+        if finding.id not in matched_previous_ids and finding.status == FindingStatus.open
+    ]
+    for finding in sorted(resolved_previous, key=lambda item: item.span_start or 0):
+        response = FindingResponse.model_validate(finding)
+        response.version_change = "resolved"
+        response.finding_version_no = previous_version.version_no
+        response.comparison_version_no = latest_version.version_no
+        response.historical = True
+        response_findings.append(response)
+    return response_findings
 
 
 @router.post("/submissions/{submission_id}/findings/apply-safe-fixes", response_model=ApplySafeFixesResponse)
