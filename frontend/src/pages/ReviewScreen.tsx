@@ -60,10 +60,16 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const [savingRevision, setSavingRevision] = useState(false);
   const [editingDraft, setEditingDraft] = useState(false);
   const [draftDirty, setDraftDirty] = useState(false);
+  const [autoRecheck, setAutoRecheck] = useState(false);
   const [draftUndoText, setDraftUndoText] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [batchApplying, setBatchApplying] = useState(false);
   const liveSaveText = useRef<string | null>(null);
+  const reviewInFlight = useRef(false);
+  const revisionSaveInFlight = useRef(false);
+  const revisionTextarea = useRef<HTMLTextAreaElement | null>(null);
+  const pendingCaret = useRef<{ start: number; end: number } | null>(null);
+  const draftStorageKey = `brandguard:review-draft:${user.id}:${submissionId}`;
   const [reviewing, setReviewing] = useState(false);
   const [reviewProgress, setReviewProgress] = useState({ percent: 0, message: "" });
   const [decisionPendingId, setDecisionPendingId] = useState<string | null>(null);
@@ -77,17 +83,72 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [sourceRetry, setSourceRetry] = useState(0);
 
+  const persistDraft = (text: string, versionId: string, start: number, end: number, checked: boolean) => {
+    window.localStorage.setItem(draftStorageKey, JSON.stringify({
+      text,
+      versionId,
+      selectionStart: start,
+      selectionEnd: end,
+      checked,
+    }));
+    pendingCaret.current = { start, end };
+  };
+
+  const handleRevisionChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const { value, selectionStart, selectionEnd } = event.target;
+    setRevisionText(value);
+    setDraftDirty(value !== currentText);
+    if (latestVersion?.id) persistDraft(value, latestVersion.id, selectionStart, selectionEnd, false);
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       setLoadError(null);
-      const sub = await api.getSubmission(submissionId);
+      const [sub, fList, hist] = await Promise.all([
+        api.getSubmission(submissionId),
+        api.getFindings(submissionId),
+        api.getHistory(submissionId),
+      ]);
+      const currentVersion = sub.versions?.[sub.versions.length - 1];
+      const currentVersionText = currentVersion?.text || "";
+      const isOwnDraft = user.role === "creator" && sub.creator_id === user.id;
+      const savedDraftText = isOwnDraft ? window.localStorage.getItem(draftStorageKey) : null;
+      let restoredText = currentVersionText;
+      let restoredDirty = false;
+      let restoredEditing = false;
+      let restoredCaret: { start: number; end: number } | null = null;
+      if (savedDraftText && currentVersion) {
+        try {
+          const savedDraft = JSON.parse(savedDraftText) as {
+            text?: unknown;
+            versionId?: unknown;
+            selectionStart?: unknown;
+            selectionEnd?: unknown;
+            checked?: unknown;
+          };
+          if (typeof savedDraft.text === "string" && savedDraft.versionId === currentVersion.id) {
+            restoredText = savedDraft.text;
+            restoredDirty = savedDraft.text !== currentVersionText || savedDraft.checked !== true;
+            restoredEditing = true;
+            restoredCaret = {
+              start: typeof savedDraft.selectionStart === "number" ? savedDraft.selectionStart : savedDraft.text.length,
+              end: typeof savedDraft.selectionEnd === "number" ? savedDraft.selectionEnd : savedDraft.text.length,
+            };
+          } else {
+            window.localStorage.removeItem(draftStorageKey);
+          }
+        } catch (error) {
+          console.error("Unable to restore the saved draft:", error);
+          window.localStorage.removeItem(draftStorageKey);
+        }
+      }
       setSubmission(sub);
-      setRevisionText(sub.versions?.[sub.versions.length - 1]?.text || "");
-      const fList = await api.getFindings(submissionId);
+      setRevisionText(restoredText);
+      setDraftDirty(restoredDirty);
+      setEditingDraft(restoredEditing);
+      pendingCaret.current = restoredCaret;
       setFindings(fList);
-
-      const hist = await api.getHistory(submissionId);
       setComments(hist.comments || []);
 
       if (fList.length > 0 && !selectedFindingId) {
@@ -103,8 +164,18 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   };
 
   useEffect(() => {
+    setAutoRecheck(false);
+    setEditingDraft(false);
     loadData();
   }, [submissionId]);
+
+  useEffect(() => {
+    if (!editingDraft || !pendingCaret.current || !revisionTextarea.current) return;
+    const { start, end } = pendingCaret.current;
+    const length = revisionTextarea.current.value.length;
+    revisionTextarea.current.setSelectionRange(Math.min(start, length), Math.min(end, length));
+    pendingCaret.current = null;
+  }, [editingDraft, submissionId]);
 
   const latestVersion = submission?.versions?.length
     ? submission.versions[submission.versions.length - 1]
@@ -118,11 +189,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const canPreviewSource = sourceMimeType === "application/pdf" || !!sourceMimeType?.startsWith("image/");
 
   const runBackgroundCheck = async (id: string) => {
+    if (reviewInFlight.current) return null;
+    reviewInFlight.current = true;
     setReviewing(true);
     setReviewProgress({ percent: 0, message: "Starting review." });
     try {
       return await api.checkSubmission(id, (percent, message) => setReviewProgress({ percent, message }));
     } finally {
+      reviewInFlight.current = false;
       setReviewing(false);
     }
   };
@@ -153,7 +227,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   }, [submissionId, latestVersion?.id, latestVersion?.source_mime_type, sourceRetry, canPreviewSource]);
 
   const handleAccept = async (finding: Finding) => {
-    if (decisionPendingId || reviewing) return;
+    if (decisionPendingId || reviewing || reviewInFlight.current || revisionSaveInFlight.current) return;
     setDecisionPendingId(finding.id);
     setActionError(null);
     try {
@@ -168,7 +242,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   };
 
   const handleEditSubmit = async () => {
-    if (!editingFinding || decisionPendingId || reviewing) return;
+    if (!editingFinding || decisionPendingId || reviewing || reviewInFlight.current || revisionSaveInFlight.current) return;
     setDecisionPendingId(editingFinding.id);
     setActionError(null);
     try {
@@ -237,51 +311,82 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     }
   };
 
-  const handleResubmitRevision = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = revisionText.trim();
-    if (!submission || !text) {
+  const saveAndCheckRevision = async () => {
+    if (revisionSaveInFlight.current || savingRevision || reviewInFlight.current || reviewing) return;
+    const text = revisionText;
+    if (!submission || !text.trim()) {
       setRevisionError("Add the revised content before saving this version.");
       return;
     }
+    if (text === currentText) {
+      setDraftDirty(false);
+      setRevisionError(null);
+      return;
+    }
+    revisionSaveInFlight.current = true;
     setSavingRevision(true);
     setRevisionError(null);
     try {
-      await api.addVersion(submission.id, text);
+      const version = await api.addVersion(submission.id, text);
+      if (!version?.id) throw new Error("The revised version could not be confirmed.");
+      const caret = pendingCaret.current || { start: text.length, end: text.length };
+      persistDraft(text, version.id, caret.start, caret.end, false);
       await runBackgroundCheck(submission.id);
+      persistDraft(text, version.id, caret.start, caret.end, true);
       await loadData();
-      if (editingDraft) setEditingDraft(false);
     } catch (err) {
+      setDraftDirty(true);
       setRevisionError(err instanceof Error ? err.message : "Unable to save and check the revised version.");
     } finally {
+      revisionSaveInFlight.current = false;
       setSavingRevision(false);
     }
   };
 
+  const handleResubmitRevision = (event: React.FormEvent) => {
+    event.preventDefault();
+    void saveAndCheckRevision();
+  };
+
+  const handleRevisionKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void saveAndCheckRevision();
+    }
+  };
+
   useEffect(() => {
-    if (!editingDraft || !draftDirty || !revisionText.trim() || revisionText.trim() === currentText || savingRevision || reviewing) return;
-    if (liveSaveText.current === revisionText.trim()) return;
+    if (!autoRecheck || !draftDirty || !revisionText.trim() || revisionText === currentText || savingRevision || reviewing) return;
+    if (liveSaveText.current === revisionText) return;
     const timer = window.setTimeout(async () => {
-      const text = revisionText.trim();
+      if (revisionSaveInFlight.current || reviewInFlight.current) return;
+      revisionSaveInFlight.current = true;
+      const text = revisionText;
       liveSaveText.current = text;
       setSavingRevision(true);
       setRevisionError(null);
       try {
-        await api.addVersion(submissionId, text);
+        const version = await api.addVersion(submissionId, text);
+        if (!version?.id) throw new Error("The revised version could not be confirmed.");
+        const caret = pendingCaret.current || { start: text.length, end: text.length };
+        persistDraft(text, version.id, caret.start, caret.end, false);
         await runBackgroundCheck(submissionId);
+        persistDraft(text, version.id, caret.start, caret.end, true);
         await loadData();
       } catch (error) {
+        setDraftDirty(true);
         liveSaveText.current = null;
         setRevisionError(error instanceof Error ? error.message : "Live re-check failed.");
       } finally {
+        revisionSaveInFlight.current = false;
         setSavingRevision(false);
       }
-    }, 900);
+    }, 3000);
     return () => window.clearTimeout(timer);
-  }, [editingDraft, draftDirty, revisionText, currentText, savingRevision, reviewing, submissionId]);
+  }, [autoRecheck, editingDraft, draftDirty, revisionText, currentText, savingRevision, reviewing, submissionId]);
 
   const handleBatchApply = async (mode: "grammar" | "safe") => {
-    if (batchApplying || decisionPendingId || reviewing) return;
+    if (batchApplying || decisionPendingId || reviewing || reviewInFlight.current || revisionSaveInFlight.current) return;
     const eligible = openFindings.filter((finding) =>
       mode === "grammar"
         ? ["grammar", "spelling"].includes(finding.category)
@@ -381,7 +486,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       .sort((a, b) => (a.span_start || 0) - (b.span_start || 0));
 
     if (sorted.length === 0) {
-      return <div className="whitespace-pre-wrap font-serif text-base leading-relaxed text-stone-800">{currentText}</div>;
+      return <div className={`whitespace-pre-wrap font-serif text-base leading-relaxed text-stone-800 ${draftDirty ? "opacity-50" : ""}`}>{currentText}</div>;
     }
 
     const elements: React.ReactNode[] = [];
@@ -439,7 +544,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
     }
 
     return (
-      <div className="whitespace-pre-wrap font-serif text-base leading-relaxed text-stone-800 selection:bg-amber-200">
+      <div className={`whitespace-pre-wrap font-serif text-base leading-relaxed text-stone-800 selection:bg-amber-200 ${draftDirty ? "opacity-50" : ""}`}>
         {elements}
       </div>
     );
@@ -542,16 +647,25 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-stone-900">Edit draft</h2>
-                <p className="mt-1 text-xs text-stone-600">Changes are re-checked after a short pause. Re-check now to save this version immediately.</p>
+                <p className="mt-1 text-xs text-stone-600">Edits are not checked until you choose Re-check. Automatic re-checking is optional.</p>
               </div>
-              <button type="button" onClick={() => setEditingDraft(false)} className="text-xs text-stone-500 underline">Close editor</button>
+              <button type="button" onClick={() => setEditingDraft(false)} className="min-h-11 px-2 text-xs text-stone-500 underline">Close editor</button>
             </div>
             {revisionError && <p role="alert" className="text-xs text-rose-700">{revisionError}</p>}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p role="status" className={draftDirty ? "text-xs font-medium text-amber-800" : "text-xs text-stone-600"}>
+                {draftDirty ? "Edited, not checked. Findings below are from the previous version." : "No draft edits pending."}
+              </p>
+              <label className="inline-flex min-h-11 items-center gap-2 text-xs text-stone-700">
+                <input type="checkbox" checked={autoRecheck} onChange={(event) => setAutoRecheck(event.target.checked)} />
+                Auto re-check after 3 s idle
+              </label>
+            </div>
             <div className="flex items-center justify-between gap-2">
-              <button type="button" disabled={savingRevision || reviewing || !draftUndoText} onClick={() => { liveSaveText.current = null; setRevisionText(draftUndoText); setDraftDirty(true); }} className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-2 text-xs text-stone-700 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" />Undo edits</button>
+              <button type="button" disabled={savingRevision || reviewing || !draftUndoText} onClick={() => { liveSaveText.current = null; setRevisionText(draftUndoText); setDraftDirty(draftUndoText !== currentText); const position = draftUndoText.length; if (latestVersion?.id) persistDraft(draftUndoText, latestVersion.id, position, position, draftUndoText === currentText); }} className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-2 text-xs text-stone-700 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" />Undo edits</button>
               <div className="flex items-center gap-3">
                 {savingRevision && <span role="status" className="text-xs text-stone-500">Saving and re-checking…</span>}
-                <button type="submit" disabled={savingRevision || reviewing || !revisionText.trim()} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">Re-check</button>
+                <button type="submit" disabled={savingRevision || reviewing || !revisionText.trim() || revisionText === currentText} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">Re-check</button>
               </div>
             </div>
           </form>
@@ -566,14 +680,25 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <div>
               <h2 className="text-sm font-semibold text-stone-900">Create a revised version</h2>
               <p className="mt-1 text-xs text-stone-600">
-                Update the content using the manager’s feedback. Saving creates a new version and runs the brand check again.
+                Update the content using the manager’s feedback. Choose Re-check to save and run the brand check.
               </p>
             </div>
             {revisionError && <p role="alert" className="text-xs text-rose-700">{revisionError}</p>}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p role="status" className={draftDirty ? "text-xs font-medium text-amber-800" : "text-xs text-stone-600"}>
+                {draftDirty ? "Edited, not checked. Findings below are from the previous version." : "No draft edits pending."}
+              </p>
+              <label className="inline-flex min-h-11 items-center gap-2 text-xs text-stone-700">
+                <input type="checkbox" checked={autoRecheck} onChange={(event) => setAutoRecheck(event.target.checked)} />
+                Auto re-check after 3 s idle
+              </label>
+            </div>
             <textarea
               aria-label="Revised submission content"
               value={revisionText}
-              onChange={(event) => setRevisionText(event.target.value)}
+              ref={revisionTextarea}
+              onChange={handleRevisionChange}
+              onKeyDown={handleRevisionKeyDown}
               rows={6}
               required
               maxLength={50000}
@@ -582,10 +707,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={savingRevision || reviewing || !revisionText.trim()}
+                disabled={savingRevision || reviewing || !revisionText.trim() || revisionText === currentText}
                 className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 disabled:opacity-50"
               >
-                {savingRevision ? "Saving and checking…" : "Save revision & run check"}
+                {savingRevision ? "Saving and checking…" : "Re-check"}
               </button>
             </div>
           </form>
@@ -596,23 +721,25 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
         {/* Left Column: Content with Span Highlights (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
           {canPreviewSource && latestVersion?.source_mime_type && (
-            sourceUrl ? (
-              <React.Suspense fallback={<div className="bg-white border border-stone-200 rounded-2xl p-5 text-xs text-stone-500">Loading document renderer…</div>}>
-                <SourceMediaViewer
-                  mimeType={latestVersion.source_mime_type}
-                  sourceUrl={sourceUrl}
-                  sourceLayout={latestVersion.source_layout}
-                  findings={findings}
-                  selectedFindingId={selectedFindingId}
-                  onSelectFinding={setSelectedFindingId}
-                />
-              </React.Suspense>
-            ) : (
-              <div role={sourceError ? "alert" : undefined} className="bg-white border border-stone-200 rounded-2xl p-5 text-xs text-stone-500">
-                {sourceError || "Loading original document preview…"}
-                {sourceError && <button type="button" onClick={() => setSourceRetry((value) => value + 1)} className="ml-2 underline text-brand-700">Retry</button>}
-              </div>
-            )
+            <div className={draftDirty ? "opacity-50" : ""}>
+              {sourceUrl ? (
+                <React.Suspense fallback={<div className="bg-white border border-stone-200 rounded-2xl p-5 text-xs text-stone-500">Loading document renderer…</div>}>
+                  <SourceMediaViewer
+                    mimeType={latestVersion.source_mime_type}
+                    sourceUrl={sourceUrl}
+                    sourceLayout={latestVersion.source_layout}
+                    findings={findings}
+                    selectedFindingId={selectedFindingId}
+                    onSelectFinding={setSelectedFindingId}
+                  />
+                </React.Suspense>
+              ) : (
+                <div role={sourceError ? "alert" : undefined} className="bg-white border border-stone-200 rounded-2xl p-5 text-xs text-stone-500">
+                  {sourceError || "Loading original document preview…"}
+                  {sourceError && <button type="button" onClick={() => setSourceRetry((value) => value + 1)} className="ml-2 underline text-brand-700">Retry</button>}
+                </div>
+              )}
+            </div>
           )}
           <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
             <div className="px-6 py-3.5 bg-stone-50/80 border-b border-stone-200 flex items-center justify-between text-xs text-stone-500">
@@ -624,13 +751,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 </span>
               </div>
               <span className="text-[11px] text-stone-400">
-                Click any highlighted span to jump to its cited finding
+                {draftDirty ? "Previous-version findings are dimmed until re-check" : "Click any highlighted span to jump to its cited finding"}
               </span>
             </div>
 
             <div className="p-6 min-h-[360px] bg-white">
               {editingDraft ? (
-                <textarea aria-label="Edit draft content" value={revisionText} onChange={(event) => { setRevisionText(event.target.value); setDraftDirty(true); }} rows={18} maxLength={200000} className="min-h-[360px] w-full resize-y whitespace-pre-wrap font-serif text-base leading-relaxed text-stone-800 outline-none" />
+                <textarea aria-label="Edit draft content" ref={revisionTextarea} value={revisionText} onChange={handleRevisionChange} onKeyDown={handleRevisionKeyDown} rows={18} maxLength={200000} className="min-h-[360px] w-full resize-y whitespace-pre-wrap font-serif text-base leading-relaxed text-stone-800 outline-none" />
               ) : renderHighlightedText()}
             </div>
           </div>
@@ -698,7 +825,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
 
           {user.role === "creator" && submission.creator_id === user.id && (
             <div className="flex flex-wrap gap-2">
-              {!editingDraft && <button type="button" onClick={() => { setDraftUndoText(currentText); setRevisionText(currentText); setDraftDirty(false); liveSaveText.current = null; setEditingDraft(true); }} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700">Edit draft</button>}
+              {!editingDraft && <button type="button" onClick={() => { setDraftUndoText(currentText); setRevisionText(currentText); setDraftDirty(false); liveSaveText.current = null; setEditingDraft(true); if (latestVersion?.id) persistDraft(currentText, latestVersion.id, currentText.length, currentText.length, true); }} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700">Edit draft</button>}
               <button type="button" onClick={() => handleBatchApply("grammar")} disabled={batchApplying || reviewing || !openFindings.some((finding) => ["grammar", "spelling"].includes(finding.category) && finding.suggested_rewrite && finding.confidence === "high" && !finding.needs_human)} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 disabled:opacity-50">{batchApplying ? "Applying…" : "Fix all grammar and spelling"}</button>
               <button type="button" onClick={() => handleBatchApply("safe")} disabled={batchApplying || reviewing || !openFindings.some((finding) => ["grammar", "spelling", "terminology", "accessibility"].includes(finding.category) && finding.suggested_rewrite && finding.confidence === "high" && !finding.needs_human)} className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Wand2 className="h-3.5 w-3.5 text-amber-300" />Apply all safe fixes</button>
               <button type="button" onClick={() => setPreviewOpen(true)} disabled={!previewEdits.length} className="inline-flex items-center gap-1 rounded-lg border border-brand-300 px-3 py-2 text-xs font-semibold text-brand-800 disabled:opacity-50"><Eye className="h-3.5 w-3.5" />Preview corrected draft</button>
@@ -714,7 +841,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               </p>
             </div>
           ) : (
-            <div className="space-y-4 max-h-[calc(100vh-14rem)] overflow-y-auto pr-1">
+            <div className={`space-y-4 max-h-[calc(100vh-14rem)] overflow-y-auto pr-1 ${draftDirty ? "opacity-50" : ""}`}>
               {findingGroups.map((group) => (
                 <section key={group.title} className="space-y-3">
                   <h3 className="sticky top-0 z-10 rounded-lg bg-stone-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-stone-700">{group.title}</h3>
@@ -856,7 +983,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           <section className="min-w-0 rounded-xl border border-stone-200 p-4"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-stone-600">Original</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-800">{currentText}</pre></section>
           <section className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4"><h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-stone-600">Corrected draft</h3><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-stone-800">{renderPreviewChanges()}</pre></section>
         </div>
-        <div className="mt-4 flex justify-end"><button type="button" onClick={() => { setRevisionText(previewText); setDraftUndoText(currentText); setDraftDirty(false); setEditingDraft(true); setPreviewOpen(false); liveSaveText.current = null; }} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white">Open in Edit Draft</button></div>
+        <div className="mt-4 flex justify-end"><button type="button" onClick={() => { setRevisionText(previewText); setDraftUndoText(currentText); setDraftDirty(previewText !== currentText); const position = previewText.length; if (latestVersion?.id) persistDraft(previewText, latestVersion.id, position, position, false); setEditingDraft(true); setPreviewOpen(false); liveSaveText.current = null; }} className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white">Open in Edit Draft</button></div>
       </Modal>
 
       <Modal open={!!editingFinding} title="Edit custom replacement" onClose={() => setEditingFinding(null)}>
